@@ -16,6 +16,7 @@ const PILLAR_COLOR = {
   'System Inequity':'#C79236','Meal / Break':'#C9CDD2','Practice Teaching':'#D786A8',
   'Debrief':'#A6ABB2'
 };
+const DEFAULT_PILLARS = Object.keys(PILLAR_COLOR).map((name, index) => ({id:'pillar'+index, name, color:PILLAR_COLOR[name]}));
 const MODES = ['Sync','Async','Coaching','Workshop'];
 const MODE_COLOR = { Sync:'#1F6F78', Async:'#B8863B', Coaching:'#6B5CA5', Workshop:'#A64D4D' };
 const RESOURCE_KINDS = ['Session plan','Slides','Async work','Exit ticket','Other'];
@@ -98,8 +99,13 @@ async function resolveRole(emailRaw){
   try {
     const res = await storage.get('wa14-accounts');
     accounts = res && res.value ? JSON.parse(res.value) : [];
-    if (!accounts.length) {
-      accounts = DEFAULT_ACCOUNTS.map(a => ({...a, pin:generatePin()}));
+    const merged = DEFAULT_ACCOUNTS.map(defaultAccount => {
+      const existing = accounts.find(account => account.email.toLowerCase()===defaultAccount.email);
+      return existing ? {...defaultAccount, ...existing, pin:existing.pin || generatePin()} : {...defaultAccount, pin:generatePin()};
+    });
+    accounts = accounts.filter(account => !DEFAULT_ACCOUNTS.some(defaultAccount => defaultAccount.email===account.email.toLowerCase()));
+    accounts = [...merged, ...accounts.map(account=>account.pin ? account : {...account,pin:generatePin()})];
+    if (accounts.length) {
       await storage.set('wa14-accounts', JSON.stringify(accounts));
     }
   } catch (e) { return { ok:false, error:'Could not verify right now — please try again.' }; }
@@ -179,12 +185,15 @@ function MainApp({ auth, onLogout }){
   const [sessions, setSessions] = useState(null);
   const [roster, setRoster] = useState(null);       // fellows
   const [planners, setPlanners] = useState(null);
+  const [rooms, setRooms] = useState(null);
+  const [pillars, setPillars] = useState(null);
   const [requests, setRequests] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState('calendar');
   const [activeWeek, setActiveWeek] = useState(0);
   const [hiddenDays, setHiddenDays] = useState({});
   const [editing, setEditing] = useState(null);
+  const [assigning, setAssigning] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [weekFilter, setWeekFilter] = useState('all');
   const [pillarFilter, setPillarFilter] = useState('all');
@@ -193,17 +202,26 @@ function MainApp({ auth, onLogout }){
   const saveTimer = useRef(null);
   const rosterSaveTimer = useRef(null);
   const plannerSaveTimer = useRef(null);
+  const roomSaveTimer = useRef(null);
+  const pillarSaveTimer = useRef(null);
   const requestSaveTimer = useRef(null);
 
   useEffect(() => {
     (async () => {
       try { const r = await storage.get('wa14-sessions'); setSessions(r && r.value ? JSON.parse(r.value) : SEED); }
       catch (e) { setSessions(SEED); }
-      try { const r = await storage.get('wa14-roster'); setRoster(r && r.value ? JSON.parse(r.value) : []); }
+      try {
+        const r = await storage.get('wa14-roster'); const fellows = r && r.value ? JSON.parse(r.value) : [];
+        const a = await storage.get('wa14-accounts'); const accounts = a && a.value ? JSON.parse(a.value) : [];
+        setRoster(fellows.map(fellow=>({...fellow,pin:fellow.pin || accounts.find(account=>account.email===fellow.email)?.pin || generatePin()})));
+      }
       catch (e) { setRoster([]); }
       try {
         const r = await storage.get('wa14-planners');
-        if (r && r.value) setPlanners(JSON.parse(r.value));
+        if (r && r.value) {
+          const a = await storage.get('wa14-accounts'); const accounts = a && a.value ? JSON.parse(a.value) : [];
+          setPlanners(JSON.parse(r.value).map(planner=>({...planner,pin:planner.pin || accounts.find(account=>account.email===planner.email)?.pin || generatePin()})));
+        }
         else {
           const a = await storage.get('wa14-accounts');
           const accounts = a && a.value ? JSON.parse(a.value) : DEFAULT_ACCOUNTS.map(x=>({...x,pin:generatePin()}));
@@ -213,6 +231,10 @@ function MainApp({ auth, onLogout }){
       catch (e) { setPlanners([]); }
       try { const r = await storage.get('wa14-requests'); setRequests(r && r.value ? JSON.parse(r.value) : []); }
       catch (e) { setRequests([]); }
+      try { const r = await storage.get('wa14-rooms'); setRooms(r && r.value ? JSON.parse(r.value) : []); }
+      catch (e) { setRooms([]); }
+      try { const r = await storage.get('wa14-pillars'); setPillars(r && r.value ? JSON.parse(r.value) : DEFAULT_PILLARS); }
+      catch (e) { setPillars(DEFAULT_PILLARS); }
       setLoaded(true);
     })();
   }, []);
@@ -229,6 +251,8 @@ function MainApp({ auth, onLogout }){
   const persistRoster = debouncedPersist(setRoster, rosterSaveTimer, 'wa14-roster');
   const persistPlanners = debouncedPersist(setPlanners, plannerSaveTimer, 'wa14-planners');
   const persistRequests = debouncedPersist(setRequests, requestSaveTimer, 'wa14-requests');
+  const persistRooms = debouncedPersist(setRooms, roomSaveTimer, 'wa14-rooms');
+  const persistPillars = debouncedPersist(setPillars, pillarSaveTimer, 'wa14-pillars');
 
   const addAccount = async (person, role) => {
     try {
@@ -285,7 +309,7 @@ function MainApp({ auth, onLogout }){
 
   const openRequests = (requests||[]).filter(r=>!r.resolved).length;
 
-  if (!loaded || !sessions || !roster || !planners || !requests) {
+  if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !pillars) {
     return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'400px',color:'#8A96A3',fontFamily:FONT}}>Loading schedule…</div>;
   }
 
@@ -298,29 +322,34 @@ function MainApp({ auth, onLogout }){
       {toast && <div style={toastStyle}>{toast}</div>}
       <div style={{padding:'20px 24px 40px'}}>
         {(tab==='calendar' || tab==='sessions') && (
-          <FilterBar pillarFilter={pillarFilter} setPillarFilter={setPillarFilter} modeFilter={modeFilter} setModeFilter={setModeFilter} />
+          <FilterBar pillarFilter={pillarFilter} setPillarFilter={setPillarFilter} modeFilter={modeFilter} setModeFilter={setModeFilter} pillars={pillars} />
         )}
 
         {tab==='calendar' && (
           <CalendarView
             sessions={filtered} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
             hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
-            onSelect={isAdmin ? setEditing : setViewing} auth={auth} roster={roster}
+            onSelect={setViewing} onDrop={isFullAdmin ? (session, date, start) => {
+              saveSession({...session, date, start, weekday:new Date(date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}), week:sessions.find(item=>item.date===date)?.week ?? activeWeek, calendared:true});
+            } : null} auth={auth} roster={roster} rooms={rooms} pillars={pillars}
           />
         )}
         {tab==='sessions' && isAdmin && (
-          <SessionsTable sessions={filtered} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} />
+          <SessionsTable sessions={filtered} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} rooms={rooms} onAssignRoom={(session, roomIds)=>saveSession({...session, roomIds})} />
         )}
         {tab==='summary' && isAdmin && <TimeSummary sessions={filtered} />}
         {tab==='fellows' && isFullAdmin && <RosterPanel roster={roster} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
         {tab==='planners' && isSuperadmin && <PlannerPanel planners={planners} onChange={persistPlanners} onAccount={addAccount} showToast={showToast} />}
+        {tab==='rooms' && isFullAdmin && <RoomsPanel rooms={rooms} roster={roster} onChange={persistRooms} showToast={showToast} />}
+        {tab==='pillars' && isFullAdmin && <PillarsPanel pillars={pillars} onChange={persistPillars} showToast={showToast} />}
         {tab==='requests' && isFullAdmin && <RequestsPanel requests={requests} onResolve={resolveRequest} onDelete={deleteRequest} />}
       </div>
 
       {isAdmin && editing && (
-        <EditPanel session={editing==='new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing!=='new' ? deleteSession : null} onClose={()=>setEditing(null)} canEditSchedule={isFullAdmin} roster={roster} />
+        <EditPanel session={editing==='new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing!=='new' ? deleteSession : null} onClose={()=>setEditing(null)} canEditSchedule={isFullAdmin} pillars={pillars} />
       )}
-      {isViewer && viewing && <ViewPanel session={viewing} auth={auth} onRequestUpdate={requestUpdate} onClose={()=>setViewing(null)} />}
+      {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next)=>{saveSession(next); setAssigning(null);}} onClose={()=>setAssigning(null)} />}
+      {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} onRequestUpdate={requestUpdate} onClose={()=>setViewing(null)} />}
     </div>
   );
 }
@@ -338,6 +367,8 @@ function TopBar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, auth, onLogou
     ...(isFullAdmin ? [
       {id:'summary', label:'Time Summary', icon:BarChart3},
       {id:'fellows', label:'Fellows', icon:UserPlus},
+      {id:'rooms', label:'Rooms', icon:DoorOpen},
+      {id:'pillars', label:'Pillars', icon:ShieldCheck},
       {id:'requests', label:'Requests'+(openRequests?' ('+openRequests+')':''), icon:MessageSquare},
     ] : []),
     ...(isSuperadmin ? [{id:'planners', label:'Planners', icon:ShieldCheck}] : []),
@@ -382,13 +413,13 @@ const btnSecondary = {...btnBase, background:'#fff', color:'#1B2733', border:'1p
 const btnGhost = {...btnBase, background:'none', color:'#5B6672'};
 const selectStyle = {padding:'6px 10px', borderRadius:6, border:'1px solid #C9CDD2', fontSize:13, background:'#fff'};
 
-function FilterBar({ pillarFilter, setPillarFilter, modeFilter, setModeFilter }){
+function FilterBar({ pillarFilter, setPillarFilter, modeFilter, setModeFilter, pillars }){
   return (
     <div style={{display:'flex', alignItems:'center', gap:16, marginBottom:16, flexWrap:'wrap'}}>
       <div style={{display:'flex', alignItems:'center', gap:8}}>
         <span style={{fontSize:12.5, color:'#5B6672'}}>Pillar</span>
         <select value={pillarFilter} onChange={e=>setPillarFilter(e.target.value)} style={selectStyle}>
-          <option value="all">All pillars</option>{PILLARS.map(p => <option key={p} value={p}>{p}</option>)}
+          <option value="all">All pillars</option>{(pillars||DEFAULT_PILLARS).map(p => <option key={p.id||p.name} value={p.name}>{p.name}</option>)}
         </select>
       </div>
       <div style={{display:'flex', alignItems:'center', gap:8}}>
@@ -404,7 +435,7 @@ function FilterBar({ pillarFilter, setPillarFilter, modeFilter, setModeFilter })
   );
 }
 
-function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, onSelect, auth, roster }){
+function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, onSelect, onDrop, auth, roster, rooms, pillars }){
   const weekSessions = sessions.filter(s => s.week===activeWeek && s.date);
   const daysMap = {};
   weekSessions.forEach(s => { if(!daysMap[s.date]) daysMap[s.date]=s.weekday; });
@@ -449,15 +480,15 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                 <div style={{padding:'10px 10px', borderBottom:'1px solid #EEF0F2', background:'#F7F8F9', fontSize:12.5, fontWeight:600, textAlign:'center'}}>
                   {wd}<div style={{fontWeight:400, color:'#8A96A3', fontSize:11}}>{dateLabel(d)}</div>
                 </div>
-                <div style={{position:'relative', height:totalHeight}}>
+                <div style={{position:'relative', height:totalHeight}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault(); const id=Number(e.dataTransfer.getData('sessionId')); const session=sessions.find(item=>item.id===id); if(!session || !onDrop) return; const rect=e.currentTarget.getBoundingClientRect(); const minutes=Math.max(GRID_START, Math.min(GRID_END-15, GRID_START+Math.round((e.clientY-rect.top)/PX_PER_MIN/15)*15)); const start=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0'); onDrop(session,d,start);}}>
                   {hours.map(m => (<div key={m} style={{position:'absolute', top:(m-GRID_START)*PX_PER_MIN, left:0, right:0, borderTop:'1px solid #F2F3F4'}} />))}
                   {daySessions.map(s => {
                     const start = toMin(s.start), end = toMin(s.end);
                     const top = (start-GRID_START)*PX_PER_MIN;
                     const height = Math.max((end-start)*PX_PER_MIN, 16);
-                    const color = PILLAR_COLOR[s.pillar] || '#C9CDD2';
+                    const color = getPillarColor(s.pillar, pillars);
                     return (
-                      <div key={s.id} onClick={()=>onSelect(s)} style={{
+                      <div key={s.id} draggable={!!onDrop} onDragStart={e=>e.dataTransfer.setData('sessionId',String(s.id))} onClick={()=>onSelect(s)} style={{
                         position:'absolute', top, left:3, right:3, height, background: color+'26', borderLeft:'3px solid '+color,
                         borderRadius:4, padding:'3px 6px', cursor:'pointer', overflow:'hidden', fontSize:10.5, lineHeight:1.25
                       }} title={s.name}>
@@ -466,8 +497,8 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                         {height>42 && s.facilitators && s.facilitators.length>0 && (
                           <div style={{color:'#5B6672', display:'flex', alignItems:'center', gap:3, marginTop:1}}><Users size={9}/> {s.facilitators.join(', ')}</div>
                         )}
-                        {height>56 && s.rooms && s.rooms.length>0 && (
-                          <div style={{color:'#5B6672', display:'flex', alignItems:'center', gap:3, marginTop:1}}><DoorOpen size={9}/> {(auth.role==='fellow' ? s.rooms.filter(r=>(r.fellowIds||[]).includes(roster.find(f=>f.email===auth.email)?.id)) : s.rooms).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || 'Room not assigned'}</div>
+                        {height>56 && ((s.rooms||[]).length>0 || (s.roomIds||[]).length>0) && (
+                          <div style={{color:'#5B6672', display:'flex', alignItems:'center', gap:3, marginTop:1}}><DoorOpen size={9}/> {getVisibleRooms(s, auth, roster, rooms).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || 'Room not assigned'}</div>
                         )}
                         {height>56 && s.resources && s.resources.length>0 && (
                           <div style={{color:'#5B6672', display:'flex', alignItems:'center', gap:3, marginTop:1}}><LinkIcon size={9}/> {s.resources.length} resource{s.resources.length>1?'s':''}</div>
@@ -481,11 +512,28 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
           })}
         </div>
       )}
+      <div style={{marginTop:18, background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, padding:16}}>
+        <div style={{fontSize:13, fontWeight:700, marginBottom:10}}>Session list</div>
+        <div style={{display:'flex', flexDirection:'column', gap:6, marginBottom:18}}>{weekSessions.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||toMin(a.start)-toMin(b.start)).map(s=><div key={s.id} onClick={()=>onSelect(s)} style={{display:'flex',justifyContent:'space-between',gap:10,padding:'8px 0',borderBottom:'1px solid #EEF0F2',fontSize:12.5,cursor:'pointer'}}><span>{s.name}</span><span style={{color:'#8A96A3',whiteSpace:'nowrap'}}>{dateLabel(s.date)} · {s.start}–{s.end}</span></div>)}</div>
+        <div style={{fontSize:13, fontWeight:700, marginBottom:10}}>Unscheduled sessions</div>
+        <div style={{display:'flex', flexWrap:'wrap', gap:8}}>{sessions.filter(s=>!s.date).map(s=><div key={s.id} draggable={!!onDrop} onDragStart={e=>e.dataTransfer.setData('sessionId',String(s.id))} onClick={()=>onSelect(s)} style={{padding:'8px 10px', border:'1px solid #DDE2E6', borderLeft:'3px solid '+getPillarColor(s.pillar,pillars), borderRadius:5, cursor:onDrop?'grab':'pointer', fontSize:12.5}}>{s.name || '(untitled)'}</div>)}</div>
+        {sessions.filter(s=>!s.date).length===0 && <div style={{fontSize:12.5,color:'#8A96A3'}}>All sessions are scheduled.</div>}
+      </div>
     </div>
   );
 }
 
-function SessionsTable({ sessions, weekFilter, setWeekFilter, onEdit, onDelete }){
+function getPillarColor(name, pillars){
+  return (pillars||[]).find(p=>p.name===name)?.color || PILLAR_COLOR[name] || '#C9CDD2';
+}
+
+function getVisibleRooms(session, auth, roster, rooms){
+  const assigned = (session.rooms||[]).concat((session.roomIds||[]).map(id=>(rooms||[]).find(room=>room.id===id)).filter(Boolean));
+  if(auth.role!=='fellow') return assigned;
+  return assigned.filter(room=>(room.fellowIds||[]).includes(roster.find(fellow=>fellow.email===auth.email)?.id));
+}
+
+function SessionsTable({ sessions, weekFilter, setWeekFilter, onEdit, onDelete, rooms, onAssignRoom }){
   const rows = useMemo(() => {
     let r = sessions.slice();
     if (weekFilter!=='all') r = r.filter(s => weekFilter==='unscheduled' ? s.week==null : s.week===Number(weekFilter));
@@ -504,7 +552,7 @@ function SessionsTable({ sessions, weekFilter, setWeekFilter, onEdit, onDelete }
       </div>
       <div style={{background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, overflow:'hidden'}}>
         <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}>{['Date','Time','Session','Pillar','Mode','Facilitators','Resources',''].map(h => (<th key={h} style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>{h}</th>))}</tr></thead>
+          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}>{['Date','Time','Session','Pillar','Mode','Facilitators','Rooms',''].map(h => (<th key={h} style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>{h}</th>))}</tr></thead>
           <tbody>
             {rows.map(s => (
               <tr key={s.id} style={{borderBottom:'1px solid #EEF0F2'}}>
@@ -514,9 +562,10 @@ function SessionsTable({ sessions, weekFilter, setWeekFilter, onEdit, onDelete }
                 <td style={{padding:'8px 12px'}}><span style={{fontSize:11, padding:'2px 8px', borderRadius:12, background:(PILLAR_COLOR[s.pillar]||'#ccc')+'26', color:'#1B2733'}}>{s.pillar}</span></td>
                 <td style={{padding:'8px 12px'}}><span style={{fontSize:11, padding:'2px 8px', borderRadius:12, background:(MODE_COLOR[s.mode]||'#ccc')+'26', color:MODE_COLOR[s.mode]||'#1B2733', fontWeight:600}}>{s.mode}</span></td>
                 <td style={{padding:'8px 12px', color:'#5B6672'}}>{(s.facilitators||[]).join(', ') || '—'}</td>
-                <td style={{padding:'8px 12px', color:'#5B6672'}}>{(s.resources||[]).length || '—'}</td>
+                <td style={{padding:'8px 12px', color:'#5B6672'}}>{(s.rooms||[]).length ? s.rooms.map(r=>r.name).join(', ') : (s.roomIds||[]).map(id=>rooms.find(r=>r.id===id)?.name).filter(Boolean).join(', ') || '—'}</td>
                 <td style={{padding:'8px 12px', textAlign:'right', whiteSpace:'nowrap'}}>
                   <button onClick={()=>onEdit(s)} style={linkBtn}>Edit</button>
+                  <select multiple value={s.roomIds||[]} onChange={e=>onAssignRoom(s,Array.from(e.target.selectedOptions,option=>option.value))} style={{...selectStyle, marginLeft:10, fontSize:11, minWidth:90}} title="Assign rooms">{rooms.map(room=><option key={room.id} value={room.id}>{room.name}</option>)}</select>
                   <button onClick={()=>{ if(window.confirm('Delete this session?')) onDelete(s.id); }} style={{...linkBtn, color:'#B84C4C', marginLeft:10}}>Delete</button>
                 </td>
               </tr>
@@ -526,6 +575,33 @@ function SessionsTable({ sessions, weekFilter, setWeekFilter, onEdit, onDelete }
       </div>
     </div>
   );
+}
+
+function AssignmentPanel({ session, rooms, onSave, onClose }){
+  const [selected, setSelected] = useState(session.roomIds||[]);
+  const toggle = id => setSelected(ids=>ids.includes(id) ? ids.filter(item=>item!==id) : [...ids,id]);
+  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:100}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{width:360,maxWidth:'92vw',background:'#fff',height:'100%',overflowY:'auto',padding:22}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><div style={{fontWeight:700}}>Assign session</div><button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer'}}><X size={18}/></button></div>
+      <div style={{fontSize:15,fontWeight:600,marginBottom:6}}>{session.name}</div><div style={{fontSize:12.5,color:'#8A96A3',marginBottom:18}}>Calendar placement is changed by dragging the session. Choose rooms here or from Sessions.</div>
+      {rooms.map(room=><label key={room.id} style={{display:'flex',gap:8,alignItems:'center',padding:'10px 0',borderBottom:'1px solid #EEF0F2',fontSize:13}}><input type="checkbox" checked={selected.includes(room.id)} onChange={()=>toggle(room.id)}/><span><b>{room.name}</b><br/><span style={{fontSize:11.5,color:'#8A96A3'}}>{room.facilitator||'Facilitator not set'}</span></span></label>)}
+      {rooms.length===0 && <div style={{fontSize:12.5,color:'#8A96A3'}}>Create rooms in the Rooms tab first.</div>}
+      <button onClick={()=>onSave({...session,roomIds:selected})} style={{...btnPrimary,width:'100%',justifyContent:'center',marginTop:22}}>Save assignments</button>
+    </div>
+  </div>;
+}
+
+function RoomsPanel({ rooms, roster, onChange, showToast }){
+  const [name,setName]=useState(''); const [facilitator,setFacilitator]=useState(''); const [fellowIds,setFellowIds]=useState([]);
+  const add = e => { e.preventDefault(); if(!name.trim()) return; onChange([...rooms,{id:'room'+Date.now(),name:name.trim(),facilitator:facilitator.trim(),fellowIds}]); setName('');setFacilitator('');setFellowIds([]);showToast('Room created'); };
+  return <div><div style={{fontSize:13,color:'#5B6672',marginBottom:16}}>Create rooms separately, assign Fellows here, then assign rooms to sessions from Sessions.</div><form onSubmit={add} style={{background:'#fff',border:'1px solid #DDE2E6',borderRadius:8,padding:18,maxWidth:560,marginBottom:18}}><Field label="Room name"><input style={inputStyle} value={name} onChange={e=>setName(e.target.value)} placeholder="Room A"/></Field><Field label="Facilitator"><input style={inputStyle} value={facilitator} onChange={e=>setFacilitator(e.target.value)} placeholder="Facilitator name"/></Field><Field label="Fellows"><div style={{display:'flex',flexWrap:'wrap',gap:'5px 12px'}}>{roster.map(f=><label key={f.id} style={{fontSize:12}}><input type="checkbox" checked={fellowIds.includes(f.id)} onChange={()=>setFellowIds(ids=>ids.includes(f.id)?ids.filter(id=>id!==f.id):[...ids,f.id])}/> {f.name}</label>)}</div></Field><button type="submit" style={btnPrimary}><Plus size={14}/> Create room</button></form>{rooms.map(room=><div key={room.id} style={{background:'#fff',border:'1px solid #DDE2E6',borderRadius:8,padding:14,marginBottom:8,maxWidth:560}}><b>{room.name}</b><div style={{fontSize:12,color:'#5B6672'}}>{room.facilitator||'Facilitator not set'} · {(room.fellowIds||[]).length} Fellows</div><button onClick={()=>onChange(rooms.filter(r=>r.id!==room.id))} style={{...linkBtn,color:'#B84C4C',marginTop:8}}>Delete</button></div>)}</div>;
+}
+
+function PillarsPanel({ pillars, onChange, showToast }){
+  const [name,setName]=useState(''); const [color,setColor]=useState('#1F6F78');
+  const save = e => { e.preventDefault(); if(!name.trim()) return; onChange([...pillars,{id:'pillar'+Date.now(),name:name.trim(),color}]); setName('');showToast('Pillar added'); };
+  const update = (id,key,value) => onChange(pillars.map(p=>p.id===id?{...p,[key]:value}:p));
+  return <div><div style={{fontSize:13,color:'#5B6672',marginBottom:16}}>Edit pillar names and colors or add new Winter Academy pillars.</div><form onSubmit={save} style={{display:'flex',gap:8,alignItems:'end',marginBottom:18,maxWidth:560}}><input style={inputStyle} value={name} onChange={e=>setName(e.target.value)} placeholder="New pillar name"/><input type="color" value={color} onChange={e=>setColor(e.target.value)} style={{width:42,height:35}}/><button type="submit" style={btnPrimary}><Plus size={14}/> Add</button></form><div style={{display:'flex',flexDirection:'column',gap:8,maxWidth:560}}>{pillars.map(p=><div key={p.id} style={{display:'flex',gap:8,alignItems:'center',background:'#fff',border:'1px solid #DDE2E6',borderRadius:8,padding:10}}><input style={inputStyle} value={p.name} onChange={e=>update(p.id,'name',e.target.value)}/><input type="color" value={p.color} onChange={e=>update(p.id,'color',e.target.value)} style={{width:42,height:35}}/><button onClick={()=>onChange(pillars.filter(item=>item.id!==p.id))} style={{...linkBtn,color:'#B84C4C'}}>Delete</button></div>)}</div></div>;
 }
 
 const linkBtn = {background:'none', border:'none', color:'#1F6F78', fontSize:12.5, fontWeight:600, cursor:'pointer', padding:0};
@@ -579,7 +655,7 @@ function TimeSummary({ sessions }){
   );
 }
 
-function ViewPanel({ session, auth, onRequestUpdate, onClose }){
+function ViewPanel({ session, auth, rooms, onRequestUpdate, onClose }){
   const color = PILLAR_COLOR[session.pillar] || '#C9CDD2';
   const [reqOpen, setReqOpen] = useState(false);
   const [msg, setMsg] = useState('');
@@ -605,7 +681,7 @@ function ViewPanel({ session, auth, onRequestUpdate, onClose }){
         <DetailRow label="When">{session.date ? dateLabel(session.date)+' · '+session.weekday : 'Unscheduled'}</DetailRow>
         <DetailRow label="Time">{session.start ? session.start+' – '+session.end : '—'}</DetailRow>
         <DetailRow label="Facilitators">{(session.facilitators||[]).length ? session.facilitators.join(', ') : '—'}</DetailRow>
-        <DetailRow label="Session rooms">{(session.rooms||[]).filter(r=>auth.role!=='fellow' || (r.fellowIds||[]).includes(auth.fellowId)).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || '—'}</DetailRow>
+        <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{id:auth.fellowId,email:auth.email}], rooms).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || '—'}</DetailRow>
 
         {session.resources && session.resources.length>0 && (
           <div style={{marginTop:18}}>
@@ -660,6 +736,7 @@ function RosterPanel({ roster, onChange, onAccount, showToast }){
     setName(''); setEmail(''); setError(''); showToast('Fellow added');
   };
   const removeOne = (id) => { onChange(roster.filter(r=>r.id!==id)); showToast('Fellow removed'); };
+  const editOne = (fellow) => { const name=window.prompt('Fellow name',fellow.name); if(!name?.trim()) return; const email=window.prompt('Fellow email',fellow.email); if(!email?.trim()) return; const next={...fellow,name:name.trim(),email:email.trim().toLowerCase()}; onChange(roster.map(item=>item.id===fellow.id?next:item)); onAccount(next,'fellow'); showToast('Fellow updated'); };
   const importBulk = () => {
     const lines = bulkText.split('\n').map(l=>l.trim()).filter(Boolean);
     let added = 0, skipped = 0; const next = [...roster];
@@ -702,7 +779,7 @@ function RosterPanel({ roster, onChange, onAccount, showToast }){
             {sorted.map(r => (
               <tr key={r.id} style={{borderBottom:'1px solid #EEF0F2'}}>
                 <td style={{padding:'8px 12px'}}>{r.name}</td><td style={{padding:'8px 12px', color:'#5B6672'}}>{r.email}</td><td style={{padding:'8px 12px', color:'#5B6672'}}><KeyRound size={12}/> {r.pin || 'Assigned'}</td>
-                <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>removeOne(r.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer', display:'flex', marginLeft:'auto'}}><Trash2 size={14}/></button></td>
+                <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>editOne(r)} style={linkBtn}>Edit</button><button onClick={()=>removeOne(r.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer', display:'inline-flex', marginLeft:10}}><Trash2 size={14}/></button></td>
               </tr>
             ))}
             {sorted.length===0 && (<tr><td colSpan={4} style={{padding:'20px 12px', textAlign:'center', color:'#8A96A3'}}>No Fellows added yet.</td></tr>)}
@@ -729,6 +806,7 @@ function PlannerPanel({ planners, onChange, onAccount, showToast }){
     setName(''); setEmail(''); setRole('planner'); setError(''); showToast('Planner added');
   };
   const removeOne = (id) => { onChange(planners.filter(p=>p.id!==id)); showToast('Planner removed'); };
+  const editOne = (planner) => { const name=window.prompt('Planner name',planner.name); if(!name?.trim()) return; const email=window.prompt('Planner email',planner.email); if(!email?.trim()) return; const next={...planner,name:name.trim(),email:email.trim().toLowerCase()}; onChange(planners.map(item=>item.id===planner.id?next:item)); onAccount(next,next.role||'planner'); showToast('Planner updated'); };
   const sorted = planners.slice().sort((a,b)=>a.name.localeCompare(b.name));
 
   return (
@@ -759,7 +837,7 @@ function PlannerPanel({ planners, onChange, onAccount, showToast }){
             {sorted.map(p => (
               <tr key={p.id} style={{borderBottom:'1px solid #EEF0F2'}}>
                 <td style={{padding:'8px 12px'}}>{p.name}<div style={{fontSize:11,color:'#8A96A3'}}>{p.email}</div></td><td style={{padding:'8px 12px', color:'#5B6672'}}>{ROLE_LABEL[p.role]||'Planning team'}</td><td style={{padding:'8px 12px', color:'#5B6672'}}><KeyRound size={12}/> {p.pin || 'Assigned'}</td>
-                <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>removeOne(p.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer', display:'flex', marginLeft:'auto'}}><Trash2 size={14}/></button></td>
+                <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>editOne(p)} style={linkBtn}>Edit</button><button onClick={()=>removeOne(p.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer', display:'inline-flex', marginLeft:10}}><Trash2 size={14}/></button></td>
               </tr>
             ))}
             {sorted.length===0 && (<tr><td colSpan={4} style={{padding:'20px 12px', textAlign:'center', color:'#8A96A3'}}>No additional Planners yet.</td></tr>)}
@@ -800,16 +878,12 @@ function RequestsPanel({ requests, onResolve, onDelete }){
   );
 }
 
-function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, roster }){
-  const [form, setForm] = useState({ ...session, facilitatorsText:(session.facilitators||[]).join(', '), resources: session.resources ? session.resources.map(r=>({...r})) : [], rooms:(session.rooms||[]).map(r=>({...r, fellowIds:[...(r.fellowIds||[])]})) });
+function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillars }){
+  const [form, setForm] = useState({ ...session, facilitatorsText:(session.facilitators||[]).join(', '), resources: session.resources ? session.resources.map(r=>({...r})) : [] });
   const set = (k,v) => setForm(f => ({...f, [k]:v}));
   const addResource = () => set('resources', [...form.resources, {id:newResId(), label:RESOURCE_KINDS[0], url:''}]);
   const updateResource = (id, key, val) => set('resources', form.resources.map(r => r.id===id ? {...r,[key]:val} : r));
   const removeResource = (id) => set('resources', form.resources.filter(r=>r.id!==id));
-  const addRoom = () => set('rooms', [...form.rooms, {id:'room'+newId(), name:'', facilitator:'', fellowIds:[]}]);
-  const updateRoom = (id, key, value) => set('rooms', form.rooms.map(r=>r.id===id ? {...r,[key]:value} : r));
-  const toggleFellow = (roomId, fellowId) => set('rooms', form.rooms.map(r=>r.id===roomId ? {...r, fellowIds:(r.fellowIds||[]).includes(fellowId) ? r.fellowIds.filter(id=>id!==fellowId) : [...(r.fellowIds||[]), fellowId]} : r));
-  const removeRoom = (id) => set('rooms', form.rooms.filter(r=>r.id!==id));
 
   const handleSave = () => {
     const weekday = form.date ? new Date(form.date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}) : '';
@@ -818,7 +892,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, roster
       date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: form.end || null,
       name: form.name, pillar: form.pillar, mode: form.mode,
       facilitators: form.facilitatorsText.split(',').map(x=>x.trim()).filter(Boolean),
-      rooms: form.rooms.filter(r=>r.name.trim()).map(r=>({...r, fellowIds:r.fellowIds||[]})),
+      roomIds: form.roomIds || [],
       resources: form.resources.filter(r=>r.url.trim()),
       calendared: !!form.date && !!form.start && !!form.end,
     });
@@ -840,19 +914,9 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, roster
           <Field label="Start time" style={{flex:1}}><input disabled={!canEditSchedule} type="time" style={inputStyle} value={form.start||''} onChange={e=>set('start', e.target.value)} /></Field>
           <Field label="End time" style={{flex:1}}><input disabled={!canEditSchedule} type="time" style={inputStyle} value={form.end||''} onChange={e=>set('end', e.target.value)} /></Field>
         </div>
-        <Field label="Pillar"><select disabled={!canEditSchedule} style={inputStyle} value={form.pillar} onChange={e=>set('pillar', e.target.value)}>{PILLARS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
+        <Field label="Pillar"><select disabled={!canEditSchedule} style={inputStyle} value={form.pillar} onChange={e=>set('pillar', e.target.value)}>{(pillars||DEFAULT_PILLARS).map(p => <option key={p.id||p.name} value={p.name}>{p.name}</option>)}</select></Field>
         <Field label="Work mode (for time tracking)"><select disabled={!canEditSchedule} style={inputStyle} value={form.mode} onChange={e=>set('mode', e.target.value)}>{MODES.map(m => <option key={m} value={m}>{m}</option>)}</select></Field>
         <Field label="Facilitators (comma-separated, supports multiple)"><input disabled={!canEditSchedule} style={{...inputStyle, opacity:canEditSchedule?1:0.6}} value={form.facilitatorsText} onChange={e=>set('facilitatorsText', e.target.value)} placeholder="e.g. Nusrat, Kabir" /></Field>
-        <Field label="Session rooms">
-          <div style={{display:'flex', flexDirection:'column', gap:10}}>
-            {form.rooms.map(room => <div key={room.id} style={{border:'1px solid #DDE2E6', borderRadius:6, padding:10}}>
-              <div style={{display:'flex', gap:6, marginBottom:8}}><input disabled={!canEditSchedule} style={inputStyle} value={room.name} onChange={e=>updateRoom(room.id,'name',e.target.value)} placeholder="Room name" /><input disabled={!canEditSchedule} style={inputStyle} value={room.facilitator} onChange={e=>updateRoom(room.id,'facilitator',e.target.value)} placeholder="Facilitator" /><button disabled={!canEditSchedule} onClick={()=>removeRoom(room.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer'}}><X size={15}/></button></div>
-              <div style={{fontSize:11.5,color:'#8A96A3',marginBottom:5}}>Assign Fellows</div>
-              <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px'}}>{roster.map(f=><label key={f.id} style={{fontSize:11.5,color:'#5B6672'}}><input disabled={!canEditSchedule} type="checkbox" checked={(room.fellowIds||[]).includes(f.id)} onChange={()=>toggleFellow(room.id,f.id)} /> {f.name}</label>)}</div>
-            </div>)}
-          </div>
-          {canEditSchedule && <button onClick={addRoom} style={{...btnGhost, marginTop:8, padding:'6px 4px'}}><DoorOpen size={13}/> Add session room</button>}
-        </Field>
         <Field label="Resources">
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
             {form.resources.map(r => (
