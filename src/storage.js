@@ -1,9 +1,8 @@
 // Thin wrapper so the rest of the app can keep calling storage.get/set/delete
 // the same way it did inside Claude's artifact environment, but backed by a
 // real, free Firestore database instead of window.storage.
-import { db } from './firebaseConfig';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
-
+import { db } from './firebaseConfig';
 const COLLECTION = 'wa14';
 
 export const storage = {
