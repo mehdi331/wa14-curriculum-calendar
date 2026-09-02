@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // This app has no Firebase Auth wired up — access control happens in
+    // the app's own login screen (email pattern + roster), not here. These
+    // rules just scope reads/writes to the one collection the app uses, so
+    // the rest of your Firestore project (if you ever add anything else to
+    // it) stays untouched. Anyone who knows your Firestore project ID can
+    // technically read/write documents in this collection directly, bypassing
+    // the app's UI — acceptable for an internal scheduling tool, but if you
+    // later want real protection, add Firebase Authentication and tighten
+    // these rules to require a signed-in, verified TFB user.
+    match /wa14/{docId} {
+      allow read, write: if true;
+    }
+  }
+}
