@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, X, Download, RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, BarChart3, Link as LinkIcon, LogOut, UserPlus, Trash2, ShieldCheck, MessageSquare, Send } from 'lucide-react';
+import { Plus, X, Download, RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, BarChart3, Link as LinkIcon, LogOut, UserPlus, Trash2, ShieldCheck, MessageSquare, Send, KeyRound, DoorOpen } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { storage, localAuth } from './storage';
 
@@ -38,8 +38,17 @@ const PX_PER_MIN = 0.95;
 const STAFF_EMAIL_RE = /^[a-z]+@teachforbangladesh\.org$/i;
 const FELLOW_EMAIL_RE = /^[a-z]+\.[a-z]+@teachforbangladesh\.org$/i;
 const SUPERADMIN_EMAIL = 'mehdi@teachforbangladesh.org';
+const SUPERADMIN_USERNAME = 'superadmin';
+const SUPERADMIN_PASSWORD = 'TND4EV@TFB1!';
+const FULL_CONTROL = ['mehdi@teachforbangladesh.org','asifur@teachforbangladesh.org','hasibur@teachforbangladesh.org'];
+const ROLE_LABEL = { superadmin:'Superadmin', planner:'Planning team', resource_planner:'Resources only', staff:'Staff', fellow:'Fellow' };
 
-const ROLE_LABEL = { superadmin:'Superadmin', planner:'Planning team', staff:'Staff', fellow:'Fellow' };
+function generatePin(){ return String(Math.floor(100000 + Math.random()*900000)); }
+const DEFAULT_ACCOUNTS = [
+  {email:'mehdi@teachforbangladesh.org', name:'Mehdi Morshed Chowdhury', role:'planner'},
+  {email:'asifur@teachforbangladesh.org', name:'Md Asifur Rahman', role:'planner'},
+  {email:'hasibur@teachforbangladesh.org', name:'Hasibur Rahman Sohan', role:'planner'}
+];
 
 function toMin(t){ if(!t) return null; const [h,m]=t.split(':').map(Number); return h*60+m; }
 function fmtDur(mins){
@@ -85,16 +94,21 @@ export default function App(){
 
 async function resolveRole(emailRaw){
   const em = (emailRaw||'').trim().toLowerCase();
-  if (em === SUPERADMIN_EMAIL) return { ok:true, email:em, role:'superadmin' };
+  let accounts = [];
+  try {
+    const res = await storage.get('wa14-accounts');
+    accounts = res && res.value ? JSON.parse(res.value) : [];
+    if (!accounts.length) {
+      accounts = DEFAULT_ACCOUNTS.map(a => ({...a, pin:generatePin()}));
+      await storage.set('wa14-accounts', JSON.stringify(accounts));
+    }
+  } catch (e) { return { ok:false, error:'Could not verify right now — please try again.' }; }
+
+  if (em === SUPERADMIN_USERNAME || em === SUPERADMIN_EMAIL) return { ok:true, email:SUPERADMIN_EMAIL, role:'superadmin', name:'Superadmin', pin:SUPERADMIN_PASSWORD };
 
   if (STAFF_EMAIL_RE.test(em)) {
-    try {
-      const res = await storage.get('wa14-planners');
-      const planners = res && res.value ? JSON.parse(res.value) : [];
-      const match = planners.find(p => p.email.toLowerCase()===em);
-      if (match) return { ok:true, email:em, role:'planner', name:match.name };
-    } catch (e) {}
-    return { ok:true, email:em, role:'staff' };
+    const match = accounts.find(a => a.email.toLowerCase()===em);
+    return match ? { ok:true, email:em, role:match.role, name:match.name, pin:match.pin } : { ok:true, email:em, role:'staff', name:em.split('@')[0] };
   }
 
   if (FELLOW_EMAIL_RE.test(em)) {
@@ -102,7 +116,10 @@ async function resolveRole(emailRaw){
       const res = await storage.get('wa14-roster');
       const roster = res && res.value ? JSON.parse(res.value) : [];
       const match = roster.find(r => r.email.toLowerCase()===em);
-      if (match) return { ok:true, email:em, role:'fellow', name:match.name };
+      if (match) {
+        const account = accounts.find(a => a.email.toLowerCase()===em);
+        return { ok:true, email:em, role:'fellow', name:match.name, fellowId:match.id, pin:account && account.pin };
+      }
     } catch (e) { return { ok:false, error:'Could not verify right now — please try again.' }; }
     return { ok:false, error:"This email isn't on the approved Fellow list yet. Ask a planner to add it." };
   }
@@ -112,6 +129,7 @@ async function resolveRole(emailRaw){
 
 function LoginGate({ onLogin }){
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
 
@@ -120,7 +138,8 @@ function LoginGate({ onLogin }){
     setError(''); setChecking(true);
     const result = await resolveRole(email);
     setChecking(false);
-    if (result.ok) onLogin({ email: result.email, role: result.role, name: result.name });
+    if (result.ok && result.pin && password !== result.pin) { setError('Incorrect password or PIN. If you forget your PIN, contact your AFA.'); return; }
+    if (result.ok) onLogin({ email: result.email, role: result.role, name: result.name, fellowId:result.fellowId });
     else setError(result.error);
   };
 
@@ -132,18 +151,20 @@ function LoginGate({ onLogin }){
 
         <div style={{fontSize:12, color:'#5B6672', fontWeight:600, marginBottom:5}}>Email</div>
         <input
-          type="email" autoFocus value={email} onChange={e=>{setEmail(e.target.value); setError('');}}
-          placeholder="name@teachforbangladesh.org"
+          type="text" autoFocus value={email} onChange={e=>{setEmail(e.target.value); setError('');}}
+          placeholder="Email or superadmin"
+          style={{width:'100%', padding:'9px 10px', borderRadius:6, border:'1px solid #C9CDD2', fontSize:13.5, boxSizing:'border-box', marginBottom:8}}
+        />
+        <div style={{fontSize:12, color:'#5B6672', fontWeight:600, marginBottom:5}}>Password</div>
+        <input
+          type="password" value={password} onChange={e=>{setPassword(e.target.value); setError('');}}
+          placeholder="Enter your password or PIN"
           style={{width:'100%', padding:'9px 10px', borderRadius:6, border:'1px solid #C9CDD2', fontSize:13.5, boxSizing:'border-box', marginBottom:8}}
         />
         {error && <div style={{color:'#B84C4C', fontSize:12, marginBottom:10, lineHeight:1.4}}>{error}</div>}
         <button type="submit" disabled={checking} style={{...btnPrimary, width:'100%', justifyContent:'center', padding:'10px', marginTop:6, opacity:checking?0.6:1}}>
           {checking ? 'Checking…' : 'Continue'}
         </button>
-        <div style={{fontSize:11, color:'#9AA5B1', marginTop:14, lineHeight:1.5}}>
-          Staff (name@teachforbangladesh.org) get read-only calendar access automatically.
-          Fellows (firstname.lastname@teachforbangladesh.org) need to be added to the Fellow list first.
-        </div>
       </form>
     </div>
   );
@@ -151,7 +172,8 @@ function LoginGate({ onLogin }){
 
 function MainApp({ auth, onLogout }){
   const isSuperadmin = auth.role === 'superadmin';
-  const isAdmin = isSuperadmin || auth.role === 'planner';
+  const isFullAdmin = isSuperadmin || auth.role === 'planner';
+  const isAdmin = isFullAdmin || auth.role === 'resource_planner';
   const isViewer = !isAdmin; // staff or fellow — read-only
 
   const [sessions, setSessions] = useState(null);
@@ -179,7 +201,15 @@ function MainApp({ auth, onLogout }){
       catch (e) { setSessions(SEED); }
       try { const r = await storage.get('wa14-roster'); setRoster(r && r.value ? JSON.parse(r.value) : []); }
       catch (e) { setRoster([]); }
-      try { const r = await storage.get('wa14-planners'); setPlanners(r && r.value ? JSON.parse(r.value) : []); }
+      try {
+        const r = await storage.get('wa14-planners');
+        if (r && r.value) setPlanners(JSON.parse(r.value));
+        else {
+          const a = await storage.get('wa14-accounts');
+          const accounts = a && a.value ? JSON.parse(a.value) : DEFAULT_ACCOUNTS.map(x=>({...x,pin:generatePin()}));
+          setPlanners(accounts.filter(x=>x.role==='planner' || x.role==='resource_planner').map((x,i)=>({...x,id:x.id||'p'+i})));
+        }
+      }
       catch (e) { setPlanners([]); }
       try { const r = await storage.get('wa14-requests'); setRequests(r && r.value ? JSON.parse(r.value) : []); }
       catch (e) { setRequests([]); }
@@ -199,6 +229,16 @@ function MainApp({ auth, onLogout }){
   const persistRoster = debouncedPersist(setRoster, rosterSaveTimer, 'wa14-roster');
   const persistPlanners = debouncedPersist(setPlanners, plannerSaveTimer, 'wa14-planners');
   const persistRequests = debouncedPersist(setRequests, requestSaveTimer, 'wa14-requests');
+
+  const addAccount = async (person, role) => {
+    try {
+      const res = await storage.get('wa14-accounts');
+      const accounts = res && res.value ? JSON.parse(res.value) : DEFAULT_ACCOUNTS.map(a=>({...a,pin:generatePin()}));
+      const next = accounts.filter(a=>a.email.toLowerCase()!==person.email.toLowerCase());
+      next.push({email:person.email, name:person.name, role, pin:person.pin || generatePin()});
+      await storage.set('wa14-accounts', JSON.stringify(next));
+    } catch (e) { console.error('account save failed', e); }
+  };
 
   const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(''), 2200); };
 
@@ -253,7 +293,7 @@ function MainApp({ auth, onLogout }){
     <div style={{fontFamily:FONT, background:'#EFF3F4', minHeight:'600px', color:'#1B2733'}}>
       <TopBar
         tab={tab} setTab={setTab} isAdmin={isAdmin} isSuperadmin={isSuperadmin} auth={auth} onLogout={onLogout}
-        onExport={exportExcel} onReset={resetSeed} onAdd={()=>setEditing('new')} openRequests={openRequests}
+        onExport={exportExcel} onReset={resetSeed} onAdd={()=>setEditing('new')} openRequests={openRequests} isFullAdmin={isFullAdmin}
       />
       {toast && <div style={toastStyle}>{toast}</div>}
       <div style={{padding:'20px 24px 40px'}}>
@@ -265,20 +305,20 @@ function MainApp({ auth, onLogout }){
           <CalendarView
             sessions={filtered} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
             hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
-            onSelect={isAdmin ? setEditing : setViewing}
+            onSelect={isAdmin ? setEditing : setViewing} auth={auth} roster={roster}
           />
         )}
         {tab==='sessions' && isAdmin && (
           <SessionsTable sessions={filtered} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} />
         )}
         {tab==='summary' && isAdmin && <TimeSummary sessions={filtered} />}
-        {tab==='fellows' && isAdmin && <RosterPanel roster={roster} onChange={persistRoster} showToast={showToast} />}
-        {tab==='planners' && isSuperadmin && <PlannerPanel planners={planners} onChange={persistPlanners} showToast={showToast} />}
-        {tab==='requests' && isAdmin && <RequestsPanel requests={requests} onResolve={resolveRequest} onDelete={deleteRequest} />}
+        {tab==='fellows' && isFullAdmin && <RosterPanel roster={roster} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
+        {tab==='planners' && isSuperadmin && <PlannerPanel planners={planners} onChange={persistPlanners} onAccount={addAccount} showToast={showToast} />}
+        {tab==='requests' && isFullAdmin && <RequestsPanel requests={requests} onResolve={resolveRequest} onDelete={deleteRequest} />}
       </div>
 
       {isAdmin && editing && (
-        <EditPanel session={editing==='new' ? blankSession() : editing} onSave={saveSession} onDelete={editing!=='new' ? deleteSession : null} onClose={()=>setEditing(null)} />
+        <EditPanel session={editing==='new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing!=='new' ? deleteSession : null} onClose={()=>setEditing(null)} canEditSchedule={isFullAdmin} roster={roster} />
       )}
       {isViewer && viewing && <ViewPanel session={viewing} auth={auth} onRequestUpdate={requestUpdate} onClose={()=>setViewing(null)} />}
     </div>
@@ -286,16 +326,16 @@ function MainApp({ auth, onLogout }){
 }
 
 function blankSession(){
-  return { id:newId(), week:0, date:'', weekday:'', start:'', end:'', name:'', pillar:PILLARS[0], mode:'Sync', facilitators:[], resources:[], calendared:false };
+  return { id:newId(), week:0, date:'', weekday:'', start:'', end:'', name:'', pillar:PILLARS[0], mode:'Sync', facilitators:[], rooms:[], resources:[], calendared:false };
 }
 
 const toastStyle = { position:'fixed', top:16, right:24, background:'#1B2733', color:'#fff', padding:'9px 16px', borderRadius:6, fontSize:13, zIndex:200, boxShadow:'0 4px 14px rgba(0,0,0,.2)' };
 
-function TopBar({ tab, setTab, isAdmin, isSuperadmin, auth, onLogout, onExport, onReset, onAdd, openRequests }){
+function TopBar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, auth, onLogout, onExport, onReset, onAdd, openRequests }){
   const tabs = [
     {id:'calendar', label:'Calendar', icon:CalendarIcon},
-    ...(isAdmin ? [
-      {id:'sessions', label:'Sessions', icon:TableIcon},
+    ...(isAdmin ? [{id:'sessions', label:'Sessions', icon:TableIcon}] : []),
+    ...(isFullAdmin ? [
       {id:'summary', label:'Time Summary', icon:BarChart3},
       {id:'fellows', label:'Fellows', icon:UserPlus},
       {id:'requests', label:'Requests'+(openRequests?' ('+openRequests+')':''), icon:MessageSquare},
@@ -320,7 +360,7 @@ function TopBar({ tab, setTab, isAdmin, isSuperadmin, auth, onLogout, onExport, 
         </div>
       </div>
       <div style={{display:'flex', alignItems:'center', gap:14, padding:'12px 0'}}>
-        {isAdmin && tab!=='fellows' && tab!=='planners' && tab!=='requests' && (
+        {isFullAdmin && tab!=='fellows' && tab!=='planners' && tab!=='requests' && (
           <div style={{display:'flex', gap:8}}>
             <button onClick={onAdd} style={btnPrimary}><Plus size={14}/> Add session</button>
             <button onClick={onExport} style={btnSecondary}><Download size={14}/> Export Excel</button>
@@ -364,7 +404,7 @@ function FilterBar({ pillarFilter, setPillarFilter, modeFilter, setModeFilter })
   );
 }
 
-function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, onSelect }){
+function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, onSelect, auth, roster }){
   const weekSessions = sessions.filter(s => s.week===activeWeek && s.date);
   const daysMap = {};
   weekSessions.forEach(s => { if(!daysMap[s.date]) daysMap[s.date]=s.weekday; });
@@ -425,6 +465,9 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                         {height>28 && <div style={{color:'#5B6672'}}>{s.start}–{s.end}</div>}
                         {height>42 && s.facilitators && s.facilitators.length>0 && (
                           <div style={{color:'#5B6672', display:'flex', alignItems:'center', gap:3, marginTop:1}}><Users size={9}/> {s.facilitators.join(', ')}</div>
+                        )}
+                        {height>56 && s.rooms && s.rooms.length>0 && (
+                          <div style={{color:'#5B6672', display:'flex', alignItems:'center', gap:3, marginTop:1}}><DoorOpen size={9}/> {(auth.role==='fellow' ? s.rooms.filter(r=>(r.fellowIds||[]).includes(roster.find(f=>f.email===auth.email)?.id)) : s.rooms).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || 'Room not assigned'}</div>
                         )}
                         {height>56 && s.resources && s.resources.length>0 && (
                           <div style={{color:'#5B6672', display:'flex', alignItems:'center', gap:3, marginTop:1}}><LinkIcon size={9}/> {s.resources.length} resource{s.resources.length>1?'s':''}</div>
@@ -562,6 +605,7 @@ function ViewPanel({ session, auth, onRequestUpdate, onClose }){
         <DetailRow label="When">{session.date ? dateLabel(session.date)+' · '+session.weekday : 'Unscheduled'}</DetailRow>
         <DetailRow label="Time">{session.start ? session.start+' – '+session.end : '—'}</DetailRow>
         <DetailRow label="Facilitators">{(session.facilitators||[]).length ? session.facilitators.join(', ') : '—'}</DetailRow>
+        <DetailRow label="Session rooms">{(session.rooms||[]).filter(r=>auth.role!=='fellow' || (r.fellowIds||[]).includes(auth.fellowId)).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || '—'}</DetailRow>
 
         {session.resources && session.resources.length>0 && (
           <div style={{marginTop:18}}>
@@ -601,7 +645,7 @@ function DetailRow({ label, children }){
   return (<div style={{marginBottom:12}}><div style={{fontSize:11.5, color:'#8A96A3', marginBottom:2}}>{label}</div><div style={{fontSize:13.5, color:'#1B2733'}}>{children}</div></div>);
 }
 
-function RosterPanel({ roster, onChange, showToast }){
+function RosterPanel({ roster, onChange, onAccount, showToast }){
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [error, setError] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false); const [bulkText, setBulkText] = useState('');
 
@@ -611,7 +655,8 @@ function RosterPanel({ roster, onChange, showToast }){
     if (!name.trim()) { setError('Enter a name.'); return; }
     if (!FELLOW_EMAIL_RE.test(em)) { setError('Email must look like firstname.lastname@teachforbangladesh.org'); return; }
     if (roster.some(r => r.email.toLowerCase()===em)) { setError('That email is already on the roster.'); return; }
-    onChange([...roster, { id: 'f'+Date.now(), name: name.trim(), email: em }]);
+    const fellow = { id: 'f'+Date.now(), name: name.trim(), email: em, pin:generatePin() };
+    onChange([...roster, fellow]); onAccount(fellow, 'fellow');
     setName(''); setEmail(''); setError(''); showToast('Fellow added');
   };
   const removeOne = (id) => { onChange(roster.filter(r=>r.id!==id)); showToast('Fellow removed'); };
@@ -623,7 +668,8 @@ function RosterPanel({ roster, onChange, showToast }){
       if (parts.length < 2) { skipped++; return; }
       const [nm, em] = parts; const emLower = em.toLowerCase();
       if (!FELLOW_EMAIL_RE.test(emLower) || next.some(r=>r.email.toLowerCase()===emLower)) { skipped++; return; }
-      next.push({ id: 'f'+Date.now()+added, name: nm, email: emLower }); added++;
+      const fellow = { id: 'f'+Date.now()+added, name: nm, email: emLower, pin:generatePin() };
+      next.push(fellow); onAccount(fellow, 'fellow'); added++;
     });
     onChange(next); setBulkText(''); setBulkOpen(false);
     showToast(added+' added'+(skipped?', '+skipped+' skipped':''));
@@ -651,15 +697,15 @@ function RosterPanel({ roster, onChange, showToast }){
       </div>
       <div style={{background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, overflow:'hidden', maxWidth:520}}>
         <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Name</th><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Email</th><th style={{padding:'9px 12px', borderBottom:'1px solid #DDE2E6'}}></th></tr></thead>
+          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Name</th><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Email</th><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>PIN</th><th style={{padding:'9px 12px', borderBottom:'1px solid #DDE2E6'}}></th></tr></thead>
           <tbody>
             {sorted.map(r => (
               <tr key={r.id} style={{borderBottom:'1px solid #EEF0F2'}}>
-                <td style={{padding:'8px 12px'}}>{r.name}</td><td style={{padding:'8px 12px', color:'#5B6672'}}>{r.email}</td>
+                <td style={{padding:'8px 12px'}}>{r.name}</td><td style={{padding:'8px 12px', color:'#5B6672'}}>{r.email}</td><td style={{padding:'8px 12px', color:'#5B6672'}}><KeyRound size={12}/> {r.pin || 'Assigned'}</td>
                 <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>removeOne(r.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer', display:'flex', marginLeft:'auto'}}><Trash2 size={14}/></button></td>
               </tr>
             ))}
-            {sorted.length===0 && (<tr><td colSpan={3} style={{padding:'20px 12px', textAlign:'center', color:'#8A96A3'}}>No Fellows added yet.</td></tr>)}
+            {sorted.length===0 && (<tr><td colSpan={4} style={{padding:'20px 12px', textAlign:'center', color:'#8A96A3'}}>No Fellows added yet.</td></tr>)}
           </tbody>
         </table>
       </div>
@@ -667,8 +713,9 @@ function RosterPanel({ roster, onChange, showToast }){
   );
 }
 
-function PlannerPanel({ planners, onChange, showToast }){
+function PlannerPanel({ planners, onChange, onAccount, showToast }){
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [error, setError] = useState('');
+  const [role, setRole] = useState('planner');
 
   const addOne = (e) => {
     e.preventDefault();
@@ -677,8 +724,9 @@ function PlannerPanel({ planners, onChange, showToast }){
     if (!STAFF_EMAIL_RE.test(em)) { setError('Email must look like name@teachforbangladesh.org'); return; }
     if (em === SUPERADMIN_EMAIL) { setError('That address is already the built-in Superadmin.'); return; }
     if (planners.some(p => p.email.toLowerCase()===em)) { setError('That email is already a Planner.'); return; }
-    onChange([...planners, { id:'p'+Date.now(), name:name.trim(), email:em }]);
-    setName(''); setEmail(''); setError(''); showToast('Planner added');
+    const planner = { id:'p'+Date.now(), name:name.trim(), email:em, role, pin:generatePin() };
+    onChange([...planners, planner]); onAccount(planner, role);
+    setName(''); setEmail(''); setRole('planner'); setError(''); showToast('Planner added');
   };
   const removeOne = (id) => { onChange(planners.filter(p=>p.id!==id)); showToast('Planner removed'); };
   const sorted = planners.slice().sort((a,b)=>a.name.localeCompare(b.name));
@@ -686,7 +734,7 @@ function PlannerPanel({ planners, onChange, showToast }){
   return (
     <div>
       <div style={{marginBottom:18, fontSize:13, color:'#5B6672', maxWidth:520}}>
-        Planners get full edit access — sessions, resources, and the Fellow roster. Only the Superadmin can add or remove Planners.
+        Assign each planning team member the access they need. Resource-only planners can edit resource links without changing the calendar or roster.
       </div>
       <div style={{background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, padding:'12px 16px', marginBottom:16, maxWidth:520, display:'flex', alignItems:'center', gap:10}}>
         <ShieldCheck size={16} color="#1F6F78" />
@@ -699,21 +747,22 @@ function PlannerPanel({ planners, onChange, showToast }){
         <form onSubmit={addOne} style={{display:'flex', gap:8, alignItems:'flex-end', flexWrap:'wrap'}}>
           <div style={{flex:'1 1 160px'}}><div style={{fontSize:12, color:'#5B6672', fontWeight:600, marginBottom:5}}>Name</div><input style={inputStyle} value={name} onChange={e=>setName(e.target.value)} placeholder="Planner's full name" /></div>
           <div style={{flex:'1 1 220px'}}><div style={{fontSize:12, color:'#5B6672', fontWeight:600, marginBottom:5}}>Email</div><input style={inputStyle} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@teachforbangladesh.org" /></div>
+          <div style={{flex:'1 1 150px'}}><div style={{fontSize:12, color:'#5B6672', fontWeight:600, marginBottom:5}}>Role</div><select style={inputStyle} value={role} onChange={e=>setRole(e.target.value)}><option value="planner">Full control</option><option value="resource_planner">Resources only</option></select></div>
           <button type="submit" style={{...btnPrimary, height:35}}><Plus size={14}/> Add</button>
         </form>
         {error && <div style={{color:'#B84C4C', fontSize:12, marginTop:8}}>{error}</div>}
       </div>
       <div style={{background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, overflow:'hidden', maxWidth:520}}>
         <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Name</th><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Email</th><th style={{padding:'9px 12px', borderBottom:'1px solid #DDE2E6'}}></th></tr></thead>
+          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Name</th><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Role</th><th style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>PIN</th><th style={{padding:'9px 12px', borderBottom:'1px solid #DDE2E6'}}></th></tr></thead>
           <tbody>
             {sorted.map(p => (
               <tr key={p.id} style={{borderBottom:'1px solid #EEF0F2'}}>
-                <td style={{padding:'8px 12px'}}>{p.name}</td><td style={{padding:'8px 12px', color:'#5B6672'}}>{p.email}</td>
+                <td style={{padding:'8px 12px'}}>{p.name}<div style={{fontSize:11,color:'#8A96A3'}}>{p.email}</div></td><td style={{padding:'8px 12px', color:'#5B6672'}}>{ROLE_LABEL[p.role]||'Planning team'}</td><td style={{padding:'8px 12px', color:'#5B6672'}}><KeyRound size={12}/> {p.pin || 'Assigned'}</td>
                 <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>removeOne(p.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer', display:'flex', marginLeft:'auto'}}><Trash2 size={14}/></button></td>
               </tr>
             ))}
-            {sorted.length===0 && (<tr><td colSpan={3} style={{padding:'20px 12px', textAlign:'center', color:'#8A96A3'}}>No additional Planners yet.</td></tr>)}
+            {sorted.length===0 && (<tr><td colSpan={4} style={{padding:'20px 12px', textAlign:'center', color:'#8A96A3'}}>No additional Planners yet.</td></tr>)}
           </tbody>
         </table>
       </div>
@@ -751,12 +800,16 @@ function RequestsPanel({ requests, onResolve, onDelete }){
   );
 }
 
-function EditPanel({ session, onSave, onDelete, onClose }){
-  const [form, setForm] = useState({ ...session, facilitatorsText:(session.facilitators||[]).join(', '), resources: session.resources ? session.resources.map(r=>({...r})) : [] });
+function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, roster }){
+  const [form, setForm] = useState({ ...session, facilitatorsText:(session.facilitators||[]).join(', '), resources: session.resources ? session.resources.map(r=>({...r})) : [], rooms:(session.rooms||[]).map(r=>({...r, fellowIds:[...(r.fellowIds||[])]})) });
   const set = (k,v) => setForm(f => ({...f, [k]:v}));
   const addResource = () => set('resources', [...form.resources, {id:newResId(), label:RESOURCE_KINDS[0], url:''}]);
   const updateResource = (id, key, val) => set('resources', form.resources.map(r => r.id===id ? {...r,[key]:val} : r));
   const removeResource = (id) => set('resources', form.resources.filter(r=>r.id!==id));
+  const addRoom = () => set('rooms', [...form.rooms, {id:'room'+newId(), name:'', facilitator:'', fellowIds:[]}]);
+  const updateRoom = (id, key, value) => set('rooms', form.rooms.map(r=>r.id===id ? {...r,[key]:value} : r));
+  const toggleFellow = (roomId, fellowId) => set('rooms', form.rooms.map(r=>r.id===roomId ? {...r, fellowIds:(r.fellowIds||[]).includes(fellowId) ? r.fellowIds.filter(id=>id!==fellowId) : [...(r.fellowIds||[]), fellowId]} : r));
+  const removeRoom = (id) => set('rooms', form.rooms.filter(r=>r.id!==id));
 
   const handleSave = () => {
     const weekday = form.date ? new Date(form.date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}) : '';
@@ -765,6 +818,7 @@ function EditPanel({ session, onSave, onDelete, onClose }){
       date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: form.end || null,
       name: form.name, pillar: form.pillar, mode: form.mode,
       facilitators: form.facilitatorsText.split(',').map(x=>x.trim()).filter(Boolean),
+      rooms: form.rooms.filter(r=>r.name.trim()).map(r=>({...r, fellowIds:r.fellowIds||[]})),
       resources: form.resources.filter(r=>r.url.trim()),
       calendared: !!form.date && !!form.start && !!form.end,
     });
@@ -777,18 +831,28 @@ function EditPanel({ session, onSave, onDelete, onClose }){
           <div style={{fontWeight:700, fontSize:15}}>{session.id ? 'Edit session' : 'New session'}</div>
           <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'#8A96A3'}}><X size={18}/></button>
         </div>
-        <Field label="Session name"><input style={inputStyle} value={form.name} onChange={e=>set('name', e.target.value)} placeholder="e.g. Backward Planning Workshop" /></Field>
-        <div style={{display:'flex', gap:10}}>
-          <Field label="Date" style={{flex:1}}><input type="date" style={inputStyle} value={form.date||''} onChange={e=>set('date', e.target.value)} /></Field>
-          <Field label="Week" style={{width:110}}><select style={inputStyle} value={form.week??''} onChange={e=>set('week', e.target.value)}><option value="">—</option>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}</select></Field>
+        <Field label="Session name"><input disabled={!canEditSchedule} style={{...inputStyle, opacity:canEditSchedule?1:0.6}} value={form.name} onChange={e=>set('name', e.target.value)} placeholder="e.g. Backward Planning Workshop" /></Field>
+        <div style={{display:'flex', gap:10, opacity:canEditSchedule?1:0.6}}>
+          <Field label="Date" style={{flex:1}}><input disabled={!canEditSchedule} type="date" style={inputStyle} value={form.date||''} onChange={e=>set('date', e.target.value)} /></Field>
+          <Field label="Week" style={{width:110}}><select disabled={!canEditSchedule} style={inputStyle} value={form.week??''} onChange={e=>set('week', e.target.value)}><option value="">—</option>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}</select></Field>
         </div>
-        <div style={{display:'flex', gap:10}}>
-          <Field label="Start time" style={{flex:1}}><input type="time" style={inputStyle} value={form.start||''} onChange={e=>set('start', e.target.value)} /></Field>
-          <Field label="End time" style={{flex:1}}><input type="time" style={inputStyle} value={form.end||''} onChange={e=>set('end', e.target.value)} /></Field>
+        <div style={{display:'flex', gap:10, opacity:canEditSchedule?1:0.6}}>
+          <Field label="Start time" style={{flex:1}}><input disabled={!canEditSchedule} type="time" style={inputStyle} value={form.start||''} onChange={e=>set('start', e.target.value)} /></Field>
+          <Field label="End time" style={{flex:1}}><input disabled={!canEditSchedule} type="time" style={inputStyle} value={form.end||''} onChange={e=>set('end', e.target.value)} /></Field>
         </div>
-        <Field label="Pillar"><select style={inputStyle} value={form.pillar} onChange={e=>set('pillar', e.target.value)}>{PILLARS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
-        <Field label="Work mode (for time tracking)"><select style={inputStyle} value={form.mode} onChange={e=>set('mode', e.target.value)}>{MODES.map(m => <option key={m} value={m}>{m}</option>)}</select></Field>
-        <Field label="Facilitators (comma-separated, supports multiple)"><input style={inputStyle} value={form.facilitatorsText} onChange={e=>set('facilitatorsText', e.target.value)} placeholder="e.g. Nusrat, Kabir" /></Field>
+        <Field label="Pillar"><select disabled={!canEditSchedule} style={inputStyle} value={form.pillar} onChange={e=>set('pillar', e.target.value)}>{PILLARS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
+        <Field label="Work mode (for time tracking)"><select disabled={!canEditSchedule} style={inputStyle} value={form.mode} onChange={e=>set('mode', e.target.value)}>{MODES.map(m => <option key={m} value={m}>{m}</option>)}</select></Field>
+        <Field label="Facilitators (comma-separated, supports multiple)"><input disabled={!canEditSchedule} style={{...inputStyle, opacity:canEditSchedule?1:0.6}} value={form.facilitatorsText} onChange={e=>set('facilitatorsText', e.target.value)} placeholder="e.g. Nusrat, Kabir" /></Field>
+        <Field label="Session rooms">
+          <div style={{display:'flex', flexDirection:'column', gap:10}}>
+            {form.rooms.map(room => <div key={room.id} style={{border:'1px solid #DDE2E6', borderRadius:6, padding:10}}>
+              <div style={{display:'flex', gap:6, marginBottom:8}}><input disabled={!canEditSchedule} style={inputStyle} value={room.name} onChange={e=>updateRoom(room.id,'name',e.target.value)} placeholder="Room name" /><input disabled={!canEditSchedule} style={inputStyle} value={room.facilitator} onChange={e=>updateRoom(room.id,'facilitator',e.target.value)} placeholder="Facilitator" /><button disabled={!canEditSchedule} onClick={()=>removeRoom(room.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer'}}><X size={15}/></button></div>
+              <div style={{fontSize:11.5,color:'#8A96A3',marginBottom:5}}>Assign Fellows</div>
+              <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px'}}>{roster.map(f=><label key={f.id} style={{fontSize:11.5,color:'#5B6672'}}><input disabled={!canEditSchedule} type="checkbox" checked={(room.fellowIds||[]).includes(f.id)} onChange={()=>toggleFellow(room.id,f.id)} /> {f.name}</label>)}</div>
+            </div>)}
+          </div>
+          {canEditSchedule && <button onClick={addRoom} style={{...btnGhost, marginTop:8, padding:'6px 4px'}}><DoorOpen size={13}/> Add session room</button>}
+        </Field>
         <Field label="Resources">
           <div style={{display:'flex', flexDirection:'column', gap:8}}>
             {form.resources.map(r => (
