@@ -8,6 +8,8 @@
 // 5. Go to Firestore > Rules and paste the rules from firestore.rules in
 //    this folder, then click Publish.
 import { initializeApp } from 'firebase/app';
+import { getAnalytics } from "firebase/analytics";
+
 import { getFirestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
@@ -25,3 +27,6 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+
+// Ensure 'export const db' is present:
+export const db = getFirestore(app);
