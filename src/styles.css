@@ -1,23 +1,6 @@
 :root {
-  color-scheme: dark;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  --woods: #005b3f;
-  --ivy: #5b8d61;
-  --bad-blood: #d65641;
-  --gold-rush: #d0a023;
-  --reputation: #252625;
-  --exile: #919191;
-  --delicate: #d5e0d5;
-  --willow: #002323;
-  --love-story: #db9a76;
-  --blank-space: #ffffff;
-  --page: #101514;
-  --surface: #1b211f;
-  --surface-raised: #252625;
-  --border: #3a4540;
-  --text: #f4f7f3;
-  --muted: #b2bdb5;
-  --danger: #ed775f;
+  color-scheme: light;
+  font-family: -apple-system, "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -25,39 +8,13 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--page);
-  color: var(--text);
+  background: #ffffff;
+  color: #1b2733;
 }
 
 button, input, select, textarea { font: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--gold-rush);
+  outline: 2px solid #1f6f78;
   outline-offset: 2px;
 }
 
-input, select, textarea {
-  background: var(--surface-raised);
-  color: var(--text);
-  border-color: var(--border) !important;
-}
-
-option { background: var(--surface-raised); color: var(--text); }
-
-a { color: var(--love-story); }
-
-::selection { background: var(--woods); color: var(--blank-space); }
-
-.wa14-app { background: var(--page) !important; color: var(--text) !important; }
-.wa14-app [style*="background:'#fff'"],
-.wa14-app [style*="background:'#FFFFFF'"],
-.wa14-app [style*="background:'#F7F8F9'"] { background: var(--surface) !important; }
-.wa14-app [style*="border:'1px solid #DDE2E6'"],
-.wa14-app [style*="borderBottom:'1px solid #DDE2E6'"],
-.wa14-app [style*="borderBottom:'1px solid #EEF0F2'"],
-.wa14-app [style*="borderRight:'1px solid #EEF0F2'"] { border-color: var(--border) !important; }
-.wa14-app [style*="color:'#1B2733'"] { color: var(--text) !important; }
-.wa14-app [style*="color:'#5B6672'"],
-.wa14-app [style*="color:'#8A96A3'"],
-.wa14-app [style*="color:'#9AA5B1'"] { color: var(--muted) !important; }
-.wa14-app [style*="color:'#B84C4C'"] { color: var(--danger) !important; }
-.wa14-app [style*="border:'1px solid #C9CDD2'"] { border-color: var(--border) !important; }
