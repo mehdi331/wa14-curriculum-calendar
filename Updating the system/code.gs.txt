@@ -1,0 +1,1179 @@
+// ================= CONFIG =================
+const SPREADSHEET_ID = "1d_jZn93md8JgASIWYJmIyiZL1JcqHhJlyfYlxzOGfB4";
+const SHEETS = {
+  ALLOWED_EMAILS: "Allowed_Emails",
+  QUESTIONS: "Questions",
+  RESPONSES: "Responses",
+  SESSIONS: "Sessions",
+  ADMIN: "Admin",
+  PINS: "PINs"  // NEW: Will store Email, Name, PIN
+};
+const ALLOWED_ADMIN_EMAILS = ["mehdi@teachforbangladesh.org", "asifur@teachforbangladesh.org"];
+
+// ================= CACHE =================
+let QUESTIONS_CACHE = null;
+let CACHE_TIME = null;
+const CACHE_DURATION = 5 * 60 * 1000;
+
+// ================= WEB APP ROUTING =================
+function doGet(e) {
+  const p = e.parameter || {};
+
+  // Admin pages
+  if (p.admin === "true") return HtmlService.createTemplateFromFile('admin').evaluate().setTitle("Admin");
+  if (p.analytics === "true") return HtmlService.createTemplateFromFile('analytics').evaluate().setTitle("Analytics");
+
+  // PUBLIC RESULT SYSTEM
+  if (p.result === "login") {
+    return HtmlService.createTemplateFromFile('result_login')
+      .evaluate()
+      .setTitle("View Your Result")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  if (p.result === "view" && p.email && p.pin) {
+    const t = HtmlService.createTemplateFromFile('result');
+    t.userEmail = p.email.toLowerCase().trim();
+    t.userPin   = p.pin.toUpperCase().trim();
+    return t.evaluate()
+      .setTitle("Your Result")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // Default quiz
+  return HtmlService.createHtmlOutputFromFile("Index").setTitle("Progress Check");
+}
+
+// ================= INITIAL DATA =================
+function getInitialData() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEETS.ALLOWED_EMAILS);
+  const admin = ss.getSheetByName(SHEETS.ADMIN);
+  const data = sh.getDataRange().getValues();
+  const participants = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1]) {
+      participants.push({
+        name: String(data[i][0] || "").trim(),
+        email: String(data[i][1] || "").trim().toLowerCase(),
+        afa: String(data[i][2] || "").trim(),
+        allowMultiple: String(data[i][3] || "").trim().toUpperCase() === "YES"
+      });
+    }
+  }
+  const status = {
+    quizOpen: (admin.getRange("B2").getValue() || "OPEN") === "OPEN",
+    defaultTimer: Number(admin.getRange("B3").getValue()) || 60,
+    gradesReleased: admin.getRange("B4").getValue() === "YES"
+  };
+  return { participants, status };
+}
+
+// ================= PIN SYSTEM =================
+function generateOrGetPIN(email) {
+  email = email.toLowerCase().trim();
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(SHEETS.PINS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEETS.PINS);
+    sheet.appendRow(["Email", "Name", "PIN"]);
+  }
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase() === email) return data[i][2];
+  }
+  const pin = Utilities.getUuid().substring(0, 8).toUpperCase();
+  const allowed = ss.getSheetByName(SHEETS.ALLOWED_EMAILS).getDataRange().getValues();
+  const user = allowed.find(r => String(r[1]).trim().toLowerCase() === email);
+  const name = user ? user[0] : "Participant";
+  sheet.appendRow([email, name, pin]);
+  return pin;
+}
+
+// ================= VALIDATE PIN & GET RESULT =================
+function validatePinAndGetResult(email, pin) {
+  console.log("validatePinAndGetResult called with email:", email, "pin:", pin);
+  email = email.toLowerCase().trim();
+  pin = pin.toString().trim().toUpperCase();
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const admin = ss.getSheetByName(SHEETS.ADMIN);
+  if (admin.getRange("B4").getValue() !== "YES") {
+    console.log("Grades not released");
+    throw new Error("Results not released yet.");
+  }
+
+  const pinSheet = ss.getSheetByName(SHEETS.PINS);
+  if (!pinSheet) {
+    console.log("PIN sheet not found");
+    throw new Error("PIN system not initialized.");
+  }
+  const pins = pinSheet.getDataRange().getValues();
+  console.log("PIN sheet data length:", pins.length);
+  const valid = pins.find(r => String(r[0]).toLowerCase() === email && r[2] === pin);
+  if (!valid) {
+    console.log("Invalid PIN for", email);
+    throw new Error("Invalid email or PIN.");
+  }
+  console.log("PIN validated for", email);
+
+  const responses = ss.getSheetByName(SHEETS.RESPONSES).getDataRange().getValues();
+  const questions = loadQuestions();
+  const participantResponses = responses.filter(r => String(r[2]).toLowerCase() === email);
+  console.log("Responses found for", email, ":", participantResponses.length);
+
+  if (participantResponses.length === 0) {
+    console.log("No responses for", email);
+    throw new Error("No responses found.");
+  }
+
+  let totalEarned = 0;
+  const details = [];
+  participantResponses.forEach(r => {
+    const q = questions.find(qq => qq.qid === r[4]);
+    if (!q) return;
+
+    const userAnswer = safeParseJSON(r[5]);
+    const correctAnswer = q.correct;
+
+    let earnedThisQ = 0;
+    let isPerfect = false;
+
+    if (q.type === "checkbox_grid") {
+      let perfectRows = 0;
+      let totalRows = 0;
+      Object.keys(correctAnswer || {}).forEach(k => {
+        const c = Array.isArray(correctAnswer[k]) ? correctAnswer[k].map(String).sort() : [];
+        const u = Array.isArray(userAnswer?.[k]) ? userAnswer[k].map(String).sort() : [];
+        totalRows++;
+        if (c.length === u.length && c.every(x => u.includes(x))) perfectRows++;
+      });
+      earnedThisQ = perfectRows * 2;
+      isPerfect = earnedThisQ === totalRows * 2;
+    } else {
+      let correctCount = 0;
+      let totalCells = 0;
+      if (q.type === "single") {
+        correctCount = String(userAnswer) === String(correctAnswer) ? 1 : 0;
+        totalCells = 1;
+      } else if (q.type === "multiple" || q.type === "check") {
+        const c = Array.isArray(correctAnswer) ? correctAnswer.map(String) : [];
+        const u = Array.isArray(userAnswer) ? userAnswer.map(String) : [];
+        correctCount = u.filter(x => c.includes(x)).length;
+        totalCells = c.length;
+      } else if (q.type === "mcq_grid") {
+        Object.keys(correctAnswer || {}).forEach(k => {
+          if (String(userAnswer?.[k]) === String(correctAnswer[k])) correctCount++;
+        });
+        totalCells = Object.keys(correctAnswer || {}).length;
+      }
+      earnedThisQ = correctCount * 2;
+      isPerfect = correctCount === totalCells;
+    }
+
+    totalEarned += earnedThisQ;
+
+    details.push({
+      qid: q.qid,
+      question: q.text,
+      type: q.type,
+      userAnswer: userAnswer,
+      correctAnswer: correctAnswer,
+      pointsEarned: earnedThisQ,
+      pointsPossible: q.points,
+      isPerfect: isPerfect,
+      options: q.options || [],
+      gridRows: q.gridRows || [],
+      gridCols: q.gridCols || []
+    });
+  });
+
+  const percentage = Math.round((totalEarned / 112) * 100);
+
+  console.log("Result generated for", email, "totalEarned:", totalEarned, "percentage:", percentage);
+  return {
+    name: valid[1],
+    email: email,
+    totalEarned: totalEarned,
+    totalPossible: 112,
+    percentage: percentage,
+    details: details
+  };
+}
+// ================= SAFE JSON & LOAD QUESTIONS =================
+function safeParseJSON(str) {
+  if (!str || typeof str !== "string") return null;
+  try { return JSON.parse(str); } catch (e) { return null; }
+}
+
+function loadQuestions() {
+  if (QUESTIONS_CACHE && Date.now() - CACHE_TIME < CACHE_DURATION) return QUESTIONS_CACHE;
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const data = ss.getSheetByName(SHEETS.QUESTIONS).getDataRange().getValues();
+  data.shift();
+  const seen = new Set();
+  QUESTIONS_CACHE = data.map(r => ({
+    qid: String(r[0] || "").trim(),
+    type: String(r[1] || "single").trim(),
+    text: r[2] || "",
+    options: safeParseJSON(r[3]) || [],
+    gridRows: safeParseJSON(r[4]) || [],
+    gridCols: safeParseJSON(r[5]) || [],
+    correct: safeParseJSON(r[6]) || null,
+    points: Number(r[7]) || 1,
+    image: r[8] || "",
+    timeLimit: Number(r[9]) || 60
+  })).filter(q => {
+    if (seen.has(q.qid)) { console.warn("Duplicate QID:", q.qid); return false; }
+    seen.add(q.qid);
+    return true;
+  });
+  CACHE_TIME = Date.now();
+  return QUESTIONS_CACHE;
+}
+// ================= START SESSION =================
+function startSession(name, email, afa, track) {
+  if (!["Primary", "Secondary"].includes(track)) throw new Error("Invalid track");
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const allowed = ss.getSheetByName(SHEETS.ALLOWED_EMAILS).getDataRange().getValues();
+  const user = allowed.find(r => String(r[0]).trim() === name && String(r[1]).trim() === email && String(r[2] || "").trim() === afa);
+  if (!user) throw new Error("Invalid credentials");
+  if ((ss.getSheetByName(SHEETS.ADMIN).getRange("B2").getValue() || "OPEN") !== "OPEN") throw new Error("Quiz is closed");
+  const allowMultiple = String(user[3] || "").toUpperCase() === "YES";
+  const sessions = ss.getSheetByName(SHEETS.SESSIONS);
+  const finished = sessions.getDataRange().getValues().find(r => r[2] === email && (r[9] === true || r[9] === "TRUE"));
+  if (finished && !allowMultiple) throw new Error("Already completed");
+
+  const questions = loadQuestions();
+  const normalIndices = questions.map((_, i) => i).filter(i => !["Primary29","Primary30","Secondary29","Secondary30"].includes(questions[i].qid));
+  shuffleArray(normalIndices);
+  const order = normalIndices.slice(0, 28);
+
+  const sessionId = Utilities.getUuid();
+  sessions.appendRow([sessionId, name, email, afa, track, JSON.stringify(order), 0, new Date(), 0, false]);
+  return { sessionId, track, totalQuestions: 30 };
+}
+
+// ================= GET CURRENT QUESTION =================
+function getCurrentQuestion(sessionId, userEmail) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.SESSIONS);
+  const row = findSessionRow(sheet, sessionId);
+  if (!row) throw new Error("Session not found");
+  const data = sheet.getRange(row, 1, 1, 10).getValues()[0];
+  if (data[2] !== userEmail) throw new Error("Unauthorized");
+  const idx = Number(data[6] || 0);
+  if (idx >= 30 || data[9] === true) return { finished: true };
+
+  const questions = loadQuestions();
+  let q;
+  if (idx < 28) {
+    q = questions[JSON.parse(data[5])[idx]];
+  } else {
+    const target = data[4] === "Primary" ? (idx === 28 ? "Primary29" : "Primary30") : (idx === 28 ? "Secondary29" : "Secondary30");
+    q = questions.find(qq => qq.qid === target);
+    if (!q) throw new Error(`Question ${target} not found`);
+  }
+
+  return {
+    qid: q.qid, type: q.type, text: q.text, options: q.options,
+    gridRows: q.gridRows, gridCols: q.gridCols, image: q.image,
+    points: q.points, position: idx + 1, timeLimit: q.timeLimit || 60
+  };
+}
+
+// ================= DETAILED GRADING =================
+function gradeAnswer(q, selected) {
+  if (!q.correct) return { isCorrect: null, pointsEarned: 0, details: "No correct answer defined" };
+
+  const correct = q.correct;
+  let pointsEarned = 0;
+  let details = {};
+
+  if (q.type === "single") {
+    const isCorrect = String(selected) === String(correct);
+    pointsEarned = isCorrect ? q.points : 0;
+    details = { user: selected, correct: correct, match: isCorrect };
+
+  } else if (q.type === "multiple") {
+    const userArr = Array.isArray(selected) ? selected.map(String).sort() : [];
+    const correctArr = Array.isArray(correct) ? correct.map(String).sort() : [];
+    const isCorrect = JSON.stringify(userArr) === JSON.stringify(correctArr);
+    pointsEarned = isCorrect ? q.points : 0;
+    details = { user: userArr, correct: correctArr, match: isCorrect };
+
+  } else if (q.type === "checkbox_grid" || q.type === "mcq_grid") {
+    const userGrid = selected || {};
+    const correctGrid = correct || {};
+    let correctCells = 0;
+    let totalCells = 0;
+
+    q.gridRows.forEach((_, r) => {
+      const userRow = userGrid[r] || (q.type === "mcq_grid" ? null : []);
+      const correctRow = correctGrid[r] || (q.type === "mcq_grid" ? null : []);
+      if (q.type === "mcq_grid") {
+        totalCells++;
+        if (String(userRow) === String(correctRow)) correctCells++;
+      } else {
+        const u = Array.isArray(userRow) ? userRow.map(String).sort() : [];
+        const c = Array.isArray(correctRow) ? correctRow.map(String).sort() : [];
+        totalCells += c.length;
+        correctCells += u.filter(x => c.includes(x)).length;
+      }
+    });
+    pointsEarned = totalCells > 0 ? Math.round((correctCells / totalCells) * q.points * 10) / 10 : 0;
+    details = { userGrid, correctGrid, correctCells, totalCells, pointsEarned };
+  }
+
+  return { isCorrect: pointsEarned === q.points, pointsEarned, details: JSON.stringify(details) };
+}
+
+// ================= SUBMIT ANSWER =================
+function submitAnswer(sessionId, payload, userEmail) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(SHEETS.SESSIONS);
+  const row = findSessionRow(sheet, sessionId);
+  if (!row) throw new Error("Session expired");
+  const data = sheet.getRange(row, 1, 1, 10).getValues()[0];
+  if (data[2] !== userEmail) throw new Error("Unauthorized");
+
+  const idx = Number(data[6] || 0);
+  const questions = loadQuestions();
+  let q;
+  if (idx < 28) {
+    q = questions[JSON.parse(data[5])[idx]];
+  } else {
+    const target = data[4] === "Primary" ? (idx === 28 ? "Primary29" : "Primary30") : (idx === 28 ? "Secondary29" : "Secondary30");
+    q = questions.find(qq => qq.qid === target);
+  }
+
+  const grade = gradeAnswer(q, payload.selected);
+  const isCorrect = grade.isCorrect;
+  const pointsEarned = grade.pointsEarned;
+  const details = grade.details;
+
+  ss.getSheetByName(SHEETS.RESPONSES).appendRow([
+    new Date(), sessionId, userEmail, data[1], q.qid,
+    JSON.stringify(payload.selected), isCorrect, payload.timeTaken || 0, data[8],
+    pointsEarned, details
+  ]);
+
+  sheet.getRange(row, 7).setValue(idx + 1);
+  if (idx + 1 >= 30) sheet.getRange(row, 10).setValue(true);
+
+  return { ok: true, nextIndex: idx + 1 };
+}
+
+// ================= RESULT WITH DETAILED FEEDBACK =================
+function getParticipantResult(email) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const adminSheet = ss.getSheetByName(SHEETS.ADMIN);
+  if (adminSheet.getRange("B4").getValue() !== "YES") throw new Error("Results not released yet");
+
+  const responses = ss.getSheetByName(SHEETS.RESPONSES).getDataRange().getValues();  // ← FIXED
+  const sessions = ss.getSheetByName(SHEETS.SESSIONS).getDataRange().getValues();
+  const questions = loadQuestions();
+
+  const sessionRow = sessions.find(r => r[2] === email && (r[9] === true || r[9] === "TRUE"));
+  if (!sessionRow) throw new Error("No completed attempt found");
+
+  const participantResponses = responses.filter(r => r[2] === email).sort((a, b) => a[0] - b[0]);
+
+  let totalScore = 0, maxScore = 0;
+  const details = [];
+
+  participantResponses.forEach(resp => {
+    const q = questions.find(qq => qq.qid === resp[4]);
+    if (!q) return;
+    const userAnswer = safeParseJSON(resp[5]);
+    const gradeDetails = safeParseJSON(resp[10]) || {};
+    const pointsEarned = Number(resp[9]) || 0;
+
+    totalScore += pointsEarned;
+    maxScore += q.points;
+
+    details.push({
+      question: q.text,
+      image: q.image || "",
+      type: q.type,
+      options: q.options,
+      gridRows: q.gridRows,
+      gridCols: q.gridCols,
+      userAnswer: userAnswer,
+      correctAnswer: q.correct,
+      isCorrect: resp[6] === true,
+      pointsEarned: pointsEarned,
+      pointsPossible: q.points,
+      timeTaken: Math.round(resp[7] || 0),
+      feedback: gradeDetails
+    });
+  });
+
+  return {
+    name: sessionRow[1], email, track: sessionRow[4],
+    totalScore, maxScore, percentage: Math.round((totalScore / maxScore) * 100),
+    details
+  };
+}
+
+// ================= ADMIN & UTILITIES =================
+function getAllSessions() {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEETS.SESSIONS);
+  const data = sheet.getDataRange().getValues();
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    const finished = data[i][9] === true || data[i][9] === "TRUE";
+    result.push({
+      Name: data[i][1], Email: data[i][2], AFA: data[i][3], Track: data[i][4],
+      Status: finished ? "Completed" : "In Progress",
+      Progress: Math.round((Number(data[i][6] || 0) / 30) * 100),
+      Violations: Number(data[i][8] || 0)
+    });
+  }
+  return result;
+}
+
+function getQuizStatus() { return (SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Admin").getRange("B2").getValue() || "OPEN") === "OPEN"; }
+function setQuizStatus(isOpen) { SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Admin").getRange("B2").setValue(isOpen ? "OPEN" : "CLOSED"); }
+function setQuestionTimer(s) { SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Admin").getRange("B3").setValue(s); }
+function releaseGrades() { SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName("Admin").getRange("B4").setValue("YES"); }
+function forceSubmitParticipant(email) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEETS.SESSIONS);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][2] === email) {
+      sheet.getRange(i + 1, 7).setValue(30);
+      sheet.getRange(i + 1, 10).setValue(true);
+    }
+  }
+}
+
+function findSessionRow(sheet, sessionId) {
+  const data = sheet.getRange(2, 1, Math.max(sheet.getLastRow()-1,1), 1).getValues();
+  for (let i = 0; i < data.length; i++) if (data[i][0] === sessionId) return i + 2;
+  return null;
+}
+function shuffleArray(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } }
+function logViolation(sessionId, reason) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const row = findSessionRow(ss.getSheetByName(SHEETS.SESSIONS), sessionId);
+  if (row) {
+    const v = Number(ss.getSheetByName(SHEETS.SESSIONS).getRange(row, 9).getValue()) || 0;
+    ss.getSheetByName(SHEETS.SESSIONS).getRange(row, 9).setValue(v + 1);
+  }
+}
+
+/**
+ * FINAL RESULT TAB GENERATOR — 100% ACCURATE
+ * Fixes checkbox_grid, Points, QuestionText, Percentage
+ * Add this to your existing Code.gs — DO NOT delete anything else!
+ */
+
+function generateResultTab() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const resp = ss.getSheetByName("Responses");
+  const q = ss.getSheetByName("Questions");
+  if (!resp || !q) return SpreadsheetApp.getUi().alert("Missing sheet!");
+
+  const rData = resp.getDataRange().getValues();
+  const qData = q.getDataRange().getValues();
+  if (rData.length < 2) return;
+
+  const rh = rData[0], qh = qData[0];
+  const r = {email:rh.indexOf("Email"), name:rh.indexOf("Name"), qid:rh.indexOf("QID"), sel:rh.indexOf("Selected(JSON)")};
+  const qq = {qid:qh.indexOf("QID"), text:qh.indexOf("QuestionText"), opt:qh.indexOf("OptionsJSON"), cor:qh.indexOf("CorrectJSON"), pts:qh.indexOf("Points"), type:qh.indexOf("Type")};
+
+  // Question map — with CLEAN CorrectJSON display
+  const qMap = {};
+  for (let i = 1; i < qData.length; i++) {
+    const row = qData[i];
+    const qid = row[qq.qid];
+    if (!qid) continue;
+
+    let rawCorrect = row[qq.cor] || "";
+    let parsedCorrect = null;
+
+    // Parse once for grading
+    try {
+      parsedCorrect = rawCorrect ? JSON.parse(rawCorrect.replace(/,\s*}/g,"}").replace(/,\s*]/g,"]")) : null;
+    } catch(e) { parsedCorrect = null; }
+
+    // Ensure checkbox_grid has arrays
+    if (parsedCorrect && typeof parsedCorrect === "object" && !Array.isArray(parsedCorrect)) {
+      Object.keys(parsedCorrect).forEach(k => {
+        if (!Array.isArray(parsedCorrect[k])) parsedCorrect[k] = [parsedCorrect[k]];
+      });
+    }
+
+    qMap[qid] = {
+      text: row[qq.text] || "",
+      opt: row[qq.opt] || "",
+      correctParsed: parsedCorrect,        // for grading
+      correctDisplay: rawCorrect || "null", // for display — NO extra escaping
+      pts: Number(row[qq.pts]) || 0,
+      type: String(row[qq.type] || "single").trim()
+    };
+  }
+
+  // Group participants
+  const participants = {};
+  for (let i = 1; i < rData.length; i++) {
+    const row = rData[i];
+    const email = row[r.email];
+    if (!email || row[r.sel] === "VIOLATION") continue;
+    if (!participants[email]) participants[email] = {name: row[r.name]||"", rows:[]};
+    participants[email].rows.push(row);
+  }
+
+  // Create Result sheet
+  let sheet = ss.getSheetByName("Result");
+  if (!sheet) sheet = ss.insertSheet("Result"); else sheet.clear();
+
+  const headers = ["Email","Name","QID","Question Text","OptionsJSON","Selected","CorrectJSON","Points","Points Earned","Percentage"];
+  sheet.getRange(1,1,1,headers.length).setValues([headers]).setFontWeight("bold").setBackground("#e8f4f8");
+
+  let row = 2;
+  Object.keys(participants).sort().forEach(email => {
+    const p = participants[email];
+    let totalPts = 0, totalEarned = 0;
+
+    p.rows.forEach(respRow => {
+      const qid = respRow[r.qid]; 
+      const selRaw = respRow[r.sel];
+      const qObj = qMap[qid];
+      if (!qObj) { row++; return; }
+
+      let sel; try { sel = JSON.parse(selRaw); } catch(e) { sel = selRaw; }
+
+      let correctCnt = 0, totalCells = 0;
+      const cor = qObj.correctParsed;
+
+      if (qObj.type === "single") {
+        correctCnt = (String(sel) === String(cor)) ? 1 : 0; totalCells = 1;
+      }
+      else if (qObj.type === "multiple" || qObj.type === "check") {
+        const c = Array.isArray(cor) ? cor.map(String) : [];
+        const u = Array.isArray(sel) ? sel.map(String) : [];
+        correctCnt = u.filter(x => c.includes(x)).length; totalCells = c.length;
+      }
+      else if (qObj.type === "mcq_grid") {
+        Object.keys(cor||{}).forEach(k => {
+          if (String(sel?.[k]) === String(cor[k])) correctCnt++;
+        });
+        totalCells = Object.keys(cor||{}).length;
+      }
+      // ──────── CHECKBOX GRID – TRUE CELL-BY-CELL COMPARISON (FIXED) ────────
+      // CHECKBOX GRID – STRICT ROW-BY-ROW EXACT MATCH (2 points per perfect row)
+      else if (qObj.type === "checkbox_grid") {
+        let perfectRows = 0;
+        let totalRows   = 0;
+
+        Object.keys(cor || {}).forEach(rowKey => {
+          const correctOptions = Array.isArray(cor[rowKey]) ? cor[rowKey].map(String).sort() : [];
+          const userOptions    = Array.isArray(sel?.[rowKey]) ? sel[rowKey].map(String).sort() : [];
+
+          totalRows++;
+
+          // Exact match: same options, same length, no extra/no missing
+          if (correctOptions.length === userOptions.length &&
+              correctOptions.every(opt => userOptions.includes(opt))) {
+            perfectRows++;
+          }
+        });
+
+        correctCnt = perfectRows;     // 1 "correct count" = 1 perfect row
+        totalCells = totalRows;       // total possible perfect rows
+      }
+
+      const earned = correctCnt * 2;
+      totalPts += qObj.pts;
+      totalEarned += earned;
+
+      sheet.getRange(row++,1,1,headers.length).setValues([[
+        email, p.name, qid, qObj.text, qObj.opt, selRaw,
+        qObj.correctDisplay,    // CLEAN — no backslashes!
+        qObj.pts, earned,
+        totalCells ? Math.round((correctCnt/totalCells)*100)+"%" : "0%"
+      ]]);
+    });
+
+    // SUMMARY — Percentage = Total Earned ÷ 112
+    const finalPct = totalEarned > 0 ? Math.round((totalEarned / 112) * 100) : 0;
+    sheet.getRange(row++,1,1,headers.length).setValues([[
+      "TOTAL → "+email, p.name, "", "FINAL SCORE", "", "", "", totalPts, totalEarned, finalPct+"%"
+    ]]).setBackground("#d4edda").setFontWeight("bold").setFontColor("#155724");
+    row++;
+  });
+
+  sheet.autoResizeColumns(1, headers.length);
+  sheet.setFrozenRows(1);
+  SpreadsheetApp.getUi().alert("Result tab generated — NO MORE BACKSLASHES!\nCorrectJSON now displays perfectly.");
+}
+
+// ================= ADMIN: GENERATE PINS FOR ALL PARTICIPANTS =================
+function generateAllPINs() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const allowedSheet = ss.getSheetByName(SHEETS.ALLOWED_EMAILS);
+  const pinSheet = ss.getSheetByName(SHEETS.PINS) || ss.insertSheet(SHEETS.PINS);
+  
+  if (pinSheet.getLastRow() === 0) {
+    pinSheet.appendRow(["Email", "Name", "PIN", "Generated On"]);
+  }
+
+  const allowed = allowedSheet.getDataRange().getValues();
+  const existing = pinSheet.getDataRange().getValues().slice(1).map(r => r[0].toLowerCase());
+  let added = 0;
+
+  for (let i = 1; i < allowed.length; i++) {
+    const name = String(allowed[i][0] || "").trim();
+    const email = String(allowed[i][1] || "").trim().toLowerCase();
+    if (!email) continue;
+
+    if (!existing.includes(email)) {
+      const pin = Utilities.getUuid().substring(0, 8).toUpperCase();
+      pinSheet.appendRow([email, name, pin, new Date()]);
+      added++;
+    }
+  }
+
+  console.log(`Generated ${added} new PINs. Total PINs: ${pinSheet.getLastRow() - 1}`);
+  SpreadsheetApp.getUi().alert(`Done! Generated ${added} new PINs.\nCheck the "PINs" sheet.`);
+}
+
+// ──────────────────────────────────────────────────────────────
+// 1. MAIN FUNCTION — RUN THIS ONE
+// ──────────────────────────────────────────────────────────────
+function generateAllParticipantResultFiles() {
+  // CHANGE THIS ONLY ONCE → your main results folder
+  const MAIN_RESULT_FOLDER_ID = "1SHZRUqX-gtNdg76rI3TMMyii4ANK_Jl5";   // ← PUT YOUR MAIN FOLDER ID HERE
+  const mainFolder = DriveApp.getFolderById(MAIN_RESULT_FOLDER_ID);
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);  // ← uses your existing constant, no duplicate!
+  const adminSheet = ss.getSheetByName("Admin");
+  if (adminSheet.getRange("B4").getValue() !== "YES") {
+    SpreadsheetApp.getUi().alert("Results not released yet (Admin!B4 ≠ YES)");
+    return;
+  }
+
+  if (adminSheet.getRange("B4").getValue() !== "YES") {
+    SpreadsheetApp.getUi().alert("Results not released yet!");
+    return;
+  }
+
+const allowedSheet = ss.getSheetByName("Allowed_Emails");   // A:Name, B:Email, C:AFA
+  const pinSheet     = ss.getSheetByName("PINs");             // A:Email, B:Name, C:PIN (optional)
+  const allowed = allowedSheet.getDataRange().getValues();
+  const pins    = pinSheet.getDataRange().getValues();
+
+  // Build participant map
+  const participants = {};
+  for (let i = 1; i < allowed.length; i++) {
+    const email = String(allowed[i][1] || "").trim().toLowerCase();
+    if (!email) continue;
+    participants[email] = {
+      name: String(allowed[i][0] || "Participant").trim(),
+      afa:  String(allowed[i][2] || "Others").trim().replace(/[^a-zA-Z0-9]/g, "_")
+    };
+  }
+
+  // Attach PIN if exists (not required for generation)
+  for (let i = 1; i < pins.length; i++) {
+    const email = String(pins[i][0] || "").trim().toLowerCase();
+    const pin   = String(pins[i][2] || "").trim().toUpperCase();
+    if (participants[email]) participants[email].pin = pin;
+  }
+
+  const summary = [["Name","Email","AFA","Score","Percentage","File Link","AFA Folder Link"]];
+  let generated = 0;
+
+  for (const [email, info] of Object.entries(participants)) {
+    const pin = info.pin || "";   // empty PIN is fine — no validation
+
+    try {
+      const result = validatePinAndGetResult(email, pin);  // works even with empty pin
+      const html   = createBeautifulResultHTML(result);
+
+      const afaFolder = getOrCreateSubfolder(mainFolder, info.afa);
+      const safeName  = info.name.replace(/[^a-zA-Z0-9\s-]/g, "_").trim();
+      const filename  = `${safeName}_Result.html`;
+
+      const file = afaFolder.createFile(filename, html, MimeType.HTML);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      summary.push([
+        info.name,
+        email,
+        info.afa,
+        result.totalEarned,
+        result.percentage + "%",
+        file.getUrl(),
+        afaFolder.getUrl()
+      ]);
+
+      generated++;
+    } catch (e) {
+      console.error(`Error for ${email}: ${e.toString()}`);
+    }
+  }
+
+  // Create master spreadsheet with all links
+  const newSs = SpreadsheetApp.create(`TFB_Result_Links_${new Date().toISOString().slice(0,10)}`);
+  const sheet = newSs.getActiveSheet();
+  sheet.getRange(1, 1, summary.length, summary[0].length).setValues(summary);
+  sheet.autoResizeColumns(1, 7);
+  DriveApp.getFileById(newSs.getId()).moveTo(mainFolder);
+
+  SpreadsheetApp.getUi().alert(
+    `ALL DONE!\n\n` +
+    `${generated} beautiful result files generated\n` +
+    `Organized in AFA subfolders\n` +
+    `Master spreadsheet with direct links:\n${newSs.getUrl()}`
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// 2. HELPER — CREATE SUBFOLDER IF NOT EXISTS
+// ──────────────────────────────────────────────────────────────
+function getOrCreateSubfolder(parent, name) {
+  const iter = parent.getFoldersByName(name);
+  return iter.hasNext() ? iter.next() : parent.createFolder(name);
+}
+
+// ──────────────────────────────────────────────────────────────
+// 3. BEAUTIFUL STANDALONE HTML WITH FULL COLOR-CODED ANSWERS
+// ──────────────────────────────────────────────────────────────
+function createBeautifulResultHTML(r) {
+  const rows = r.details.map((q, i) => {
+    let answerHTML = "<em>No response</em>";
+
+    if (q.type === "single" || q.type === "multiple" || q.type === "check") {
+      const correct = Array.isArray(q.correctAnswer) ? q.correctAnswer.map(String) : [String(q.correctAnswer || "")];
+      const user    = q.userAnswer ? (Array.isArray(q.userAnswer) ? q.userAnswer.map(String) : [String(q.userAnswer)]) : [];
+
+      answerHTML = (q.options || []).map((opt, idx) => {
+        const isCorrect = correct.includes(String(idx));
+        const isSelected = user.includes(String(idx));
+        let style = "padding:7px 12px; margin:4px; border-radius:8px; font-size:0.95em; display:inline-block;";
+        if (isCorrect && isSelected)  style += "background:#d4edda; color:#166534; border:2px solid #22c55e;";
+        else if (isCorrect)           style += "background:#86efac; color:#166534;";
+        else if (isSelected)          style += "background:#fecaca; color:#991b1b; border:2px solid #ef4444;";
+        else                          style += "background:#f1f5f9; color:#64748b;";
+        return `<span style="${style}">${opt}</span>`;
+      }).join("");
+
+    } else if (q.type === "mcq_grid" || q.type === "checkbox_grid") {
+      let table = `<table style="width:100%; border-collapse:collapse; margin:10px 0; font-size:0.9em;">`;
+      (q.gridRows || []).forEach((row, rIdx) => {
+        table += `<tr><td style="padding:8px; font-weight:bold; width:30%;">${row}</td><td style="padding:8px;">`;
+        (q.gridCols || []).forEach((_, cIdx) => {
+          const key = String(rIdx);
+          const correctVal = q.correctAnswer?.[key];
+          const userVal    = q.userAnswer?.[key];
+          const isCorrect = q.type === "mcq_grid"
+            ? String(userVal) === String(correctVal)
+            : Array.isArray(correctVal) && Array.isArray(userVal)
+              ? correctVal.map(String).sort().join() === userVal.map(String).sort().join()
+              : false;
+          const bg = isCorrect ? "#d4edda" : (userVal != null ? "#fecaca" : "#f1f5f9");
+          const text = userVal != null ? "Selected" : "—";
+          table += `<span style="display:inline-block; padding:6px 12px; margin:3px; border-radius:6px; background:${bg};">${text}</span>`;
+        });
+        table += `</td></tr>`;
+      });
+      table += `</table>`;
+      answerHTML = table;
+    }
+
+    return `<tr style="${q.pointsEarned === q.pointsPossible ? 'background:#f0fdf4' : 'background:#fef2f2'}">
+      <td style="padding:14px;">${i + 1}</td>
+      <td style="padding:14px;">${q.question}</td>
+      <td style="padding:14px; font-weight:bold;">${q.pointsEarned} / ${q.pointsPossible}</td>
+      <td style="padding:14px;">${answerHTML}</td>
+    </tr>`;
+  }).join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${r.name} – Result</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;background:#f8fafc;margin:0;padding:20px;color:#1e293b;}
+    .card{max-width:940px;margin:20px auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.15);}
+    .header{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:white;padding:50px;text-align:center;}
+    .header h1{font-size:2.5em;margin:0;}
+    .score{background:#f0fdf4;color:#166534;padding:40px;text-align:center;border-radius:18px;margin:30px;font-size:1.7em;}
+    .big{font-size:6em;font-weight:900;margin:10px 0;line-height:1;}
+    table{width:100%;border-collapse:collapse;margin:30px 0;}
+    th{background:#f8fafc;padding:16px;text-align:left;font-weight:600;}
+    td{padding:14px;vertical-align:top;}
+    .footer{text-align:center;padding:50px;background:#f1f5f9;color:#64748b;font-size:0.95em;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Teach For Bangladesh</h1>
+      <h2 style="margin:15px 0 0;font-size:1.8em;">${r.name}</h2>
+      <p style="margin:10px 0;font-size:1.2em;opacity:0.9;">${r.email}</p>
+    </div>
+    <div class="score">
+      <div class="big">${r.totalEarned}</div>
+      <div>out of <strong>112</strong> points — <strong>${r.percentage}%</strong></div>
+    </div>
+    <div style="padding:0 40px 50px;">
+      <h2 style="text-align:center;color:#1e40af;margin-bottom:30px;font-size:1.8em;">Your Detailed Answers</h2>
+      <table>
+        <tr><th>#</th><th>Question</th><th>Points</th><th>Your Response</th></tr>
+        ${rows}
+      </table>
+    </div>
+    <div class="footer">
+      Thank you for your passion and commitment!<br>
+      Result generated on ${new Date().toLocaleString('en-GB')}
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// ──────────────────────────────────────────────────────────────
+// ANALYTICS GENERATOR — RUN THIS ANYTIME AFTER RESULTS ARE READY
+// ──────────────────────────────────────────────────────────────
+function generateMasterAnalyticsHTML() {
+  const MAIN_RESULT_FOLDER_ID = "1SHZRUqX-gtNdg76rI3TMMyii4ANK_Jl5"; // ← same folder as before
+  const folder = DriveApp.getFolderById(MAIN_RESULT_FOLDER_ID);
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const adminSheet = ss.getSheetByName("Admin");
+  if (adminSheet.getRange("B4").getValue() !== "YES") {
+    SpreadsheetApp.getUi().alert("Results not released yet!");
+    return;
+  }
+
+  // Collect all participant results
+  const allowed = ss.getSheetByName("Allowed_Emails").getDataRange().getValues();
+  const pins    = ss.getSheetByName("PINs").getDataRange().getValues();
+
+  const participants = {};
+  for (let i = 1; i < allowed.length; i++) {
+    const email = String(allowed[i][1] || "").trim().toLowerCase();
+    if (!email) continue;
+    participants[email] = {
+      name: String(allowed[i][0] || "").trim(),
+      afa:  String(allowed[i][2] || "Others").trim()
+    };
+  }
+  for (let i = 1; i < pins.length; i++) {
+    const email = String(pins[i][0] || "").trim().toLowerCase();
+    const pin   = String(pins[i][2] || "").trim().toUpperCase();
+    if (participants[email]) participants[email].pin = pin;
+  }
+
+  const allResults = [];
+  for (const [email, info] of Object.entries(participants)) {
+    try {
+      const r = validatePinAndGetResult(email, info.pin || "");
+      r.afa = info.afa;
+      r.name = info.name;
+      allResults.push(r);
+    } catch (e) { /* skip */ }
+  }
+
+  if (allResults.length === 0) {
+    SpreadsheetApp.getUi().alert("No results found!");
+    return;
+  }
+
+  const html = createMasterAnalyticsHTML(allResults);
+  const file = folder.createFile("Analytics.html", html, MimeType.HTML);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  SpreadsheetApp.getUi().alert(
+    `MASTER ANALYTICS GENERATED!\n\nFile: ${file.getUrl()}\n\nBell curve + histogram + AFA comparison + everything beautiful!`
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
+// ACTUAL HTML CREATION (BEAUTIFUL + BELL CURVE)
+// ──────────────────────────────────────────────────────────────
+function createMasterAnalyticsHTML(data) {
+  const scores = data.map(r => r.totalEarned);
+  const avg   = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+  const median = scores.slice().sort((a,b)=>a-b)[Math.floor(scores.length/2)];
+  const max   = Math.max(...scores);
+  const min   = Math.min(...scores);
+
+  // Score distribution for histogram (0–112 step 8)
+  const bins = Array(15).fill(0); // 0-7,8-15,...,104-112
+  const binLabels = [];
+  for (let i = 0; i < 15; i++) {
+    const low = i*8; const high = i===14 ? 112 : (i+1)*8-1;
+    binLabels.push(i===14 ? "104–112" : `${low}-${high}`);
+    bins[i] = scores.filter(s => s >= low && s <= high).length;
+  }
+  const maxBin = Math.max(...bins);
+
+  // AFA stats
+  const afaStats = {};
+  data.forEach(r => {
+    const a = r.afa || "Others";
+    if (!afaStats[a]) afaStats[a] = {count:0, sum:0, names:[]};
+    afaStats[a].count++;
+    afaStats[a].sum += r.totalEarned;
+    if (r.totalEarned === 112) afaStats[a].names.push(r.name);
+  });
+  const afaList = Object.entries(afaStats).map(([afa, s]) => ({
+    afa, avg: Math.round(s.sum/s.count), count: s.count, perfect: s.names
+  })).sort((a,b)=>b.avg-a.avg);
+
+  // Question difficulty
+  const qStats = {};
+  data.forEach(r => {
+    r.details.forEach(q => {
+      if (!qStats[q.qid]) qStats[q.qid] = {text:q.question.substring(0,80)+(q.question.length>80?"…":""), correct:0, total:data.length};
+      if (q.pointsEarned === q.pointsPossible) qStats[q.qid].correct++;
+    });
+  });
+  const qList = Object.values(qStats)
+    .map(o => ({...o, percent: Math.round(o.correct/o.total*100)}))
+    .sort((a,b)=>a.percent-b.percent);
+
+  // Top & bottom 10
+  const sorted = data.slice().sort((a,b)=>b.totalEarned-a.totalEarned);
+  const top10 = sorted.slice(0,10);
+  const bottom10 = sorted.slice(-10).reverse();
+
+  // Bell curve data (for Canvas)
+  const bellCurveJS = scores.map(s => s).sort((a,b)=>a-b);
+  const bellData = bellCurveJS.map((s,i) => ({x:i+1, y:s}));
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Teach For Bangladesh – Master Analytics</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;background:#f8fafc;color:#1e293b;margin:0;padding:20px;}
+    .card{max-width:1100px;margin:20px auto;background:#fff;border-radius:20px;padding:30px;box-shadow:0 20px 60px rgba(0,0,0,0.12);}
+    .header{background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:white;padding:40px;text-align:center;border-radius:16px;}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px;margin:30px 0;}
+    .stat{background:#f0f9ff;padding:20px;border-radius:12px;text-align:center;}
+    .big{font-size:3em;font-weight:900;margin:8px 0;}
+    .bar-container{height:30px;background:#e2e8f0;border-radius:8px;overflow:hidden;margin:8px 0;}
+    .bar{height:100%;background:#3b82f6;transition:width 1.5s ease;}
+    table{width:100%;border-collapse:collapse;margin:25px 0;}
+    th{background:#f1f5f9;padding:14px;text-align:left;}
+    td{padding:12px;border-bottom:1px solid #e2e8f0;}
+    canvas{max-width:100%;height:300px;margin:30px 0;}
+    .btn{background:#1e40af;color:white;padding:12px 24px;border:none;border-radius:8px;cursor:pointer;font-size:1em;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Teach For Bangladesh</h1>
+      <h2>Master Analytics Dashboard</h2>
+      <p>Generated on ${new Date().toLocaleString('en-GB')}</p>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="big">${data.length}</div><div>Total Participants</div></div>
+      <div class="stat"><div class="big">${avg}</div><div>Average Score</div></div>
+      <div class="stat"><div class="big">${median}</div><div>Median</div></div>
+      <div class="stat"><div class="big">${max}</div><div>Highest</div></div>
+      <div class="stat"><div class="big">${min}</div><div>Lowest</div></div>
+      <div class="stat"><div class="big">${data.filter(r=>r.totalEarned>=100).length}</div><div>100+ Club</div></div>
+    </div>
+
+    <h2>Score Distribution</h2>
+    ${binLabels.map((label,i)=>`
+      <div style="display:flex;align-items:center;margin:10px 0;">
+        <div style="width:120px;">${label}</div>
+        <div class="bar-container flex-grow:1"><div class="bar" style="width:${(bins[i]/maxBin*100).toFixed(2)}%"></div></div>
+        <div style="width:50px;text-align:right;">${bins[i]}</div>
+      </div>`).join('')}
+
+    <h2>Bell Curve (Every Participant's Score)</h2>
+    <canvas id="bell"></canvas>
+
+    <h2>AFA-wise Performance</h2>
+    <table>
+      <tr><th>Rank</th><th>AFA</th><th>Participants</th><th>Average Score</th></tr>
+      ${afaList.map((a,i)=>`<tr><td>${i+1}</td><td>${a.afa}</td><td>${a.count}</td><td><strong>${a.avg}</strong></td></tr>`).join('')}
+    </table>
+
+    <h2>Top 10 Performers</h2>
+    <table>${top10.map((r,i)=>`<tr><td>${i+1}</td><td>${r.name}</td><td>${r.afa}</td><td><strong>${r.totalEarned} (${r.percentage}%)</strong></td></tr>`).join('')}</table>
+
+    <h2>Hardest Questions</h2>
+    <table>${qList.slice(0,15).map((q,i)=>`<tr><td>${i+1}</td><td>${q.text}</td><td>${q.percent}% correct</td></tr>`).join('')}</table>
+
+    <div style="text-align:center;margin:40px;">
+      <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+  </div>
+
+  <script>
+    const ctx = document.getElementById('bell').getContext('2d');
+    const dataPoints = ${JSON.stringify(bellData)};
+    new Chart(ctx, {
+      type: 'scatter',
+      data: { datasets: [{ label: 'Participant Scores', data: dataPoints.map(p=>({x:p.x,y:p.y})), backgroundColor: '#ef4444', pointRadius: 5 }] },
+      options: {
+        scales: { x: {display:false}, y: {min:0,max:115,title:{display:true,text:'Score out of 112'}} },
+        plugins: { legend: {display:false}, title: {display:true,text:'Score Distribution Bell Curve'} }
+      }
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>`;
+}
+
+// ──────────────────────────────────────────────────────────────
+// QUESTION-WISE ANALYTICS (Overall + AFA-wise % correct)
+// ──────────────────────────────────────────────────────────────
+function generateQuestionAnalyticsHTML() {
+  const MAIN_RESULT_FOLDER_ID = "1SHZRUqX-gtNdg76rI3TMMyii4ANK_Jl5"; // ← same as before
+  const folder = DriveApp.getFolderById(MAIN_RESULT_FOLDER_ID);
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const adminSheet = ss.getSheetByName("Admin");
+  if (adminSheet.getRange("B4").getValue() !== "YES") {
+    SpreadsheetApp.getUi().alert("Results not released yet!");
+    return;
+  }
+
+  const allowed = ss.getSheetByName("Allowed_Emails").getDataRange().getValues();
+  const pins    = ss.getSheetByName("PINs").getDataRange().getValues();
+
+  // Build email → AFA map
+  const emailToAFA = {};
+  for (let i = 1; i < allowed.length; i++) {
+    const email = String(allowed[i][1] || "").trim().toLowerCase();
+    const afa   = String(allowed[i][2] || "Others").trim();
+    if (email) emailToAFA[email] = afa;
+  }
+
+  // Collect all results
+  const allResults = [];
+  for (let i = 1; i < pins.length; i++) {
+    const email = String(pins[i][0] || "").trim().toLowerCase();
+    const pin   = String(pins[i][2] || "").trim().toUpperCase();
+    if (!email) continue;
+    try {
+      const r = validatePinAndGetResult(email, pin);
+      r.afa = emailToAFA[email] || "Others";
+      allResults.push(r);
+    } catch (e) { /* skip invalid */ }
+  }
+
+  if (allResults.length === 0) {
+    SpreadsheetApp.getUi().alert("No results found!");
+    return;
+  }
+
+  // Question stats: qid → {text, overallCorrect, total, afa:{AFA: {correct, total}}}
+  const qStats = {};
+  allResults.forEach(r => {
+    r.details.forEach(q => {
+      if (!qStats[q.qid]) {
+        qStats[q.qid] = {
+          text: q.question.replace(/<[^>]*>/g, "").substring(0, 100) + (q.question.length > 100 ? "…" : ""),
+          overall: { correct: 0, total: allResults.length },
+          afa: {}
+        };
+      }
+      const isCorrect = q.pointsEarned === q.pointsPossible;
+      if (isCorrect) qStats[q.qid].overall.correct++;
+
+      const afa = r.afa;
+      if (!qStats[q.qid].afa[afa]) qStats[q.qid].afa[afa] = { correct: 0, total: 0 };
+      qStats[q.qid].afa[afa].total++;
+      if (isCorrect) qStats[q.qid].afa[afa].correct++;
+    });
+  });
+
+  // Build HTML rows
+  let rows = "";
+  Object.keys(qStats).sort((a, b) => {
+    const pa = qStats[a].overall.correct / qStats[a].overall.total;
+    const pb = qStats[b].overall.correct / qStats[b].overall.total;
+    return pa - pb; // hardest first
+  }).forEach(qid => {
+    const q = qStats[qid];
+    const overallPct = Math.round((q.overall.correct / q.overall.total) * 100);
+
+    let afaCells = "";
+    Object.keys(q.afa).sort().forEach(afa => {
+      const p = Math.round((q.afa[afa].correct / q.afa[afa].total) * 100);
+      const color = p >= 70 ? "#166534" : p >= 40 ? "#ca8a04" : "#991b1b";
+      afaCells += `<td style="background:${p>=70?'#ecfdf5':p>=40?'#fffbeb':'#fee2e2'};color:${color};font-weight:600;">${p}%</td>`;
+    });
+
+    rows += `
+      <tr style="background:${overallPct>=70?'#f0fdf4':overallPct>=40?'#fffbeb':'#fef2f2'};">
+        <td style="font-weight:600;">${qid}</td>
+        <td>${q.text}</td>
+        <td style="font-weight:bold;font-size:1.1em;color:${overallPct>=70?'#166534':overallPct>=40?'#ca8a04':'#991b1b'};">${overallPct}%</td>
+        ${afaCells}
+      </tr>`;
+  });
+
+  // AFA header
+  const afaHeader = Object.keys(qStats[Object.keys(qStats)[0]]?.afa || {}).sort().map(a => `<th>${a}</th>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Question Analytics – Teach For Bangladesh</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:system-ui,Arial,sans-serif;background:#f8fafc;color:#1e293b;margin:0;padding:20px;}
+    .card{max-width:1200px;margin:20px auto;background:#fff;border-radius:20px;padding:40px;box-shadow:0 20px 60px rgba(0,0,0,0.12);}
+    .header{background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:white;padding:50px;text-align:center;border-radius:16px;}
+    h1{margin:0;font-size:2.5em;} h2{margin:40px 0 20px;color:#1e40af;}
+    table{width:100%;border-collapse:collapse;margin:30px 0;font-size:0.95em;}
+    th{background:#f1f5f9;padding:16px;text-align:center;font-weight:600;}
+    td{padding:14px;text-align:center;}
+    .footer{text-align:center;padding:50px;background:#f1f5f9;color:#64748b;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>Teach For Bangladesh</h1>
+      <h2>Question-Wise Analytics</h2>
+      <p>Overall & AFA-wise % correct • Generated ${new Date().toLocaleString('en-GB')}</p>
+    </div>
+
+    <h2>Performance by Question</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <tr>
+          <th>QID</th>
+          <th>Question</th>
+          <th>Overall % Correct</th>
+          ${afaHeader}
+        </tr>
+        ${rows}
+      </table>
+    </div>
+
+    <div class="footer">
+      <strong>Green</strong> = ≥70% correct • <strong>Yellow</strong> = 40–69% • <strong>Red</strong> = <40%<br>
+      Use this to identify topics to re-teach!
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const file = folder.createFile("Question_Analytics.html", html, MimeType.HTML);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  SpreadsheetApp.getUi().alert(`QUESTION ANALYTICS GENERATED!\n\nFile → ${file.getUrl()}`);
+}

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Progress Check</title>
+  <style>
+    #optionsContainer { max-height: 60vh; overflow-y: auto; padding-right: 8px; }
+    #optionsContainer::-webkit-scrollbar { width: 8px; }
+    #optionsContainer::-webkit-scrollbar-thumb { background: #aaa; border-radius: 4px; }
+    .option-box { display: flex; align-items: center; padding: 16px 20px; margin: 10px 0; border: 2px solid #e2e8f0; border-radius: 12px; background: white; transition: all 0.2s; cursor: pointer; font-size: 1.1rem; }
+    .option-box:hover { border-color: #6366f1; background: #f9f9ff; }
+    .option-box.selected { border-color: #4f46e5; background: #eef2ff; font-weight: 600; box-shadow: 0 4px 12px rgba(79,70,229,0.15); }
+    .track-btn { padding: 2.5rem 1rem; border-radius: 12px; font-size: 1.8rem; font-weight: bold; text-align: center; cursor: pointer; transition: all 0.3s; border: 4px solid transparent; min-height: 140px; display: flex; align-items: center; justify-content: center; }
+    .track-btn input { display: none; }
+    .track-btn.selected { border-color: #1f2937; transform: scale(1.05); }
+    #violationToast { position: fixed; top: 20px; right: 20px; z-index: 10000; background: #dc2626; color: white; padding: 16px 28px; border-radius: 12px; font-weight: bold; opacity: 0; transition: opacity 0.4s; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+    #violationToast.show { opacity: 1; }
+    #violationCounter { position: fixed; top: 20px; left: 20px; z-index: 9999; background: #991b1b; color: white; padding: 12px 20px; border-radius: 50px; font-weight: bold; font-size: 1rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+    #nextBtn { padding: 1.5rem; font-size: 1.5rem; font-weight: bold; border-radius: 10px; transition: all 0.3s; }
+    #nextBtn:not(.answered) { background: white; color: #666; border: 2px solid #ccc; cursor: not-allowed; }
+    #nextBtn.answered { background: #16a34a; color: white; }
+    #nextBtn.submitting { background: #dc2626; color: white; }
+    #nextBtn.error { background: #f59e0b; color: white; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans" oncontextmenu="return false;" onselectstart="return false;" ondragstart="return false;">
+
+  <div id="violationCounter" class="hidden">Violations: <span id="violationCount">0</span></div>
+  <div id="violationToast"><span id="toastReason"></span></div>
+
+  <div class="max-w-4xl mx-auto p-6">
+    <div class="bg-white rounded-2xl shadow-xl p-10 mt-10" id="mainContent">
+
+      <!-- Entry Screen -->
+      <div id="entry">
+        <h1 class="text-5xl font-bold text-center text-gray-800 mb-12">Progress Check</h1>
+        <div class="space-y-10">
+          <div>
+            <label class="block text-xl font-semibold text-gray-800 mb-4">Select Your Name</label>
+            <select id="participantSelect" class="w-full p-5 border-2 border-gray-300 rounded-xl text-lg focus:border-gray-600 focus:outline-none">
+              <option value="">Choose your name...</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xl font-semibold text-gray-800 mb-6">Choose Your Track</label>
+            <div class="grid grid-cols-2 gap-10">
+              <label class="track-btn bg-blue-600 text-white selected" id="primaryBtn">
+                <input type="radio" name="track" value="Primary" checked> Primary Pedagogy
+              </label>
+              <label class="track-btn bg-purple-600 text-white" id="secondaryBtn">
+                <input type="radio" name="track" value="Secondary"> Secondary Pedagogy
+              </label>
+            </div>
+          </div>
+          <button id="startBtn" class="w-full bg-gray-800 text-white py-6 rounded-xl font-bold text-2xl hover:bg-gray-900 transition">
+            Start Assessment
+          </button>
+          <p id="msg" class="text-red-600 text-center font-bold text-xl mt-6"></p>
+        </div>
+      </div>
+
+      <!-- Quiz Screen -->
+      <div id="quiz" class="hidden space-y-10">
+        <div class="flex justify-between items-center bg-gray-800 text-white p-6 rounded-xl">
+          <div class="text-2xl font-bold">Question <span id="qpos">1</span> / 30</div>
+          <div class="text-4xl font-bold" id="timer">60</div>
+        </div>
+        <div id="questionContainer" class="bg-white p-10 rounded-xl border-2 border-gray-300 text-xl leading-relaxed"></div>
+        <div id="optionsContainer" class="bg-gray-100 p-6 rounded-xl border-2 border-gray-300"></div>
+        <button id="nextBtn" class="w-full text-center font-bold text-xl transition">Submit</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+let sessionId = null, currentQuestion = null, timeLeft = 0, timerInterval = null;
+let selectedAnswer = null, violationCount = 0;
+let user = null;
+
+// AUTO-RESUME ON PAGE LOAD
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('tfb_quiz_session');
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      sessionId = data.sessionId;
+      user = data.user;
+      violationCount = data.violations || 0;
+      document.getElementById("violationCount").textContent = violationCount;
+      document.getElementById("entry").classList.add("hidden");
+      document.getElementById("quiz").classList.remove("hidden");
+      document.getElementById("violationCounter").classList.remove("hidden");
+      loadNextQuestion();
+      showToast("Resumed your session from Question " + (data.lastQ || "?"));
+    } catch(e) {
+      localStorage.removeItem('tfb_quiz_session');
+    }
+  }
+});
+
+function saveSessionState() {
+  if (sessionId && user) {
+    localStorage.setItem('tfb_quiz_session', JSON.stringify({
+      sessionId,
+      user,
+      violations: violationCount,
+      lastQ: currentQuestion ? currentQuestion.position : 1
+    }));
+  }
+}
+
+function clearSessionState() {
+  localStorage.removeItem('tfb_quiz_session');
+}
+
+function showToast(msg) {
+  const toast = document.createElement("div");
+  toast.textContent = msg;
+  toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:white;padding:16px 32px;border-radius:12px;z-index:10000;font-weight:bold;box-shadow:0 10px 30px rgba(0,0,0,0.3);";
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// VIOLATION SYSTEM
+function recordViolation(reason) {
+  violationCount++;
+  document.getElementById("violationCount").textContent = violationCount;
+  document.getElementById("violationCounter").classList.remove("hidden");
+  document.getElementById("toastReason").textContent = reason;
+  document.getElementById("violationToast").classList.add("show");
+  setTimeout(() => document.getElementById("violationToast").classList.remove("show"), 4000);
+  if (sessionId) google.script.run.withFailureHandler(() => {}).logViolation(sessionId, reason);
+}
+
+const channel = new BroadcastChannel('tfb_quiz_2025');
+let isPrimary = true;
+channel.onmessage = e => { if (e.data === 'ping' && isPrimary) channel.postMessage('pong'); if (e.data === 'pong' && !isPrimary) recordViolation("Multiple tabs opened"); };
+window.addEventListener('load', () => { isPrimary = true; channel.postMessage('ping'); });
+window.addEventListener('resize', () => { if (Math.abs(innerWidth - (window.lastWidth || innerWidth)) > 100) recordViolation("Window resized"); window.lastWidth = innerWidth; });
+document.addEventListener('visibilitychange', () => document.hidden && recordViolation("Tab switched"));
+window.addEventListener('offline', () => recordViolation("Internet disconnected"));
+document.addEventListener('copy cut paste', e => { e.preventDefault(); recordViolation("Copy/paste blocked"); });
+
+// TRACK SELECTION
+document.getElementById("primaryBtn").onclick = () => { document.getElementById("primaryBtn").classList.add("selected"); document.getElementById("secondaryBtn").classList.remove("selected"); };
+document.getElementById("secondaryBtn").onclick = () => { document.getElementById("secondaryBtn").classList.add("selected"); document.getElementById("primaryBtn").classList.remove("selected"); };
+
+// TIMER
+function startTimer(seconds) {
+  clearInterval(timerInterval);
+  timeLeft = seconds;
+  document.getElementById("timer").textContent = timeLeft;
+  timerInterval = setInterval(() => {
+    if (!navigator.onLine || document.getElementById("nextBtn").classList.contains("submitting")) return;
+    timeLeft--;
+    document.getElementById("timer").textContent = timeLeft;
+    if (timeLeft <= 0) document.getElementById("nextBtn").click();
+  }, 1000);
+}
+
+// RENDER QUESTION
+function renderQuestion(q) {
+  document.getElementById("qpos").textContent = q.position;
+  document.getElementById("questionContainer").innerHTML = `<div class="text-2xl font-medium text-gray-800 mb-8">${q.text}</div>${q.image ? `<div class="my-8 text-center"><img src="${q.image}" class="max-w-full max-h-96 inline-block rounded-lg border-2 border-gray-300 shadow-md"></div>` : ''}`;
+  const container = document.getElementById("optionsContainer"); container.innerHTML = "";
+  selectedAnswer = null;
+  document.getElementById("nextBtn").className = "w-full text-center font-bold text-xl transition";
+
+  if (q.type === "single" || q.type === "multiple") {
+    q.options.forEach((opt, i) => {
+      const div = document.createElement("div"); div.className = "option-box";
+      div.innerHTML = `<input type="${q.type === 'multiple' ? 'checkbox' : 'radio'}" name="opt" value="${i}" id="opt${i}" class="w-6 h-6"><label for="opt${i}" class="ml-4 cursor-pointer flex-1 text-lg">${opt}</label>`;
+      div.onclick = e => { if (e.target.tagName !== "INPUT") div.querySelector("input").click(); };
+      div.querySelector("input").onchange = () => {
+        if (q.type === "single") container.querySelectorAll(".option-box").forEach(d => d.classList.remove("selected"));
+        div.classList.toggle("selected", div.querySelector("input").checked);
+        selectedAnswer = q.type === "multiple" ? Array.from(container.querySelectorAll("input:checked")).map(c => +c.value) : i;
+        document.getElementById("nextBtn").classList.add("answered");
+      };
+      container.appendChild(div);
+    });
+  } else if (q.type.includes("grid")) {
+    const table = document.createElement("table"); table.className = "w-full border-collapse text-lg";
+    table.innerHTML = `<thead><tr class="bg-gray-200"><th class="p-4"></th>${q.gridCols.map(c => `<th class="p-4 text-center">${c}</th>`).join("")}</tr></thead><tbody>${q.gridRows.map((row, r) => `<tr><td class="p-4 font-medium bg-gray-50">${row}</td>${q.gridCols.map((_, c) => `<td class="p-4 text-center"><input type="${q.type === 'checkbox_grid' ? 'checkbox' : 'radio'}" name="${q.type === 'mcq_grid' ? 'row'+r : 'grid'}" data-row="${r}" data-col="${c}" class="w-7 h-7"></td>`).join("")}</tr>`).join("")}</tbody>`;
+    container.appendChild(table);
+    container.querySelectorAll("input").forEach(inp => {
+      inp.onchange = () => {
+        const answer = {};
+        container.querySelectorAll("input").forEach(i => {
+          const r = i.dataset.row, c = i.dataset.col;
+          if (!answer[r]) answer[r] = q.type === "mcq_grid" ? null : [];
+          if (i.checked) { if (q.type === "mcq_grid") answer[r] = +c; else answer[r].push(+c); }
+        });
+        selectedAnswer = answer;
+        document.getElementById("nextBtn").classList.add("answered");
+      };
+    });
+  }
+  startTimer(q.timeLimit);
+}
+
+// LOAD PARTICIPANTS
+google.script.run.withSuccessHandler(data => {
+  if (!data.status.quizOpen) {
+    document.getElementById("msg").textContent = "Quiz is currently closed.";
+    document.getElementById("startBtn").disabled = true;
+    return;
+  }
+  const select = document.getElementById("participantSelect");
+  data.participants.forEach(p => select.add(new Option(`${p.name} – ${p.email} – ${p.afa}`, JSON.stringify(p))));
+}).getInitialData();
+
+// START QUIZ
+document.getElementById("startBtn").onclick = () => {
+  const sel = document.getElementById("participantSelect").value;
+  const track = document.querySelector("input[name='track']:checked");
+  if (!sel || !track) return document.getElementById("msg").textContent = "Please select name and track";
+  user = JSON.parse(sel);
+  google.script.run
+    .withSuccessHandler(res => {
+      sessionId = res.sessionId;
+      saveSessionState();
+      document.getElementById("entry").classList.add("hidden");
+      document.getElementById("quiz").classList.remove("hidden");
+      document.getElementById("violationCounter").classList.remove("hidden");
+      loadNextQuestion();
+    })
+    .withFailureHandler(err => document.getElementById("msg").textContent = err.message)
+    .startSession(user.name, user.email, user.afa, track.value);
+};
+
+// SUBMIT ANSWER
+document.getElementById("nextBtn").onclick = () => {
+  if (!document.getElementById("nextBtn").classList.contains("answered")) return;
+  const btn = document.getElementById("nextBtn");
+  btn.classList.add("submitting"); btn.classList.remove("answered"); btn.textContent = "Submitting...";
+  clearInterval(timerInterval);
+
+  google.script.run
+    .withSuccessHandler(res => {
+      saveSessionState();
+      if (res.nextIndex >= 30) {
+        clearSessionState();
+        document.getElementById("quiz").innerHTML = `<div class="text-center py-20"><h1 class="text-6xl font-bold text-green-600 mb-6">Completed!</h1><p class="text-2xl">Thank you for completing the assessment.</p></div>`;
+      } else {
+        loadNextQuestion();
+      }
+    })
+    .withFailureHandler(err => {
+      btn.classList.remove("submitting"); btn.classList.add("error"); btn.textContent = "Try Again";
+      startTimer(10);
+      recordViolation("Submit failed");
+    })
+    .submitAnswer(sessionId, { selected: selectedAnswer, timeTaken: currentQuestion.timeLimit - timeLeft }, user.email);
+};
+
+// LOAD NEXT QUESTION
+function loadNextQuestion() {
+  google.script.run
+    .withSuccessHandler(q => {
+      if (q.finished) {
+        clearSessionState();
+        document.getElementById("quiz").innerHTML = `<div class="text-center py-20"><h1 class="text-6xl font-bold text-green-600 mb-6">Completed!</h1></div>`;
+        return;
+      }
+      currentQuestion = q;
+      renderQuestion(q);
+      saveSessionState();
+    })
+    .withFailureHandler(err => {
+      recordViolation("Failed to load question");
+      setTimeout(loadNextQuestion, 5000);
+    })
+    .getCurrentQuestion(sessionId, user.email);
+}
+</script>
+</body>
+</html>

@@ -5,6 +5,24 @@ import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 const COLLECTION = 'wa14';
 
+export const ASSESSMENT_KEYS = {
+  assessments: 'wa14-assessments',
+  questions: 'wa14-assessment-questions',
+  attempts: 'wa14-assessment-attempts',
+  attendance: 'wa14-attendance',
+  analytics: 'wa14-assessment-analytics',
+};
+
+export function parseStoredArray(record) {
+  if (!record?.value) return [];
+  try {
+    const parsed = JSON.parse(record.value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
 export const storage = {
   async get(key) {
     const snap = await getDoc(doc(db, COLLECTION, key));

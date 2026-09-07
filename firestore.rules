@@ -28,7 +28,9 @@ service cloud.firestore {
     match /wa14/{docId} {
       allow read: if isTfbUser();
       allow create, update, delete: if isPlanner()
-        && docId in ['wa14-sessions', 'wa14-rooms', 'wa14-pillars', 'wa14-requests'];
+        && docId in ['wa14-sessions', 'wa14-rooms', 'wa14-pillars', 'wa14-requests', 'wa14-settings', 'wa14-assessments', 'wa14-assessment-questions', 'wa14-assessment-analytics'];
+      allow create, update, delete: if isTfbUser()
+        && docId in ['wa14-assessment-attempts', 'wa14-attendance'];
       allow create, update, delete: if isSuperadmin()
         && docId in ['wa14-accounts', 'wa14-planners', 'wa14-roster'];
     }

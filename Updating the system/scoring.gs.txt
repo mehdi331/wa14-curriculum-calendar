@@ -1,0 +1,153 @@
+/**
+ * FINAL UPGRADED SCORING — 2 POINTS PER CORRECT OPTION
+ * MaxPoints = (Number of correct options) × 2
+ * PointsEarned = (Number of correct selections) × 2
+ * Works perfectly with multiple, checkbox_grid, mcq_grid
+ */
+
+function calculateAccurateScores() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const respSheet = ss.getSheetByName("Responses");
+  const qSheet = ss.getSheetByName("Questions");
+
+  if (!respSheet || !qSheet) throw new Error("Missing sheet");
+
+  // Auto-add columns
+  ["PointsEarned", "MaxPoints", "ParticipantTotal", "ParticipantPercentage"].forEach(name => {
+    const headers = respSheet.getRange(1,1,1,respSheet.getLastColumn()).getValues()[0];
+    if (!headers.includes(name)) {
+      respSheet.insertColumnAfter(respSheet.getLastColumn());
+      respSheet.getRange(1, respSheet.getLastColumn()).setValue(name).setFontWeight("bold");
+    }
+  });
+
+  const headers = respSheet.getRange(1,1,1,respSheet.getLastColumn()).getValues()[0];
+  const C = {
+    email: headers.indexOf("Email") + 1,
+    qid: headers.indexOf("QID") + 1,
+    selected: headers.indexOf("Selected(JSON)") + 1,
+    isCorrect: headers.indexOf("IsCorrect") + 1,
+    pointsEarned: headers.indexOf("PointsEarned") + 1,
+    maxPoints: headers.indexOf("MaxPoints") + 1,
+    total: headers.indexOf("ParticipantTotal") + 1,
+    percent: headers.indexOf("ParticipantPercentage") + 1
+  };
+
+  // Load Questions — Count correct options to calculate MaxPoints
+  const qData = qSheet.getDataRange().getValues();
+  const qh = qData[0];
+  const questions = {};
+
+  for (let i = 1; i < qData.length; i++) {
+    const row = qData[i];
+    const qid = row[qh.indexOf("QID")];
+    if (!qid) continue;
+
+    let correctRaw = row[qh.indexOf("CorrectJSON")];
+    let correct = null;
+    try {
+      correct = correctRaw ? JSON.parse(correctRaw.replace(/,\s*}/g,"}").replace(/,\s*]/g,"]")) : null;
+    } catch(e) { correct = null; }
+
+    const type = String(row[qh.indexOf("Type")] || "single").trim();
+
+    // COUNT TOTAL CORRECT OPTIONS
+    let totalCorrectOptions = 0;
+    if (type === "single") {
+      totalCorrectOptions = 1;
+    }
+    else if (type === "multiple" || type === "check") {
+      totalCorrectOptions = Array.isArray(correct) ? correct.length : 0;
+    }
+    else if (type === "mcq_grid") {
+      totalCorrectOptions = Object.keys(correct || {}).length;
+    }
+    else if (type === "checkbox_grid") {
+      Object.keys(correct || {}).forEach(k => {
+        totalCorrectOptions += Array.isArray(correct[k]) ? correct[k].length : 0;
+      });
+    }
+
+    const maxPoints = totalCorrectOptions * 2;  // 2 points per correct option
+
+    questions[qid] = {
+      correct: correct,
+      type: type,
+      maxPoints: maxPoints,
+      totalOptions: totalCorrectOptions
+    };
+  }
+
+  const totals = {};
+  const respData = respSheet.getDataRange().getValues();
+
+  for (let r = 1; r < respData.length; r++) {
+    const row = respData[r];
+    const email = row[C.email - 1];
+    const qid = row[C.qid - 1];
+    const selectedRaw = row[C.selected - 1];
+
+    if (!email || !qid || !questions[qid]) {
+      respSheet.getRange(r + 1, C.pointsEarned).setValue(0);
+      respSheet.getRange(r + 1, C.maxPoints).setValue(0);
+      continue;
+    }
+
+    let userAns = null;
+    try { userAns = typeof selectedRaw === "string" ? JSON.parse(selectedRaw) : selectedRaw; } catch(e) {}
+
+    const q = questions[qid];
+    let correctCount = 0;
+    let isFullyCorrect = false;
+
+    if (q.type === "single") {
+      isFullyCorrect = String(userAns) === String(q.correct);
+      correctCount = isFullyCorrect ? 1 : 0;
+    }
+    else if (q.type === "multiple" || q.type === "check") {
+      const c = Array.isArray(q.correct) ? q.correct.map(String) : [];
+      const u = Array.isArray(userAns) ? userAns.map(String) : [];
+      correctCount = u.filter(x => c.includes(x)).length;
+      isFullyCorrect = correctCount === c.length && u.length === c.length;
+    }
+    else if (q.type === "mcq_grid") {
+      Object.keys(q.correct || {}).forEach(k => {
+        if (String(userAns?.[k]) === String(q.correct[k])) correctCount++;
+      });
+      isFullyCorrect = correctCount === q.totalOptions;
+    }
+    else if (q.type === "checkbox_grid") {
+      Object.keys(q.correct || {}).forEach(k => {
+        const cRow = Array.isArray(q.correct[k]) ? q.correct[k].map(String) : [];
+        const uRow = Array.isArray(userAns?.[k]) ? userAns[k].map(String) : [];
+        correctCount += uRow.filter(x => cRow.includes(x)).length;
+      });
+      isFullyCorrect = correctCount === q.totalOptions;
+    }
+
+    const earned = correctCount * 2;  // 2 points per correct selection
+
+    // Write results
+    respSheet.getRange(r + 1, C.isCorrect).setValue(isFullyCorrect);
+    respSheet.getRange(r + 1, C.pointsEarned).setValue(earned);
+    respSheet.getRange(r + 1, C.maxPoints).setValue(q.maxPoints);
+
+    if (!totals[email]) totals[email] = { earned: 0, max: 0, row: r + 1 };
+    totals[email].earned += earned;
+    totals[email].max += q.maxPoints;
+    totals[email].row = r + 1;
+  }
+
+  // Final scores
+  Object.keys(totals).forEach(email => {
+    const t = totals[email];
+    const pct = t.max > 0 ? Math.round((t.earned / t.max) * 100) : 0;
+    respSheet.getRange(t.row, C.total).setValue(t.earned);
+    respSheet.getRange(t.row, C.percent).setValue(pct + "%");
+    respSheet.getRange(t.row, 1, 1, respSheet.getLastColumn())
+      .setBackground("#d4edda").setFontWeight("bold").setFontColor("#155724");
+  });
+
+  try { SpreadsheetApp.getUi().alert("UPGRADED SCORING COMPLETE!\n2 points per correct option applied."); }
+  catch(e) { console.log("Done"); }
+}

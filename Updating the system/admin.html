@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Quiz Admin Dashboard</title>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-7xl mx-auto p-6">
+    <h1 class="text-4xl font-bold text-center mb-8 text-indigo-800">Quiz Admin Dashboard</h1>
+
+    <div class="grid md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-xl font-bold mb-4">Quiz Control</h2>
+        <button id="toggleBtn" onclick="toggleQuiz()" class="w-full py-3 rounded-lg text-white font-bold text-xl"></button>
+        <div class="mt-4">
+          <label>Default Timer (seconds):</label>
+          <input type="number" id="timerInput" class="w-full border rounded p-2" value="60">
+          <button onclick="updateTimer()" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded">Update</button>
+        </div>
+        <button onclick="releaseGrades()" class="mt-4 w-full bg-purple-600 text-white py-3 rounded-lg font-bold">Release Grades</button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-xl font-bold mb-4">Edit Questions</h2>
+        <div id="questionsList" class="space-y-3 max-h-96 overflow-y-auto"></div>
+        <button onclick="loadQuestions()" class="mt-4 bg-green-600 text-white px-4 py-2 rounded">Refresh Questions</button>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-lg p-6">
+        <h2 class="text-xl font-bold mb-4">Allowed Emails</h2>
+        <div id="emailsList" class="space-y-3 max-h-96 overflow-y-auto"></div>
+        <button onclick="loadEmails()" class="mt-4 bg-green-600 text-white px-4 py-2 rounded">Refresh List</button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-lg p-6">
+      <h2 class="text-xl font-bold mb-4">Live Participants</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-800 text-white"><tr><th class="p-3">Name</th><th>Email</th><th>AFA</th><th>Track</th><th>Status</th><th>Progress</th><th>Violations</th><th>Action</th></tr></thead>
+          <tbody id="participantTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-6 text-center">
+      <a href="?analytics" class="bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-indigo-700">Open Analytics Dashboard</a>
+    </div>
+  </div>
+
+<script>
+function loadAll() { loadStatus(); loadParticipants(); loadQuestions(); loadEmails(); }
+function loadStatus() {
+  google.script.run.withSuccessHandler(s => {
+    document.getElementById("toggleBtn").textContent = s ? "CLOSE QUIZ" : "OPEN QUIZ";
+    document.getElementById("toggleBtn").className = s ? "w-full py-3 rounded-lg bg-red-600 text-white font-bold text-xl" : "w-full py-3 rounded-lg bg-green-600 text-white font-bold text-xl";
+  }).getQuizStatus();
+}
+function toggleQuiz() { google.script.run.withSuccessHandler(loadAll).setQuizStatus(!document.getElementById("toggleBtn").textContent.includes("CLOSE")); }
+function updateTimer() { google.script.run.withSuccessHandler(() => alert("Timer updated!")).setQuestionTimer(document.getElementById("timerInput").value); }
+function releaseGrades() { if (confirm("Release grades?")) google.script.run.withSuccessHandler(() => alert("Grades released!")).releaseGrades(); }
+
+function loadParticipants() {
+  google.script.run.withSuccessHandler(data => {
+    const tbody = document.getElementById("participantTable");
+    tbody.innerHTML = "";
+    data.forEach(p => {
+      const tr = document.createElement("tr");
+      tr.className = "border-b hover:bg-gray-50";
+      tr.innerHTML = `<td class="p-3">${p.Name}</td><td>${p.Email}</td><td>${p.AFA}</td><td>${p.Track}</td>
+        <td class="${p.Status === 'Completed' ? 'text-green-600' : 'text-orange-600'} font-bold">${p.Status}</td>
+        <td>${p.Progress}%</td><td class="text-red-600 font-bold">${p.Violations}</td>
+        <td><button onclick="forceSubmit('${p.Email}')" class="bg-red-600 text-white px-3 py-1 rounded text-xs">Force End</button></td>`;
+      tbody.appendChild(tr);
+    });
+  }).getAllSessions();
+}
+
+function forceSubmit(email) { if (confirm("Force end for " + email + "?")) google.script.run.withSuccessHandler(loadParticipants).forceSubmitParticipant(email); }
+
+function loadQuestions() {
+  google.script.run.withSuccessHandler(list => {
+    const div = document.getElementById("questionsList");
+    div.innerHTML = "";
+    list.forEach(q => {
+      const card = document.createElement("div");
+      card.className = "border rounded-lg p-4 bg-gray-50";
+      card.innerHTML = `
+        <div class="font-bold">Q${q.row - 1}: ${q.qid}</div>
+        <div class="text-sm text-gray-700 mt-1">${q.text.substring(0, 100)}...</div>
+        <div class="mt-2 flex gap-2">
+          <input type="text" id="text${q.row}" value="${q.text}" class="flex-1 border rounded px-2 py-1 text-sm">
+          <input type="text" id="correct${q.row}" value="${q.correct}" placeholder="Correct JSON" class="w-48 border rounded px-2 py-1 text-sm">
+          <button onclick="saveQuestion(${q.row})" class="bg-blue-600 text-white px-3 py-1 rounded text-xs">Save</button>
+        </div>`;
+      div.appendChild(card);
+    });
+  }).getQuestionsForAdmin();
+}
+
+function saveQuestion(row) {
+  const text = document.getElementById("text" + row).value;
+  const correct = document.getElementById("correct" + row).value;
+  google.script.run.withSuccessHandler(() => alert("Question updated!")).updateQuestion(row, "Q" + (row - 1), "single", text, correct);
+}
+
+function loadEmails() {
+  google.script.run.withSuccessHandler(list => {
+    const div = document.getElementById("emailsList");
+    div.innerHTML = "";
+    list.forEach(p => {
+      const card = document.createElement("div");
+      card.className = "border rounded-lg p-3 bg-gray-50 flex items-center gap-3";
+      card.innerHTML = `
+        <input type="text" id="name${p.row}" value="${p.name}" class="flex-1 border rounded px-2 py-1 text-sm">
+        <input type="text" id="email${p.row}" value="${p.email}" class="flex-1 border rounded px-2 py-1 text-sm">
+        <input type="text" id="afa${p.row}" value="${p.afa}" class="w-32 border rounded px-2 py-1 text-sm">
+        <select id="mult${p.row}" class="border rounded px-2 py-1 text-sm">
+          <option ${p.multiple === "YES" ? "selected" : ""}>YES</option>
+          <option ${p.multiple !== "YES" ? "selected" : ""}>NO</option>
+        </select>
+        <button onclick="saveEmail(${p.row})" class="bg-green-600 text-white px-3 py-1 rounded text-xs">Save</button>`;
+      div.appendChild(card);
+    });
+  }).getAllowedEmails();
+}
+
+function saveEmail(row) {
+  const name = document.getElementById("name" + row).value;
+  const email = document.getElementById("email" + row).value;
+  const afa = document.getElementById("afa" + row).value;
+  const mult = document.getElementById("mult" + row).value;
+  google.script.run.withSuccessHandler(() => alert("Email updated!")).updateAllowedEmail(row, name, email, afa, mult);
+}
+
+loadAll();
+setInterval(loadAll, 10000);
+</script>
+</body>
+</html>

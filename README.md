@@ -7,6 +7,8 @@ npm ci
 npm run dev
 ```
 
+During local development only, the sign-in screen includes **Test superuser** and **Test Fellow** buttons. These identities are stored in local browser storage and are removed from production builds. They are useful for checking role-based layouts and workflows, but they do not bypass Firestore security rules; use an authenticated Firebase account when testing live data reads and writes.
+
 The app uses Firebase Authentication and Cloud Firestore. The Firebase web configuration is public client configuration and is bundled into the browser app; it must not be treated as a secret. Restrict the Firebase API key to the production domain and enable only the APIs this project uses.
 
 ## Firebase setup
@@ -18,6 +20,18 @@ The app uses Firebase Authentication and Cloud Firestore. The Firebase web confi
 5. Confirm Firestore usage stays within the Spark quota: 50,000 reads/day, 20,000 writes/day, 20,000 deletes/day, 1 GiB storage, and 10 GiB/month outbound transfer.
 
 The current rules include a temporary transition bridge for the existing planning-team email addresses. Replace that bridge with Firebase custom claims managed by a trusted administrator before adding more privileged users. Never restore password or PIN authentication in the browser.
+
+## Assessments and attendance
+
+Staff can create session-linked assessments with single-choice, multiple-choice, check, and paragraph questions; each choice option has a stable ID so changing its text does not change its answer key. Paragraph questions support a rubric and expected concepts. Fellows receive active assigned assessments with persisted answers; paragraph responses are submitted as pending staff review.
+
+The local development login includes demo controls for 10 Fellows, 5 sessions, 5 assessments, and demo questions. Demo records are prefixed with `DEMO` and can be removed from the Staff analytics view.
+
+Question images accept a public image URL or common Google Drive share links, which are normalized to Drive's view endpoint. Drive files must be shared as **Anyone with the link → Viewer**. The Fellow experience displays the image above the question prompt. Do not store base64 images in Firestore.
+
+Staff can use the **Review** tab to score paragraph responses, add feedback, and record the reviewer/date. An optional Google Apps Script AI proxy can provide a suggested score and feedback, but a staff member must approve and save the final score. Set `AI_SUGGEST_ENDPOINT` in `src/App.jsx` only to the deployed proxy URL; keep any model API key in Apps Script. Exports include answers, reviews, and AI suggestions.
+
+The initial assessment persistence uses aggregate documents for compatibility with the existing app. It is suitable for local/demo testing, but production assessment use still requires stricter per-Fellow Firestore rules, server-authoritative grading/timing, protected answer keys, and per-record response storage.
 
 ## Deployment
 
