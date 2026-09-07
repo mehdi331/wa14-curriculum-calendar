@@ -19,7 +19,7 @@ const PILLAR_COLOR = {
 const DEFAULT_PILLARS = Object.keys(PILLAR_COLOR).map((name, index) => ({id:'pillar'+index, name, color:PILLAR_COLOR[name]}));
 const MODES = ['Sync','Async','Coaching','Workshop'];
 const MODE_COLOR = { Sync:'#1F6F78', Async:'#B8863B', Coaching:'#6B5CA5', Workshop:'#A64D4D' };
-const RESOURCE_KINDS = ['Session plan','Slides','Async work','Exit ticket','Other'];
+const RESOURCE_KINDS = ['Session plan','Slides','Async work','Exit ticket','Old folder','Other'];
 const WEEKS = [0,1,2,3,4,5,6];
 const GRID_START = 8*60;
 const GRID_END = 22*60+30;
@@ -283,11 +283,12 @@ function MainApp({ auth, onLogout }){
       'Session Name': s.name, Pillar: s.pillar, Mode: s.mode,
       Facilitators: (s.facilitators||[]).join(', '),
       Resources: (s.resources||[]).map(r=>r.label+': '+r.url).join(' | '),
+      Outcomes: (s.outcomes||[]).join(' | '),
       Calendared: s.calendared ? 'Yes' : 'No',
     }));
     rows.sort((a,b) => (a.Date||'zzzz').localeCompare(b.Date||'zzzz') || (a.Start||'').localeCompare(b.Start||''));
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{wch:9},{wch:12},{wch:11},{wch:7},{wch:7},{wch:10},{wch:42},{wch:20},{wch:11},{wch:22},{wch:40},{wch:10}];
+    ws['!cols'] = [{wch:9},{wch:12},{wch:11},{wch:7},{wch:7},{wch:10},{wch:42},{wch:20},{wch:11},{wch:22},{wch:40},{wch:40},{wch:10}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sessions');
     XLSX.writeFile(wb, 'WA14_Sessions_Export.xlsx');
@@ -355,7 +356,7 @@ function MainApp({ auth, onLogout }){
 }
 
 function blankSession(){
-  return { id:newId(), week:0, date:'', weekday:'', start:'', end:'', name:'', pillar:PILLARS[0], mode:'Sync', facilitators:[], rooms:[], resources:[], calendared:false };
+  return { id:newId(), week:0, date:'', weekday:'', start:'', end:'', name:'', pillar:PILLARS[0], mode:'Sync', facilitators:[], rooms:[], resources:[], outcomes:[], calendared:false };
 }
 
 const toastStyle = { position:'fixed', top:16, right:24, background:'#1B2733', color:'#fff', padding:'9px 16px', borderRadius:6, fontSize:13, zIndex:200, boxShadow:'0 4px 14px rgba(0,0,0,.2)' };
@@ -552,7 +553,7 @@ function SessionsTable({ sessions, weekFilter, setWeekFilter, onEdit, onDelete, 
       </div>
       <div style={{background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, overflow:'hidden'}}>
         <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}>{['Date','Time','Session','Pillar','Mode','Facilitators','Rooms',''].map(h => (<th key={h} style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>{h}</th>))}</tr></thead>
+          <thead><tr style={{background:'#F7F8F9', textAlign:'left'}}>{['Date','Time','Session','Pillar','Mode','Facilitators','Rooms','Outcomes',''].map(h => (<th key={h} style={{padding:'9px 12px', fontWeight:600, color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>{h}</th>))}</tr></thead>
           <tbody>
             {rows.map(s => (
               <tr key={s.id} style={{borderBottom:'1px solid #EEF0F2'}}>
@@ -563,6 +564,7 @@ function SessionsTable({ sessions, weekFilter, setWeekFilter, onEdit, onDelete, 
                 <td style={{padding:'8px 12px'}}><span style={{fontSize:11, padding:'2px 8px', borderRadius:12, background:(MODE_COLOR[s.mode]||'#ccc')+'26', color:MODE_COLOR[s.mode]||'#1B2733', fontWeight:600}}>{s.mode}</span></td>
                 <td style={{padding:'8px 12px', color:'#5B6672'}}>{(s.facilitators||[]).join(', ') || '—'}</td>
                 <td style={{padding:'8px 12px', color:'#5B6672'}}>{(s.rooms||[]).length ? s.rooms.map(r=>r.name).join(', ') : (s.roomIds||[]).map(id=>rooms.find(r=>r.id===id)?.name).filter(Boolean).join(', ') || '—'}</td>
+                <td style={{padding:'8px 12px', color:'#5B6672'}}>{s.outcomes && s.outcomes.length ? s.outcomes.join('; ') : '—'}</td>
                 <td style={{padding:'8px 12px', textAlign:'right', whiteSpace:'nowrap'}}>
                   <button onClick={()=>onEdit(s)} style={linkBtn}>Edit</button>
                   <select multiple value={s.roomIds||[]} onChange={e=>onAssignRoom(s,Array.from(e.target.selectedOptions,option=>option.value))} style={{...selectStyle, marginLeft:10, fontSize:11, minWidth:90}} title="Assign rooms">{rooms.map(room=><option key={room.id} value={room.id}>{room.name}</option>)}</select>
@@ -691,6 +693,20 @@ function ViewPanel({ session, auth, rooms, onRequestUpdate, onClose }){
                 <a key={r.id} href={r.url} target="_blank" rel="noreferrer" style={{display:'flex', alignItems:'center', gap:8, padding:'8px 10px', border:'1px solid #DDE2E6', borderRadius:6, fontSize:12.5, color:'#1F6F78', textDecoration:'none'}}>
                   <LinkIcon size={13}/> <span style={{fontWeight:600}}>{r.label}</span>
                 </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {session.outcomes && session.outcomes.length>0 && (
+          <div style={{marginTop:18}}>
+            <div style={{fontSize:12, color:'#5B6672', fontWeight:600, marginBottom:8}}>Outcomes</div>
+            <div style={{display:'flex', flexDirection:'column', gap:6}}>
+              {session.outcomes.map((outcome, idx) => (
+                <div key={idx} style={{display:'flex', alignItems:'flex-start', gap:8, fontSize:12.5, color:'#1B2733', lineHeight:1.4}}>
+                  <span style={{flexShrink:0, color:'#1F6F78', fontWeight:600}}>{idx+1}.</span>
+                  <span>{outcome}</span>
+                </div>
               ))}
             </div>
           </div>
@@ -879,11 +895,14 @@ function RequestsPanel({ requests, onResolve, onDelete }){
 }
 
 function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillars }){
-  const [form, setForm] = useState({ ...session, facilitatorsText:(session.facilitators||[]).join(', '), resources: session.resources ? session.resources.map(r=>({...r})) : [] });
+  const [form, setForm] = useState({ ...session, facilitatorsText:(session.facilitators||[]).join(', '), resources: session.resources ? session.resources.map(r=>({...r})) : [], outcomes: (session.outcomes||[]).filter(Boolean).map(text=>({id:newResId(), text})) });
   const set = (k,v) => setForm(f => ({...f, [k]:v}));
   const addResource = () => set('resources', [...form.resources, {id:newResId(), label:RESOURCE_KINDS[0], url:''}]);
   const updateResource = (id, key, val) => set('resources', form.resources.map(r => r.id===id ? {...r,[key]:val} : r));
   const removeResource = (id) => set('resources', form.resources.filter(r=>r.id!==id));
+  const addOutcome = () => set('outcomes', [...form.outcomes, {id:newResId(), text:''}]);
+  const updateOutcome = (id, val) => set('outcomes', form.outcomes.map(o => o.id===id ? {...o, text:val} : o));
+  const removeOutcome = (id) => set('outcomes', form.outcomes.filter(o=>o.id!==id));
 
   const handleSave = () => {
     const weekday = form.date ? new Date(form.date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}) : '';
@@ -894,6 +913,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillar
       facilitators: form.facilitatorsText.split(',').map(x=>x.trim()).filter(Boolean),
       roomIds: form.roomIds || [],
       resources: form.resources.filter(r=>r.url.trim()),
+      outcomes: form.outcomes.map(o=>(o.text||'').trim()).filter(Boolean),
       calendared: !!form.date && !!form.start && !!form.end,
     });
   };
@@ -928,6 +948,17 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillar
             ))}
           </div>
           <button onClick={addResource} style={{...btnGhost, marginTop:8, padding:'6px 4px'}}><Plus size={13}/> Add resource link</button>
+        </Field>
+        <Field label="Outcomes">
+          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+            {form.outcomes.map(o => (
+              <div key={o.id} style={{display:'flex', gap:6, alignItems:'center'}}>
+                <input style={inputStyle} placeholder="Outcome" value={o.text} onChange={e=>updateOutcome(o.id,e.target.value)} />
+                <button onClick={()=>removeOutcome(o.id)} style={{background:'none', border:'none', color:'#B84C4C', cursor:'pointer', flexShrink:0}}><X size={15}/></button>
+              </div>
+            ))}
+          </div>
+          <button onClick={addOutcome} style={{...btnGhost, marginTop:8, padding:'6px 4px'}}><Plus size={13}/> Add outcome</button>
         </Field>
         <div style={{display:'flex', gap:8, marginTop:20}}>
           <button onClick={handleSave} style={{...btnPrimary, flex:1, justifyContent:'center', padding:'10px'}}>Save session</button>
