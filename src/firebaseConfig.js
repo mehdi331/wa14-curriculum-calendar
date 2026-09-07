@@ -9,6 +9,7 @@
 //    this folder, then click Publish.
 import { initializeApp } from 'firebase/app';
 import { getAnalytics } from "firebase/analytics";
+import { getAuth } from 'firebase/auth';
 
 import { getFirestore } from 'firebase/firestore';
 
@@ -30,3 +31,4 @@ const analytics = getAnalytics(app);
 
 // Ensure 'export const db' is present:
 export const db = getFirestore(app);
+export const auth = getAuth(app);

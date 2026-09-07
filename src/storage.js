@@ -20,20 +20,3 @@ export const storage = {
   },
 };
 
-// Personal, per-browser data (just the "who am I logged in as" auth token)
-// doesn't need to be shared, so it stays in plain localStorage — no Firestore
-// round trip needed for that.
-export const localAuth = {
-  get() {
-    try {
-      const raw = localStorage.getItem('wa14-auth');
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) { return null; }
-  },
-  set(value) {
-    try { localStorage.setItem('wa14-auth', JSON.stringify(value)); } catch (e) {}
-  },
-  clear() {
-    try { localStorage.removeItem('wa14-auth'); } catch (e) {}
-  },
-};

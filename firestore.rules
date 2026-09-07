@@ -1,17 +1,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // This app has no Firebase Auth wired up — access control happens in
-    // the app's own login screen (email pattern + roster), not here. These
-    // rules just scope reads/writes to the one collection the app uses, so
-    // the rest of your Firestore project (if you ever add anything else to
-    // it) stays untouched. Anyone who knows your Firestore project ID can
-    // technically read/write documents in this collection directly, bypassing
-    // the app's UI — acceptable for an internal scheduling tool, but if you
-    // later want real protection, add Firebase Authentication and tighten
-    // these rules to require a signed-in, verified TFB user.
+    function isTfbUser() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.matches('.*@teachforbangladesh\\.org$');
+    }
+
+    function isPlanner() {
+      return isTfbUser()
+        && (request.auth.token.email in [
+            'mehdi@teachforbangladesh.org',
+            'asifur@teachforbangladesh.org',
+            'hasibur@teachforbangladesh.org'
+          ]
+          || (request.auth.token.keys().hasAny(['role'])
+            && request.auth.token.role in ['superadmin', 'planner', 'resource_planner']));
+    }
+
+    function isSuperadmin() {
+      return isTfbUser()
+        && (request.auth.token.email == 'mehdi@teachforbangladesh.org'
+          || (request.auth.token.keys().hasAny(['role'])
+            && request.auth.token.role == 'superadmin'));
+    }
+
     match /wa14/{docId} {
-      allow read, write: if true;
+      allow read: if isTfbUser();
+      allow create, update, delete: if isPlanner()
+        && docId in ['wa14-sessions', 'wa14-rooms', 'wa14-pillars', 'wa14-requests'];
+      allow create, update, delete: if isSuperadmin()
+        && docId in ['wa14-accounts', 'wa14-planners', 'wa14-roster'];
     }
   }
 }
