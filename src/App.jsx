@@ -79,7 +79,7 @@ export default function App(){
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
-    return onAuthStateChanged(auth, async (user) => {
+    return onAuthStateChanged(firebaseAuth, async (user) => {
       if (!user) {
         setAuth(null);
         setAuthLoaded(true);
