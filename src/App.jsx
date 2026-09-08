@@ -410,6 +410,8 @@ function MainApp({ auth, onLogout }){
   const [sessionSearch, setSessionSearch] = useState('');
   const [toast, setToast] = useState('');
   const saveTimer = useRef(null);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
   const rosterSaveTimer = useRef(null);
   const plannerSaveTimer = useRef(null);
   const roomSaveTimer = useRef(null);
@@ -512,40 +514,104 @@ function MainApp({ auth, onLogout }){
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         if (!rows.length) { showToast('No data found in file'); return; }
+
+        // Helper to find a value from row by possible keys (case-insensitive, trimmed)
+        const findValue = (row, possibleKeys) => {
+          // First try exact match
+          for (const key of possibleKeys) {
+            if (row[key] !== undefined && row[key] !== '') return String(row[key]).trim();
+          }
+          // Then try case-insensitive match with trimmed keys
+          const rowKeys = Object.keys(row);
+          for (const key of possibleKeys) {
+            const match = rowKeys.find(k => k.trim().toLowerCase() === key.toLowerCase());
+            if (match && row[match] !== undefined && row[match] !== '') return String(row[match]).trim();
+          }
+          return '';
+        };
+
         const startDate = academySettings?.startDate;
-        const newSessions = rows.map((row, idx) => {
-          const date = row.Date || row.date || row.DATE || '';
-          const start = row.Start || row.start || row.START || row['Start Time'] || '';
-          const end = row.End || row.end || row.END || row['End Time'] || '';
-          const name = row['Session Name'] || row.name || row.NAME || row.Session || row['Session Title'] || '';
-          if (!date || !name) return null;
-          const dateObj = new Date(date+'T00:00:00');
-          const weekday = dateObj.toLocaleDateString(undefined,{weekday:'long'});
-          const week = startDate ? weekForDate(date, startDate) : (row.Week != null ? parseInt(String(row.week || row.Week || row.WEEK || '0').replace(/\D/g,'')) : 0);
-          return {
-            id: 'imp-'+Date.now()+'-'+idx,
-            week: week != null ? week : 0,
-            date,
+        const newSessions = [];
+        const skippedRows = [];
+
+        rows.forEach((row, idx) => {
+          const date = findValue(row, ['Date', 'date', 'DATE', 'Session Date', 'session date', 'Day', 'day']);
+          const start = findValue(row, ['Start', 'start', 'START', 'Start Time', 'start time', 'Time Start', 'Begin', 'begin']);
+          const end = findValue(row, ['End', 'end', 'END', 'End Time', 'end time', 'Time End', 'Finish', 'finish']);
+          const name = findValue(row, ['Session Name', 'name', 'NAME', 'Session', 'session', 'SESSION', 'Session Title', 'session title', 'Title', 'title', 'Activity', 'activity']);
+
+          if (!date || !name) {
+            skippedRows.push({ row: idx + 1, reason: !date ? 'missing date' : 'missing name', data: JSON.stringify(row).substring(0, 100) });
+            return;
+          }
+
+          // Parse date - handle various formats
+          let dateObj;
+          if (date.includes('-')) {
+            // ISO format: YYYY-MM-DD
+            dateObj = new Date(date + 'T00:00:00');
+          } else if (date.includes('/')) {
+            // Format: MM/DD/YYYY or DD/MM/YYYY
+            const parts = date.split('/');
+            if (parts[0].length === 4) {
+              // YYYY/MM/DD
+              dateObj = new Date(date.replace(/\//g, '-') + 'T00:00:00');
+            } else {
+              // Assume MM/DD/YYYY
+              dateObj = new Date(parts[2], parseInt(parts[0]) - 1, parts[1]);
+            }
+          } else {
+            // Try parsing as-is
+            dateObj = new Date(date);
+          }
+
+          if (isNaN(dateObj.getTime())) {
+            skippedRows.push({ row: idx + 1, reason: 'invalid date: ' + date });
+            return;
+          }
+
+          // Format date as YYYY-MM-DD
+          const isoDate = dateObj.getFullYear() + '-' +
+            String(dateObj.getMonth() + 1).padStart(2, '0') + '-' +
+            String(dateObj.getDate()).padStart(2, '0');
+
+          const weekday = dateObj.toLocaleDateString(undefined, { weekday: 'long' });
+          const week = startDate ? weekForDate(isoDate, startDate) : parseInt(findValue(row, ['Week', 'week', 'WEEK'])) || 0;
+
+          newSessions.push({
+            id: 'imp-' + Date.now() + '-' + idx,
+            week: week,
+            date: isoDate,
             weekday,
-            start: String(start),
-            end: String(end),
-            name: String(name),
-            pillar: row.Pillar || row.pillar || row.PILLAR || PILLARS[0],
-            mode: row.Mode || row.mode || row.MODE || 'Sync',
-            facilitators: row.Facilitators ? String(row.Facilitators).split(',').map(s=>s.trim()).filter(Boolean) : [],
+            start,
+            end,
+            name,
+            pillar: findValue(row, ['Pillar', 'pillar', 'PILLAR', 'Category', 'category', 'Type', 'type']) || PILLARS[0],
+            mode: findValue(row, ['Mode', 'mode', 'MODE', 'Format', 'format']) || 'Sync',
+            facilitators: findValue(row, ['Facilitators', 'facilitators', 'FACILITATORS', 'Facilitator', 'facilitator', 'Presenter', 'presenter', 'Lead', 'lead']).split(',').map(s => s.trim()).filter(Boolean),
             rooms: [],
             resources: [],
-            outcomes: row.Outcomes ? String(row.Outcomes).split('|').map(s=>s.trim()).filter(Boolean) : [],
-            notes: '',
-            fellowNotes: '',
-            afaGroup: '',
+            outcomes: findValue(row, ['Outcomes', 'outcomes', 'OUTCOMES', 'Outcome', 'outcome', 'Objectives', 'objectives', 'Objective', 'objective']).split('|').map(s => s.trim()).filter(Boolean),
+            notes: findValue(row, ['Notes', 'notes', 'NOTES', 'Note', 'note', 'Description', 'description']),
+            fellowNotes: findValue(row, ['Fellow Notes', 'fellow notes', 'Fellow Note', 'fellow note']),
+            afaGroup: findValue(row, ['AFA Group', 'afa group', 'AFA', 'afa', 'Group', 'group']),
             calendared: true,
-          };
-        }).filter(Boolean);
-        if (!newSessions.length) { showToast('No valid sessions found'); return; }
+          });
+        });
+
+        if (skippedRows.length > 0) {
+          console.log('Import skipped rows:', skippedRows);
+        }
+
+        if (!newSessions.length) {
+          const skipInfo = skippedRows.slice(0, 3).map(s => `Row ${s.row}: ${s.reason}`).join('; ');
+          showToast('No valid sessions. ' + (skipInfo ? 'Issues: ' + skipInfo : 'Check column names'));
+          return;
+        }
+
         const next = [...sessions, ...newSessions];
         persist(next);
-        showToast('Imported '+newSessions.length+' session'+(newSessions.length===1?'':'s'));
+        showToast('Imported ' + newSessions.length + ' session' + (newSessions.length === 1 ? '' : 's') + (skippedRows.length ? ' (' + skippedRows.length + ' skipped)' : ''));
       } catch (err) {
         console.error('Import failed', err);
         showToast('Import failed: ' + err.message);
@@ -556,7 +622,8 @@ function MainApp({ auth, onLogout }){
 
 
   const saveSession = (s) => {
-    const next = sessions.find(x=>x.id===s.id) ? sessions.map(x => x.id===s.id ? s : x) : [...sessions, s];
+    const current = sessionsRef.current;
+    const next = current.find(x=>x.id===s.id) ? current.map(x => x.id===s.id ? s : x) : [...current, s];
     persist(next); setEditing(null); showToast('Session saved');
   };
   const deleteSession = (id) => { persist(sessions.filter(x=>x.id!==id)); setEditing(null); showToast('Session removed'); };
