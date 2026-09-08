@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, X, Download, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText } from '@phosphor-icons/react';
+import { Plus, X, Download, Upload, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText } from '@phosphor-icons/react';
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, GoogleAuthProvider } from 'firebase/auth';
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
@@ -81,6 +81,23 @@ const STAFF_ADMIN_ROLES = ['academy_lead','afa_lead','curriculum_specialist','pl
 const AFA_ROLES = ['afa','afa_lead'];
 
 function toMin(t){ if(!t) return null; const [h,m]=t.split(':').map(Number); return h*60+m; }
+// Format a Date object to YYYY-MM-DD in local time (avoids UTC shift from toISOString)
+function toIsoDate(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+// Week index for a date, derived from the academy start date (Sunday-anchored).
+// Week 00 is the full week (Sunday-Saturday) before the start date's week.
+// Week 01 is the start date's week, etc.
+function weekForDate(date, startDate){
+  if (!startDate) return null;
+  const s = new Date(startDate+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); // Go to Sunday of the week BEFORE
+  const d = new Date(date+'T00:00:00');
+  const diff = Math.floor((d - s) / (24*60*60*1000));
+  return Math.floor(diff / 7);
+}
 // A session whose end <= start flows past midnight into the next day (e.g. 23:00 → 01:00)
 function wrapsMidnight(s){ const a=toMin(s.start), b=toMin(s.end); return a!=null && b!=null && b<=a; }
 function durationMin(s){ const a=toMin(s.start), b=toMin(s.end); if(a==null||b==null) return 0; let d=b-a; if(d<=0) d+=24*60; return d; }
@@ -482,6 +499,62 @@ function MainApp({ auth, onLogout }){
 
   const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(''), 2200); };
 
+  const importExcel = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls,.csv';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const data = await file.arrayBuffer();
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        if (!rows.length) { showToast('No data found in file'); return; }
+        const startDate = academySettings?.startDate;
+        const newSessions = rows.map((row, idx) => {
+          const date = row.Date || row.date || row.DATE || '';
+          const start = row.Start || row.start || row.START || row['Start Time'] || '';
+          const end = row.End || row.end || row.END || row['End Time'] || '';
+          const name = row['Session Name'] || row.name || row.NAME || row.Session || row['Session Title'] || '';
+          if (!date || !name) return null;
+          const dateObj = new Date(date+'T00:00:00');
+          const weekday = dateObj.toLocaleDateString(undefined,{weekday:'long'});
+          const week = startDate ? weekForDate(date, startDate) : (row.Week != null ? parseInt(String(row.week || row.Week || row.WEEK || '0').replace(/\D/g,'')) : 0);
+          return {
+            id: 'imp-'+Date.now()+'-'+idx,
+            week: week != null ? week : 0,
+            date,
+            weekday,
+            start: String(start),
+            end: String(end),
+            name: String(name),
+            pillar: row.Pillar || row.pillar || row.PILLAR || PILLARS[0],
+            mode: row.Mode || row.mode || row.MODE || 'Sync',
+            facilitators: row.Facilitators ? String(row.Facilitators).split(',').map(s=>s.trim()).filter(Boolean) : [],
+            rooms: [],
+            resources: [],
+            outcomes: row.Outcomes ? String(row.Outcomes).split('|').map(s=>s.trim()).filter(Boolean) : [],
+            notes: '',
+            fellowNotes: '',
+            afaGroup: '',
+            calendared: true,
+          };
+        }).filter(Boolean);
+        if (!newSessions.length) { showToast('No valid sessions found'); return; }
+        const next = [...sessions, ...newSessions];
+        persist(next);
+        showToast('Imported '+newSessions.length+' session'+(newSessions.length===1?'':'s'));
+      } catch (err) {
+        console.error('Import failed', err);
+        showToast('Import failed: ' + err.message);
+      }
+    };
+    input.click();
+  };
+
+
   const saveSession = (s) => {
     const next = sessions.find(x=>x.id===s.id) ? sessions.map(x => x.id===s.id ? s : x) : [...sessions, s];
     persist(next); setEditing(null); showToast('Session saved');
@@ -562,6 +635,17 @@ function MainApp({ auth, onLogout }){
     return sessions.filter(s => (pillarFilter==='all' || s.pillar===pillarFilter) && (modeFilter==='all' || s.mode===modeFilter));
   }, [sessions, pillarFilter, modeFilter]);
   const fellowWeeks = academySettings?.fellowWeeks || WEEKS;
+  const academyWeeks = useMemo(() => {
+    const start = academySettings?.startDate, end = academySettings?.endDate;
+    if (!start || !end) return null;
+    const s = new Date(start+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); // snap to Sunday of the week BEFORE
+    const e = new Date(end+'T00:00:00');
+    const diffDays = Math.floor((e - s) / (24*60*60*1000));
+    const count = Math.floor(diffDays / 7) + 1;
+    if (count < 1 || count > 30) return null;
+    return Array.from({length:count}, (_,i) => i);
+  }, [academySettings?.startDate, academySettings?.endDate]);
+  const weeks = academyWeeks || WEEKS;
   const afaGroups = [...new Set(
     (planners||[]).filter(p=>AFA_ROLES.includes(p.role)).flatMap(p=>[p.group||'', p.name||'']).filter(Boolean)
       .concat((roster||[]).map(r=>(r.afaGroup||'').trim()).filter(Boolean))
@@ -581,7 +665,7 @@ function MainApp({ auth, onLogout }){
         <div className="flex-1 min-w-0">
         <TopBar
           tab={tab} isFullAdmin={isFullAdmin} auth={auth} onLogout={onLogout}
-          onExport={exportExcel} onReset={resetSeed} onAdd={()=>setEditing('new')}
+          onExport={exportExcel} onImport={importExcel} onReset={resetSeed} onAdd={()=>setEditing('new')}
         />
         {toast && <div className={toastStyle}>{toast}</div>}
         <div className="pt-5 px-6 pb-10">
@@ -595,18 +679,20 @@ function MainApp({ auth, onLogout }){
           <CalendarView
             sessions={calendarSessions} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
             hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
+            weeks={weeks} startDate={academySettings?.startDate || null}
+            academySettings={academySettings} onSettingsChange={isFullAdmin ? next => persistSettings(next) : null}
             fellowWeeks={fellowWeeks} onFellowWeeksChange={isFullAdmin ? next => persistSettings({...academySettings,fellowWeeks:next}) : null}
             onPlace={isFullAdmin ? (session, date, start) => setPlacement({session, date, start}) : null}
             onSelect={setViewing} onDrop={isFullAdmin ? (session, date, start) => {
-              saveSession({...session, date, start, weekday:new Date(date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}), week:sessions.find(item=>item.date===date)?.week ?? activeWeek, calendared:true});
+              saveSession({...session, date, start, weekday:new Date(date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}), week:weekForDate(date, academySettings?.startDate), calendared:true});
             } : null} auth={auth} roster={roster} rooms={rooms} pillars={pillars}
           />
           </>
         )}
         {tab==='sessions' && isAdmin && (
-          <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} rooms={rooms} onAssignRoom={(session, roomIds)=>saveSession({...session, roomIds})} />
+          <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} rooms={rooms} weeks={weeks} onAssignRoom={(session, roomIds)=>saveSession({...session, roomIds})} />
         )}
-        {tab==='summary' && isAdmin && <TimeSummary sessions={filtered} />}
+        {tab==='summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} />}
         {tab==='fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
         {tab==='planners' && isSuperadmin && <PlannerPanel planners={planners} onChange={persistPlanners} onAccount={addAccount} showToast={showToast} />}
         {tab==='rooms' && isFullAdmin && <RoomsPanel rooms={rooms} roster={roster} onChange={persistRoomsAndRoster} showToast={showToast} />}
@@ -620,9 +706,9 @@ function MainApp({ auth, onLogout }){
       </div>
 
       {isAdmin && editing && (
-        <EditPanel session={editing==='new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing!=='new' ? deleteSession : null} onClose={()=>setEditing(null)} canEditSchedule={isFullAdmin} pillars={pillars} rooms={rooms} staff={planners} />
+        <EditPanel session={editing==='new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing!=='new' ? deleteSession : null} onClose={()=>setEditing(null)} canEditSchedule={isFullAdmin} pillars={pillars} rooms={rooms} staff={planners} weeks={weeks} startDate={academySettings?.startDate || null} />
       )}
-      {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({...session, date, start, end, weekday:new Date(date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}), week:activeWeek, calendared:true}); setPlacement(null); }} onClose={()=>setPlacement(null)} />}
+      {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({...session, date, start, end, weekday:new Date(date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}), week:weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared:true}); setPlacement(null); }} onClose={()=>setPlacement(null)} />}
       {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next)=>{saveSession(next); setAssigning(null);}} onClose={()=>setAssigning(null)} />}
       {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} onAssign={()=>setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={()=>setViewing(null)} />}
     </div>
@@ -665,7 +751,7 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests
   );
 }
 
-function TopBar({ tab, isFullAdmin, auth, onLogout, onExport, onReset, onAdd }){
+function TopBar({ tab, isFullAdmin, auth, onLogout, onExport, onImport, onReset, onAdd }){
   return (
     <div className="bg-white border-b border-[#DDE2E6] px-6 flex items-center justify-between flex-wrap gap-3">
       <div className="py-2.5 min-w-[210px]"><div className="font-extrabold text-xl leading-tight">Training and Design</div><div className="text-[11.5px] text-[#8A96A3] mt-[3px]">Teach For Bangladesh</div></div>
@@ -673,6 +759,7 @@ function TopBar({ tab, isFullAdmin, auth, onLogout, onExport, onReset, onAdd }){
         {isFullAdmin && (
           <div className="flex gap-2">
             {(tab==='calendar' || tab==='sessions') && <button onClick={onAdd} className={btnPrimary}><Plus size={14}/> Add session</button>}
+            <button onClick={onImport} className={btnSecondary}><Upload size={14}/> Import Excel</button>
             <button onClick={onExport} className={btnSecondary}><Download size={14}/> Export Excel</button>
             <button onClick={onReset} className={btnGhost}><RotateCcw size={14}/> Reset</button>
           </div>
@@ -714,32 +801,53 @@ function FilterBar({ pillarFilter, setPillarFilter, modeFilter, setModeFilter, p
   );
 }
 
-function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, fellowWeeks, onFellowWeeksChange, onSelect, onDrop, onPlace, auth, roster, rooms, pillars }){
-  const weekSessions = sessions.filter(s => s.week===activeWeek && s.date);
-  const anchor = weekSessions.slice().sort((a,b)=>a.date.localeCompare(b.date))[0]?.date;
-  const anchorDate = anchor ? new Date(anchor+'T00:00:00') : new Date('2026-10-25T00:00:00');
-  anchorDate.setDate(anchorDate.getDate() - anchorDate.getDay());
+function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, weeks = WEEKS, startDate, academySettings, onSettingsChange, fellowWeeks, onFellowWeeksChange, onSelect, onDrop, onPlace, auth, roster, rooms, pillars }){
+  // Anchor: Sunday of the week BEFORE the academy start date's week (so week 00 is the full week before).
+  // Fallback to first session date, then hardcoded default.
+  const anchorIso = (() => {
+    if (startDate) { const s = new Date(startDate+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
+    const withDate = sessions.filter(s => s.date).sort((a,b)=>a.date.localeCompare(b.date));
+    if (withDate.length) { const s = new Date(withDate[0].date+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
+    return '2026-10-18';
+  })();
+  const anchorDate = new Date(anchorIso+'T00:00:00');
+  anchorDate.setDate(anchorDate.getDate() + (activeWeek||0)*7);
   const days = Array.from({length:7}, (_,index) => {
     const date = new Date(anchorDate);
     date.setDate(anchorDate.getDate()+index);
-    const iso = date.toISOString().slice(0,10);
+    const iso = toIsoDate(date);
     return [iso, date.toLocaleDateString(undefined,{weekday:'long'})];
   });
+  const weekLabel = (w) => {
+    const s = new Date(anchorIso+'T00:00:00'); s.setDate(s.getDate() + w*7);
+    const e = new Date(s); e.setDate(s.getDate()+6);
+    const fmt = d => d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+    return fmt(s)+' – '+fmt(e);
+  };
   const visibleDays = days.filter(([d]) => !hiddenDays[d]);
   const hours = [];
   for (let m=GRID_START; m<GRID_END; m+=60) hours.push(m);
   const totalHeight = (GRID_END-GRID_START)*PX_PER_MIN;
+  const weekSessions = sessions.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek||0));
 
   return (
     <div>
-      {onFellowWeeksChange && <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:12.5,color:'#5B6672'}}><b>Fellow-visible weeks</b>{WEEKS.map(w=><label key={w} style={{display:'flex',alignItems:'center',gap:4}}><input type="checkbox" checked={fellowWeeks.includes(w)} onChange={()=>onFellowWeeksChange(fellowWeeks.includes(w)?fellowWeeks.filter(item=>item!==w):[...fellowWeeks,w])}/>W{String(w).padStart(2,'0')}</label>)}</div>}
+      {onSettingsChange && (
+        <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:12,fontSize:12.5,color:'#5B6672',background:'#fff',border:'1px solid #DDE2E6',borderRadius:8,padding:'10px 14px'}}>
+          <b>Academy dates</b>
+          <label style={{display:'flex',alignItems:'center',gap:5}}>Start <input type="date" className={selectStyle} value={academySettings?.startDate||''} onChange={e=>onSettingsChange({...academySettings, startDate:e.target.value})} /></label>
+          <label style={{display:'flex',alignItems:'center',gap:5}}>End <input type="date" className={selectStyle} value={academySettings?.endDate||''} onChange={e=>onSettingsChange({...academySettings, endDate:e.target.value})} /></label>
+          <span>{weeks && weeks.length ? (academySettings?.startDate ? weeks.length+' week'+(weeks.length===1?'':'s') : '') : 'Set both dates to generate the calendar'}</span>
+        </div>
+      )}
+      {onFellowWeeksChange && <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:12.5,color:'#5B6672'}}><b>Fellow-visible weeks</b>{weeks.map(w=><label key={w} style={{display:'flex',alignItems:'center',gap:4}}><input type="checkbox" checked={fellowWeeks.includes(w)} onChange={()=>onFellowWeeksChange(fellowWeeks.includes(w)?fellowWeeks.filter(item=>item!==w):[...fellowWeeks,w])}/>W{String(w).padStart(2,'0')}</label>)}</div>}
       <div style={{display:'flex', gap:6, marginBottom:14, flexWrap:'wrap'}}>
-        {WEEKS.map(w => (
+        {weeks.map(w => (
           <button key={w} onClick={()=>setActiveWeek(w)} style={{
             padding:'7px 14px', borderRadius:20, fontSize:13, fontWeight:600, cursor:'pointer',
             border: activeWeek===w ? '1px solid #1F6F78' : '1px solid #C9CDD2',
             background: activeWeek===w ? '#1F6F78' : '#fff', color: activeWeek===w ? '#fff' : '#5B6672'
-          }}>Week {String(w).padStart(2,'0')}</button>
+          }}>Week {String(w).padStart(2,'0')} · {weekLabel(w)}</button>
         ))}
       </div>
       {days.length>1 && (
@@ -917,7 +1025,7 @@ function FellowAssessments({ assessments, questions, attempts, auth, sessions, o
   return <div style={{marginBottom:18}}><div style={{fontSize:13,fontWeight:700,marginBottom:10}}>Active assessments</div>{available.map(assessment=><div key={assessment.id} style={{background:'#fff',border:'1px solid #DDE2E6',borderRadius:8,padding:14,maxWidth:620,marginBottom:8,display:'flex',justifyContent:'space-between',gap:12}}><div><b>{assessment.title}</b><div style={{fontSize:12,color:'#5B6672',marginTop:4}}>{sessions.find(item=>String(item.id)===String(assessment.sessionId))?.name}</div></div><button onClick={()=>start(assessment)} className={btnPrimary}>Start</button></div>)}{!available.length&&<div style={{fontSize:12.5,color:'#8A96A3'}}>No active assessments.</div>}</div>;
 }
 
-function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, rooms, onAssignRoom }){
+function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, rooms, weeks, onAssignRoom }){
   const rows = useMemo(() => {
     let r = sessions.slice();
     const query = search.trim().toLowerCase();
@@ -933,7 +1041,7 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search sessions, facilitators, rooms, resources" className={inputStyle+' w-[300px]! max-w-full'} aria-label="Search sessions" />
         <span style={{fontSize:13, color:'#5B6672'}}>Week</span>
         <select value={weekFilter} onChange={e=>setWeekFilter(e.target.value)} className={selectStyle}>
-          <option value="all">All weeks</option>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}<option value="unscheduled">Unscheduled</option>
+          <option value="all">All weeks</option>{(weeks||WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}<option value="unscheduled">Unscheduled</option>
         </select>
         <span style={{fontSize:12.5, color:'#8A96A3'}}>{rows.length} sessions</span>
       </div>
@@ -997,7 +1105,8 @@ function PillarsPanel({ pillars, onChange, showToast }){
 
 const linkBtn = {background:'none', border:'none', color:'#1F6F78', fontSize:12.5, fontWeight:600, cursor:'pointer', padding:0};
 
-function TimeSummary({ sessions }){
+function TimeSummary({ sessions, weeks }){
+  const weekList = weeks || WEEKS;
   const scheduled = sessions.filter(s => s.calendared && s.start && s.end && s.week!=null);
   const byMode = {}; MODES.forEach(m => byMode[m] = {total:0, byWeek:{}});
   scheduled.forEach(s => {
@@ -1024,12 +1133,12 @@ function TimeSummary({ sessions }){
       </div>
       <div style={{background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, overflow:'hidden', marginBottom:24}}>
         <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#F7F8F9'}}><th style={{padding:'9px 12px', textAlign:'left', color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Mode</th>{WEEKS.map(w => <th key={w} style={{padding:'9px 10px', color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>W{String(w).padStart(2,'0')}</th>)}<th style={{padding:'9px 12px', color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Total</th></tr></thead>
+          <thead><tr style={{background:'#F7F8F9'}}><th style={{padding:'9px 12px', textAlign:'left', color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Mode</th>{weekList.map(w => <th key={w} style={{padding:'9px 10px', color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>W{String(w).padStart(2,'0')}</th>)}<th style={{padding:'9px 12px', color:'#5B6672', borderBottom:'1px solid #DDE2E6'}}>Total</th></tr></thead>
           <tbody>
             {MODES.map(m => (
               <tr key={m} style={{borderBottom:'1px solid #EEF0F2'}}>
                 <td style={{padding:'8px 12px', fontWeight:600, color:MODE_COLOR[m]}}>{m}</td>
-                {WEEKS.map(w => <td key={w} style={{padding:'8px 10px', textAlign:'center', color:'#5B6672'}}>{fmtDur(byMode[m].byWeek[w]||0)}</td>)}
+                {weekList.map(w => <td key={w} style={{padding:'8px 10px', textAlign:'center', color:'#5B6672'}}>{fmtDur(byMode[m].byWeek[w]||0)}</td>)}
                 <td style={{padding:'8px 12px', textAlign:'center', fontWeight:600}}>{fmtDur(byMode[m].total)}</td>
               </tr>
             ))}
@@ -1636,7 +1745,7 @@ function QuestionEditor({ question, onSave, onClose }){
   return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:130}} onClick={onClose}><div onClick={event=>event.stopPropagation()} style={{width:460,maxWidth:'94vw',background:'#fff',height:'100%',overflowY:'auto',padding:22}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><b>Question editor</b><button onClick={onClose} style={{background:'none',border:'none'}}><X size={18}/></button></div><Field label="Question type"><select className={inputStyle} value={form.type} onChange={event=>set('type',event.target.value)}>{ASSESSMENT_TYPES.map(type=><option key={type} value={type}>{type}</option>)}</select></Field><Field label="Question text"><textarea className={inputStyle+' resize-y'} rows={4} value={form.text} onChange={event=>set('text',event.target.value)}/></Field>{['single','multiple','check'].includes(form.type)&&listEditor('options','Options')}{['mcq_grid','checkbox_grid'].includes(form.type)&&<>{listEditor('gridRows','Grid rows')}{listEditor('gridCols','Grid columns')}</>}<Field label="Correct answer JSON"><input className={inputStyle} value={Array.isArray(form.correct)?JSON.stringify(form.correct):form.correct} onChange={event=>set('correct',event.target.value)}/></Field><div style={{display:'flex',gap:10}}><Field label="Points" style={{flex:1}}><input type="number" min="0" className={inputStyle} value={form.points} onChange={event=>set('points',Number(event.target.value))}/></Field><Field label="Time limit (minutes)" style={{flex:1}}><input type="number" min="0" className={inputStyle} value={form.timeLimit} onChange={event=>set('timeLimit',Number(event.target.value))}/></Field></div><Field label="Image URL (JPG, JPEG, or PNG)"><input type="url" className={inputStyle} value={form.imageUrl} onChange={event=>set('imageUrl',event.target.value)} placeholder="https://..."/></Field><button onClick={()=>onSave({...form,updatedAt:new Date().toISOString()})} className={btnPrimary+' w-full justify-center mt-[10px]'}>Save question</button></div></div>;
 }
 
-function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillars, rooms, staff }){
+function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillars, rooms, staff, weeks, startDate }){
   const [form, setForm] = useState({ ...session, facilitators: (session.facilitators||[]).map(f => typeof f==='string' ? {id:newResId(), staffName:f, roomId:''} : {id:f.id||newResId(), staffName:f.staffName||f.name||'', roomId:f.roomId||'', group:f.group||''}), resources: session.resources ? session.resources.map(r=>({...r})) : [], outcomes: (session.outcomes||[]).filter(Boolean).map(text=>({id:newResId(), text})), notes:session.notes||'', fellowNotes:session.fellowNotes||'', attendanceCode:session.attendanceCode||'' });
   const set = (k,v) => setForm(f => ({...f, [k]:v}));
   const addResource = () => set('resources', [...form.resources, {id:newResId(), label:RESOURCE_KINDS[0], url:''}]);
@@ -1651,8 +1760,9 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillar
 
   const handleSave = () => {
     const weekday = form.date ? new Date(form.date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}) : '';
+    const derivedWeek = form.date && startDate ? weekForDate(form.date, startDate) : null;
     onSave({
-      id: form.id, week: form.date ? form.week : (form.week===''? null : Number(form.week)),
+      id: form.id, week: derivedWeek!=null ? derivedWeek : (form.date ? form.week : (form.week===''? null : Number(form.week))),
       date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: form.end || null,
       name: form.name, pillar: form.pillar, mode: form.mode,
       facilitators: form.facilitators.map(f=>{ const rec={id:f.id||newResId(), staffName:(f.staffName||'').trim(), roomId:(f.roomId||'').trim()}; if(f.group) rec.group=f.group; return rec; }).filter(f=>f.staffName || f.roomId || f.group),
@@ -1674,7 +1784,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, pillar
         <Field label="Session name"><input disabled={!canEditSchedule} className={inputStyle+(canEditSchedule?'':' opacity-60')} value={form.name} onChange={e=>set('name', e.target.value)} placeholder="e.g. Backward Planning Workshop" /></Field>
         <div style={{display:'flex', gap:10, opacity:canEditSchedule?1:0.6}}>
           <Field label="Date" style={{flex:1}}><input disabled={!canEditSchedule} type="date" className={inputStyle} value={form.date||''} onChange={e=>set('date', e.target.value)} /></Field>
-          <Field label="Week" style={{width:110}}><select disabled={!canEditSchedule} className={inputStyle} value={form.week??''} onChange={e=>set('week', e.target.value)}><option value="">—</option>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}</select></Field>
+          <Field label="Week" style={{width:110}}><select disabled={!canEditSchedule} className={inputStyle} value={form.week??''} onChange={e=>set('week', e.target.value)}><option value="">—</option>{(weeks||WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}</select></Field>
         </div>
         <div style={{display:'flex', gap:10, opacity:canEditSchedule?1:0.6}}>
           <Field label="Start time" style={{flex:1}}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.start||''} onChange={e=>set('start', e.target.value)} /></Field>
@@ -1746,4 +1856,4 @@ function Field({ label, children, style }){
 const inputStyle = 'w-full px-2.5 py-2 rounded-md border border-[#C9CDD2] text-[13px] bg-white box-border';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, computeAttemptScore, computeAttemptPercentage };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, computeAttemptScore, computeAttemptPercentage, weekForDate };

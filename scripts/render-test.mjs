@@ -40,6 +40,16 @@ const pct = mod2.__panels.computeAttemptPercentage(mockAttempt, mockAssessment);
 if (sc.earned === 5 && sc.total === 6 && pct === 83) console.log('OK    computeAttemptScore 5/6 = 83%');
 else { console.log('FAIL  computeAttemptScore got ' + JSON.stringify(sc) + ' pct=' + pct); failed++; }
 
+// weekForDate: 2026-10-25 is a Sunday → dates map to correct week indexes
+// Week 00 is the full week before (Oct 18-24), Week 01 is Oct 25-31, etc.
+const wf = mod2.__panels.weekForDate;
+const wfChecks = [['2026-10-18', 0], ['2026-10-24', 0], ['2026-10-25', 1], ['2026-10-31', 1], ['2026-11-01', 2], ['2026-11-07', 2], ['2026-11-08', 3]];
+for (const [d, expected] of wfChecks) {
+  const got = wf(d, '2026-10-25');
+  if (got === expected) console.log('OK    weekForDate ' + d + ' → ' + got);
+  else { console.log('FAIL  weekForDate ' + d + ' → ' + got + ' (expected ' + expected + ')'); failed++; }
+}
+
 await vite.close();
 console.log(failed === 0 ? 'ALL PANELS RENDER OK' : failed + ' PANEL(S) FAILED');
 process.exit(failed === 0 ? 0 : 1);
