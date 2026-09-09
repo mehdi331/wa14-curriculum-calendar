@@ -1,8 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: -apple-system, "Segoe UI", sans-serif;
+}
+
+:root {
+  --wa14-bg: #252625;          /* page background */
+  --wa14-container: #003223;   /* containers on the background */
+  --wa14-text: #D5E0D5;        /* general text */
+  --wa14-menu: #005B3F;        /* menu / nav */
+  --wa14-menu-text: #D5E0D5;   /* menu text */
+  --wa14-button: #D65641;      /* buttons */
+  --wa14-button-text: #D5E0D5; /* button text */
+  --wa14-textbox: #FFFFFF;     /* text boxes stay white */
+  --wa14-textbox-text: #252625;/* text in text boxes */
 }
 
 * { box-sizing: border-box; }
@@ -10,13 +22,46 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #ffffff;
-  color: #1b2733;
+  background: var(--wa14-bg);
+  color: var(--wa14-text);
+  overflow-x: hidden;
 }
 
 button, input, select, textarea { font: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 2px solid #1f6f78;
+  outline: 2px solid var(--wa14-button);
   outline-offset: 2px;
+}
+
+/* Text boxes stay white with dark text, wherever they appear */
+.wa14-app input, .wa14-app select, .wa14-app textarea {
+  color: var(--wa14-textbox-text);
+  background: #fff;
+}
+
+.wa14-app { min-height: 100vh; }
+.wa14-main { display: flex; flex: 1; min-height: 100vh; min-width: 0; }
+.wa14-content { flex: 1; min-width: 0; overflow-x: visible; }
+.wa14-content-inner { padding: 20px 24px 40px; }
+.wa14-cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.wa14-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.wa14-table-scroll table { min-width: 760px; }
+.wa14-grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.proctored { user-select: none; -webkit-user-select: none; }
+.proctored input, .proctored textarea { user-select: text; -webkit-user-select: text; }
+
+@media (max-width: 1024px) {
+  .wa14-content-inner { padding: 16px 14px 32px; }
+  .wa14-hide-tablet { display: none !important; }
+  /* Room for the fixed mobile menu bar pinned to the top */
+  .wa14-content { padding-top: 54px; }
+}
+
+@media (max-width: 640px) {
+  .wa14-content-inner { padding: 14px 10px 28px; }
+  .wa14-hide-mobile { display: none !important; }
+  button { min-height: 40px; }
+  input, select, textarea { font-size: 16px; }
+  .wa14-cal-scroll { margin: 0 -10px; padding: 0 10px; }
 }
 
