@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon, NotePencil as Edit } from '@phosphor-icons/react';
+import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, Copy as CopyIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon, NotePencil as Edit } from '@phosphor-icons/react';
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, GoogleAuthProvider } from 'firebase/auth';
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
@@ -76,7 +76,7 @@ const ROLE_LABEL = {
   placement_ops: 'School Placement & Ops',
 };
 // Built-in Superadmin record so the Superadmin can also be picked as a facilitator.
-const SUPERADMIN_ACCOUNT = { id: 'superadmin', name: 'Mehdi Morshed Chowdhury', email: SUPERADMIN_EMAIL, role: 'superadmin' };
+const SUPERADMIN_ACCOUNT = { id: 'superadmin', name: 'Mehdi Morshed Chowdhury', email: SUPERADMIN_EMAIL, role: 'superadmin', callSign: callSignFromName('Mehdi Morshed Chowdhury') };
 // Derive a call sign from a full name: "Mehdi Morshed Chowdhury" → "MMC",
 // "Md Asifur Rahman" → "AR" (common prefixes like Md/Dr/Mr are skipped).
 function callSignFromName(name) {
@@ -198,6 +198,26 @@ function fmtWhen(iso) {
   const dt = new Date(iso);
   return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
+function endFromDuration(start, durMin) {
+  const mins = toMin(start);
+  const d = Number(durMin);
+  if (mins == null || !d || d <= 0) return '';
+  const total = mins + Math.round(d);
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+function startFromDuration(start, durationMin) {
+  return endFromDuration(start, durationMin) || start;
+}
+// Duration in minutes between a start and end time (wraps past midnight); fallback when missing.
+function durationBetween(start, end, fallback) {
+  const a = toMin(start), b = toMin(end);
+  if (a == null || b == null) return fallback == null ? 60 : fallback;
+  const d = (b - a + 24 * 60) % (24 * 60);
+  return d === 0 ? (fallback == null ? 60 : fallback) : d;
+}
+const DURATION_PRESETS = [15, 30, 45, 60, 90, 120, 180];
 
 let uid = 10000;
 function newId() { return uid++; }
@@ -272,9 +292,10 @@ function facilitatorLabel(f, rooms, staff) {
   if (!f) return '';
   const room = f.roomId ? (rooms || []).find(x => '' + x.id === String(f.roomId)) : null;
   const roomName = room ? room.name : '';
-  const staffMember = (staff || []).find(s => s.name === f.staffName);
-  const displayName = staffMember?.callSign || f.staffName || f.name || '';
-  const parts = [displayName, roomName].filter(Boolean);
+  const superadminMatch = f.staffName === SUPERADMIN_ACCOUNT.name || f.staffName === SUPERADMIN_ACCOUNT.email || (f.id && String(f.id) === 'superadmin');
+  const staffMember = superadminMatch ? SUPERADMIN_ACCOUNT : (staff || []).find(s => s.name === f.staffName);
+  const callSign = staffMember?.callSign || (f.staffName ? callSignFromName(f.staffName) : '');
+  const parts = [callSign, roomName].filter(Boolean);
   if (parts.length) return parts.join(' · ');
   if (f.kind === 'room') return roomName || (f.roomId || '');   // legacy shape
   return f.group || f.afaGroup || '';                          // legacy shape
@@ -862,12 +883,10 @@ const duplicateSession = (s) => {
   if (now - duplicateGuard.current < 400) return;
   duplicateGuard.current = now;
   const base = sessionsRef.current;
-  if (base.some(x => String(x.name) === String((s.name || 'Untitled session') + ' (copy)') && !x.date)) return;
-  const copy = { ...s, id: 'dup-' + now + '-' + Math.floor(Math.random() * 1000), name: (s.name || 'Untitled session') + ' (copy)', date: '', weekday: '', start: '', end: '', week: 0, calendared: false };
+  const copy = { ...s, id: 'dup-' + now + '-' + Math.floor(Math.random() * 1000), name: (s.name || 'Untitled session') + ' (copy)' };
   setSessions(prev => prev ? [...prev, copy] : [copy]);
   persist([...base, copy]);
-  setEditing(copy);
-  showToast('Session duplicated -- it is unscheduled; set a date/time and save');
+  showToast('Duplicated as "' + copy.name + '" — ' + (copy.week != null ? 'Week ' + String(copy.week).padStart(2, '0') : 'unscheduled'));
 };
 const resetSeed = () => {
   if (!window.confirm('Reset all sessions back to the original WA14 schedule? Your edits will be lost.')) return;
@@ -1010,7 +1029,7 @@ return (
             </>
           )}
           {tab === 'sessions' && isAdmin && (
-            <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} onDuplicate={duplicateSession} rooms={rooms} weeks={weeks} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners} />
+            <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} onDuplicate={duplicateSession} rooms={rooms} weeks={weeks} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners} startDate={academySettings?.startDate || null} />
           )}
           {tab === 'staffCalendar' && isAdmin && (
             <StaffCalendar
@@ -1043,9 +1062,9 @@ return (
     {isAdmin && editing && (
       <EditPanel session={editing === 'new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing !== 'new' ? deleteSession : null} onClose={() => setEditing(null)} canEditSchedule={isFullAdmin} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} rooms={rooms} staff={planners} weeks={weeks} startDate={academySettings?.startDate || null} />
     )}
-    {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({ ...session, date, start, end, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared: true }); setPlacement(null); }} onClose={() => setPlacement(null)} />}
+    {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({ ...session, date, start, end, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared: true }); setPlacement(null); }} onClose={() => setPlacement(null)} onAddSession={(date, start, end) => { setPlacement(null); setEditing({ ...blankSession(), date, start, end, weekday: date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '', week: date ? (weekForDate(date, academySettings?.startDate) ?? activeWeek) : 0, calendared: !!date && !!start && !!end }); }} />}
     {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next) => { saveSession(next); setAssigning(null); }} onClose={() => setAssigning(null)} />}
-    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} />}
+    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} onDuplicate={isFullAdmin ? duplicateSession : null} />}
     {isAdmin && staffEditing && (
       <StaffTaskEditor task={staffEditing === 'new' ? null : staffEditing} isFullAdmin={isFullAdmin} onSave={saveStaffTask} onDelete={isFullAdmin && staffEditing !== 'new' ? deleteStaffTask : null} onClose={() => setStaffEditing(null)} />
     )}
@@ -1121,10 +1140,7 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
           ))}
         </div>
       )}
-      {staffWeekTasks.length === 0 && mainWeekTasks.length === 0 ? (
-        <div style={{ padding: '60px 0', textAlign: 'center', color: '#003223', fontSize: 14, background: '#fff', borderRadius: 8 }}>No staff tasks or sessions this week.</div>
-      ) : (
-        <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+      <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
           <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
             <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
             <div className="relative" style={{ height: totalHeight }}>
@@ -1160,7 +1176,7 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
                         background: color + '26', borderLeft: '3px solid ' + color, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', opacity: 0.7
                       }} title={s.name + ' (main session)'}>
                         <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}</div>
-                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end}</div>}
+                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end} · {fmtDur(durationMin(s))}</div>}
                       </div>
                     );
                   })}
@@ -1173,7 +1189,7 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
                         background: staffColor + '26', borderLeft: '3px solid ' + staffColor, borderRadius: 4, padding: '3px 6px', cursor: isFullAdmin ? 'grab' : 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', boxShadow: 'inset 0 0 0 1px ' + staffColor
                       }} title={s.name + ' (staff task)'}>
                         <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}{s.owner ? ' · ' + s.owner : ''}</div>
-                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end}</div>}
+                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end} · {fmtDur(durationMin(s))}</div>}
                         {height > 42 && s.status && <div style={{ color: '#003223', fontStyle: 'italic' }}>{s.status}</div>}
                       </div>
                     );
@@ -1183,14 +1199,13 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
             );
           })}
         </div></div>
-      )}
       <div style={{ marginTop: 18, background: '#fff', border: '1px solid #DDE2E6', borderRadius: 8, padding: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Staff task list</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, minWidth: 480 }}>
           {staffTasks.filter(s => s.date).sort((a, b) => (a.date || '').localeCompare(b.date || '') || toMin(a.start) - toMin(b.start)).map(s => (
             <div key={s.id} onClick={() => isFullAdmin ? onEditStaff(s) : onSelect(s)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #EEF0F2', fontSize: 12.5, cursor: 'pointer' }}>
               <span style={{ color: '#003223' }}>{s.name || '(untitled)'}{s.owner ? ' · ' + s.owner : ''}</span>
-              <span style={{ color: '#003223', whiteSpace: 'nowrap' }}>{dateLabel(s.date)} · {s.start}–{s.end}{s.status ? ' · ' + s.status : ''}</span>
+              <span style={{ color: '#003223', whiteSpace: 'nowrap' }}>{dateLabel(s.date)} · {s.start}–{s.end} · {fmtDur(durationMin(s))}{s.status ? ' · ' + s.status : ''}</span>
             </div>
           ))}
         </div>
@@ -1213,11 +1228,18 @@ const STAFF_STATUSES = ['todo', 'in_progress', 'blocked', 'done'];
 function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(() => task ? { ...task } : blankStaffTask());
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const staffTaskDuration = durationBetween(form.start, form.end, 60);
+  const [staffCustomMode, setStaffCustomMode] = useState(false);
+  const onStaffStart = (v) => setForm(f => ({ ...f, start: v, end: v ? endFromDuration(v, durationBetween(v, f.end, 60)) || f.end : f.end }));
+  const onStaffEnd = (v) => set('end', v);
+  const onStaffDurationPreset = (val) => { if (val === 'custom') { setStaffCustomMode(true); return; } setStaffCustomMode(false); if (form.start) set('end', endFromDuration(form.start, Number(val)) || form.end); };
+  const onStaffCustomDuration = (raw) => { const v = raw === '' ? 60 : Number(raw); if (form.start) set('end', endFromDuration(form.start, v) || form.end); };
   const handleSave = () => {
     if (!form.name.trim()) { alert('Enter a task name.'); return; }
+    const finalEnd = endFromDuration(form.start, durationBetween(form.start, form.end, 60)) || form.end || '';
     onSave({
       id: form.id, kind: 'staff-task', name: form.name.trim(), date: form.date || '', weekday: form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '',
-      start: form.start || '', end: form.end || '', week: form.date ? 0 : (form.week || 0), notes: (form.notes || '').trim(), owner: (form.owner || '').trim(), status: form.status || 'todo',
+      start: form.start || '', end: finalEnd, week: form.date ? 0 : (form.week || 0), notes: (form.notes || '').trim(), owner: (form.owner || '').trim(), status: form.status || 'todo',
     });
   };
   return (
@@ -1234,9 +1256,14 @@ function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
           <Field label="Week" style={{ width: 110 }}><select className={inputStyle} value={form.week ?? 0} onChange={e => set('week', Number(e.target.value))}>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}</select></Field>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Field label="Start time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.start || ''} onChange={e => set('start', e.target.value)} /></Field>
-          <Field label="End time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.end || ''} onChange={e => set('end', e.target.value)} /></Field>
+          <Field label="Start time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.start || ''} onChange={e => onStaffStart(e.target.value)} /></Field>
+          <Field label="End time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.end || ''} onChange={e => onStaffEnd(e.target.value)} /></Field>
         </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Field label="Duration (min)" style={{ flex: 1 }}><select className={inputStyle} value={staffCustomMode || !DURATION_PRESETS.includes(Number(staffTaskDuration)) ? 'custom' : Number(staffTaskDuration)} onChange={e => onStaffDurationPreset(e.target.value)}>{DURATION_PRESETS.map(d => <option key={d} value={d}>{d}m</option>)}<option value="custom">Custom…</option></select></Field>
+          <Field label="Duration" style={{ flex: 1 }}><div className={inputStyle} style={{ background: '#EEF0F2', color: '#003223', fontWeight: 600 }}>{form.start ? fmtDur(staffTaskDuration) : '--'}</div></Field>
+        </div>
+        {(staffCustomMode || !DURATION_PRESETS.includes(Number(staffTaskDuration))) && <Field label="Custom duration (minutes)"><input type="number" min="1" max="1439" className={inputStyle} value={staffTaskDuration} onChange={e => onStaffCustomDuration(e.target.value)} placeholder="e.g. 75" /></Field>}
         <Field label="Status"><select className={inputStyle} value={form.status || 'todo'} onChange={e => set('status', e.target.value)}>{STAFF_STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></Field>
         <Field label="Notes"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="Planning notes (staff only)" /></Field>
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
@@ -1414,10 +1441,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
           ))}
         </div>
       )}
-      {weekSessions.length === 0 ? (
-        <div style={{ padding: '60px 0', textAlign: 'center', color: '#003223', fontSize: 14 }}>No sessions match the current filters this week.</div>
-      ) : (
-        <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+      <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
           <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
             <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
             <div className="relative" style={{ height: totalHeight }}>
@@ -1445,7 +1469,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                         borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, fontStyle: 'italic', opacity: 0.85, overflowWrap: 'breakWord', wordBreak: 'breakWord'
                       }} title={s.name + ' (continued from previous day)'}>
                         <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name} <span style={{ fontWeight: 400, color: '#003223' }}>(cont.)</span></div>
-                        {height > 28 && <div style={{ color: '#003223' }}>until {s.end}</div>}
+                        {height > 28 && <div style={{ color: '#003223' }}>until {s.end} · {fmtDur(durationMin(s))}</div>}
                       </div>
                     );
                   })}
@@ -1459,7 +1483,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                         borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', overflowWrap: 'breakWord', wordBreak: 'breakWord'
                       }} title={s.name}>
                         <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}</div>
-                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end}</div>}
+                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end} · {fmtDur(durationMin(s))}</div>}
                         {height > 42 && s.facilitators && s.facilitators.length > 0 && (
                           <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><Users size={9} /> {fmtFacilitators(s.facilitators, rooms, staff)}</div>
                         )}
@@ -1477,10 +1501,9 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
             );
           })}
         </div></div>
-      )}
       <div style={{ marginTop: 18, background: '#fff', border: '1px solid #DDE2E6', borderRadius: 8, padding: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Session list</div>
-        <div className="wa14-table-scroll"><div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, minWidth: 480 }}>{weekSessions.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || toMin(a.start) - toMin(b.start)).map(s => <div key={s.id} onClick={() => onSelect(s)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #EEF0F2', fontSize: 12.5, cursor: 'pointer' }}><span style={{ color: '#003223' }}>{s.name}</span><span style={{ color: '#003223', whiteSpace: 'nowrap' }}>{dateLabel(s.date)} · {s.start}–{s.end}</span></div>)}</div></div>
+        <div className="wa14-table-scroll"><div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, minWidth: 480 }}>{weekSessions.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || toMin(a.start) - toMin(b.start)).map(s => <div key={s.id} onClick={() => onSelect(s)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #EEF0F2', fontSize: 12.5, cursor: 'pointer' }}><span style={{ color: '#003223' }}>{s.name}</span><span style={{ color: '#003223', whiteSpace: 'nowrap' }}>{dateLabel(s.date)} · {s.start}–{s.end} · {fmtDur(durationMin(s))}</span></div>)}</div></div>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Unscheduled sessions</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{sessions.filter(s => !s.date).map(s => <div key={s.id} draggable={!!onDrop} onDragStart={e => e.dataTransfer.setData('sessionId', String(s.id))} onClick={() => onPlace ? onPlace(s, '', '') : onSelect(s)} style={{ padding: '8px 10px', border: '1px solid #DDE2E6', borderLeft: '3px solid ' + getTypeColor(s.type, sessionTypes), borderRadius: 5, cursor: onDrop ? 'grab' : 'pointer', fontSize: 12.5 }}>{s.name || '(untitled)'}</div>)}</div>
         {sessions.filter(s => !s.date).length === 0 && <div style={{ fontSize: 12.5, color: '#003223' }}>All sessions are scheduled.</div>}
@@ -1489,13 +1512,50 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
   );
 }
 
-function PlacementPanel({ sessions, initial, onSave, onClose }) {
+function PlacementPanel({ sessions, initial, onSave, onClose, onAddSession }) {
   const [sessionId, setSessionId] = useState(initial.session?.id || '');
+  const [search, setSearch] = useState('');
   const [date, setDate] = useState(initial.date || '');
   const [start, setStart] = useState(initial.start || '09:00');
-  const [end, setEnd] = useState(initial.session?.start && initial.session?.end ? initial.session.end : '10:00');
+  const [end, setEnd] = useState(initial.session?.start && initial.session?.end ? initial.session.end : endFromDuration(initial.start, 60) || '10:00');
+  const [customMode, setCustomMode] = useState(false);
+  const duration = durationBetween(start, end, 60);
+  const onStartChange = (v) => { setStart(v); if (v) setEnd(endFromDuration(v, durationBetween(v, end, 60)) || end); };
+  const onEndChange = (v) => setEnd(v);
+  const onDurationPreset = (val) => { if (val === 'custom') { setCustomMode(true); return; } setCustomMode(false); if (start) setEnd(endFromDuration(start, Number(val)) || end); };
+  const q = search.trim().toLowerCase();
+  const filteredSessions = q ? sessions.filter(item => String(item.name || '').toLowerCase().includes(q)) : sessions;
   const selected = sessions.find(item => String(item.id) === String(sessionId));
-  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 110 }} onClick={onClose}><div onClick={e => e.stopPropagation()} style={{ width: 380, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><div style={{ fontWeight: 700 }}>Place session on calendar</div><button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button></div><Field label="Session"><select className={inputStyle} value={sessionId} onChange={e => setSessionId(e.target.value)}><option value="">Choose a session</option>{sessions.map(item => <option key={item.id} value={item.id}>{item.name || '(untitled)'}</option>)}</select></Field><Field label="Date"><input type="date" className={inputStyle} value={date} onChange={e => setDate(e.target.value)} /></Field><div style={{ display: 'flex', gap: 10 }}><Field label="Start time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={start} onChange={e => setStart(e.target.value)} /></Field><Field label="End time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={end} onChange={e => setEnd(e.target.value)} /></Field></div><button disabled={!selected || !date || !start || !end} onClick={() => onSave(selected, date, start, end)} className={btnPrimary + ' w-full justify-center mt-[12px]'} style={{ opacity: selected && date && start && end ? 1 : 0.5 }}>Add to calendar</button></div></div>;
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 110 }} onClick={onClose}><div onClick={e => e.stopPropagation()} style={{ width: 380, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><div style={{ fontWeight: 700 }}>Place session on calendar</div><button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button></div>
+    <Field label="Search sessions"><input className={inputStyle} value={search} onChange={e => setSearch(e.target.value)} placeholder="Type session name…" /></Field>
+    {q ? (
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Session</div>
+        <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #2A5C4B', borderRadius: 6, background: '#fff' }}>
+          {filteredSessions.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12.5, color: '#9DB09D' }}>No sessions match “{search.trim()}”.</div>
+          ) : filteredSessions.map(item => (
+            <div key={item.id} onClick={() => setSessionId(item.id)} style={{ padding: '9px 12px', cursor: 'pointer', fontSize: 12.5, borderBottom: '1px solid #EEF0F2', background: String(item.id) === String(sessionId) ? '#E8F0EC' : '#fff', color: '#003223' }}>
+              <div style={{ fontWeight: 600 }}>{item.name || '(untitled)'}</div>
+              <div style={{ fontSize: 11.5, color: '#9DB09D' }}>{item.date ? dateLabel(item.date) + (item.week != null ? ' · Week ' + String(item.week).padStart(2, '0') : '') : 'Unscheduled'}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : (
+      <Field label="Session"><select className={inputStyle} value={sessionId} onChange={e => setSessionId(e.target.value)}><option value="">Choose a session</option>{filteredSessions.map(item => <option key={item.id} value={item.id}>{item.name || '(untitled)'}</option>)}</select></Field>
+    )}
+    {!selected && onAddSession && (
+      <button onClick={() => onAddSession(date, start, end)} className={btnSecondary + ' w-full justify-center mb-[14px]'}><Plus size={14} /> Add new session</button>
+    )}
+    <Field label="Date"><input type="date" className={inputStyle} value={date} onChange={e => setDate(e.target.value)} /></Field>
+    <div style={{ display: 'flex', gap: 10 }}><Field label="Start time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={start} onChange={e => onStartChange(e.target.value)} /></Field><Field label="End time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={end} onChange={e => onEndChange(e.target.value)} /></Field></div>
+    <div style={{ display: 'flex', gap: 10 }}><Field label="Duration (min)" style={{ flex: 1 }}><select className={inputStyle} value={customMode || !DURATION_PRESETS.includes(Number(duration)) ? 'custom' : Number(duration)} onChange={e => onDurationPreset(e.target.value)}>{DURATION_PRESETS.map(d => <option key={d} value={d}>{d}m</option>)}<option value="custom">Custom…</option></select></Field></div>
+    {(customMode || !DURATION_PRESETS.includes(Number(duration))) && <Field label="Custom duration (minutes)"><input type="number" min="1" max="1439" className={inputStyle} value={duration} onChange={e => { const v = e.target.value === '' ? 60 : Number(e.target.value); if (start) setEnd(endFromDuration(start, v) || end); }} placeholder="e.g. 75" /></Field>}
+    <DetailRow label="Duration">{start && end ? fmtDur(durationBetween(start, end, 60)) : '--'}</DetailRow>
+    <button disabled={!selected || !date || !start || !end} onClick={() => onSave(selected, date, start, end)} className={btnPrimary + ' w-full justify-center mt-[12px]'} style={{ opacity: selected && date && start && end ? 1 : 0.5 }}>Add to calendar</button>
+  </div></div>;
 }
 
 function getTypeColor(name, types) {
@@ -1581,7 +1641,7 @@ function FellowOverview({ sessions, auth, rooms, attendance, codes, onAttendance
     const used = list.filter(c => c.used).length;
     return used + ' of ' + list.length + ' codes used';
   };
-  const card = (label, session) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, flex: 1, minWidth: 220 }}><div style={{ fontSize: 11.5, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>{label}</div>{session ? <><div style={{ fontWeight: 700, fontSize: 15 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{dateLabel(session.date)} · {session.start}"{session.end}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(room => room.name + ' · ' + (room.physicalLocation || room.meetingUrl || 'Location not set')).join(', ') || 'Location not assigned'}</div><div style={{ fontSize: 12, color: '#9DB09D', marginTop: 6 }}>{codeStats(session)}</div>{attendance.some(entry => entry.sessionId === session.id && entry.fellowId === auth.fellowId) ? <div style={{ marginTop: 8, fontSize: 12.5, color: '#D65641', fontWeight: 700 }}>Attendance recorded</div> : <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}><input value={codeInputs[session.id] || ''} onChange={e => setCodeInputs(prev => ({ ...prev, [session.id]: e.target.value }))} placeholder="Enter attendance code" className={inputStyle} style={{ maxWidth: 180 }} /><button onClick={() => checkIn(session)} className={btnSecondary}>Give attendance</button></div>}</> : <div style={{ fontSize: 13, color: '#9DB09D' }}>No session</div>}</div>;
+  const card = (label, session) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, flex: 1, minWidth: 220 }}><div style={{ fontSize: 11.5, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>{label}</div>{session ? <><div style={{ fontWeight: 700, fontSize: 15 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{dateLabel(session.date)} · {session.start}–{session.end} · {fmtDur(durationMin(session))}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(room => room.name + ' · ' + (room.physicalLocation || room.meetingUrl || 'Location not set')).join(', ') || 'Location not assigned'}</div><div style={{ fontSize: 12, color: '#9DB09D', marginTop: 6 }}>{codeStats(session)}</div>{attendance.some(entry => entry.sessionId === session.id && entry.fellowId === auth.fellowId) ? <div style={{ marginTop: 8, fontSize: 12.5, color: '#D65641', fontWeight: 700 }}>Attendance recorded</div> : <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}><input value={codeInputs[session.id] || ''} onChange={e => setCodeInputs(prev => ({ ...prev, [session.id]: e.target.value }))} placeholder="Enter attendance code" className={inputStyle} style={{ maxWidth: 180 }} /><button onClick={() => checkIn(session)} className={btnSecondary}>Give attendance</button></div>}</> : <div style={{ fontSize: 13, color: '#9DB09D' }}>No session</div>}</div>;
   return <div style={{ marginBottom: 18 }}><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 10 }}>AFA group: <b>{auth.afaGroup || 'Not assigned'}</b></div><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>{card('Current session', current)}{card('Upcoming session', next)}</div></div>;
 }
 
@@ -1872,15 +1932,16 @@ function DeviceRequestPanel({ requests, attempts, assessments, roster, onResolve
   );
 }
 
-function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, onDuplicate, rooms, weeks, sessionTypes, pillarTags, staff }) {
+function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, onDuplicate, rooms, weeks, sessionTypes, pillarTags, staff, startDate }) {
+  const displayedWeek = (s) => (s.date && startDate) ? weekForDate(s.date, startDate) : (s.week != null ? s.week : null);
   const rows = useMemo(() => {
     let r = sessions.slice();
     const query = search.trim().toLowerCase();
     if (query) r = r.filter(s => [s.name, s.date, s.type, s.mode, ...sessionPillarNames(s, pillarTags), ...fmtFacilitators(s.facilitators, rooms, staff).split(', '), ...(s.resources || []).flatMap(resource => [resource.label, resource.url]), ...(s.roomIds || []).map(id => rooms.find(room => room.id === id)?.name)].filter(Boolean).join(' ').toLowerCase().includes(query));
-    if (weekFilter !== 'all') r = r.filter(s => weekFilter === 'unscheduled' ? s.week == null : s.week === Number(weekFilter));
+    if (weekFilter !== 'all') r = r.filter(s => weekFilter === 'unscheduled' ? displayedWeek(s) == null : (displayedWeek(s) != null && Number(displayedWeek(s)) === Number(weekFilter)));
     r.sort((a, b) => (a.date || 'zzzz').localeCompare(b.date || 'zzzz') || (toMin(a.start) || 9999) - (toMin(b.start) || 9999));
     return r;
-  }, [sessions, search, weekFilter, rooms]);
+  }, [sessions, search, weekFilter, rooms, startDate]);
 
   return (
     <div>
@@ -1894,10 +1955,11 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
       </div>
       <div className="wa14-table-scroll" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>
         <table style={{ minWidth: 1200, borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Date', 'Time', 'Session', 'Type', 'Mode', 'Pillars', 'Facilitators', 'Outcomes', ''].map(h => (<th key={h} style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>))}</tr></thead>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Week', 'Date', 'Time', 'Session', 'Type', 'Mode', 'Pillars', 'Facilitators', 'Outcomes', ''].map(h => (<th key={h} style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>))}</tr></thead>
           <tbody>
             {rows.map(s => (
               <tr key={s.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap', fontWeight: 600 }}>{displayedWeek(s) != null ? 'Week ' + String(displayedWeek(s)).padStart(2, '0') : '--'}</td>
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.date ? dateLabel(s.date) : '--'}</td>
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.start ? s.start + ' - ' + s.end : '--'}</td>
                 <td style={{ padding: '8px 12px', fontWeight: 500, cursor: 'pointer', maxWidth: 220 }} onClick={() => onEdit(s)}>{s.name || '(untitled)'}</td>
@@ -2241,7 +2303,7 @@ function AnalyticsPanel({ sessions, attendance, attempts, onSeedDemo, onDeleteDe
   return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Attendance and assessment overview for Staff.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>On-time attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{onTime}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Late attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{late}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Completed assessments</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{completed}</div></div></div><div style={{ marginTop: 24, fontSize: 13, fontWeight: 700 }}>Session attendance</div><div style={{ marginTop: 8, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 780 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: 9 }}>Session</th><th style={{ padding: 9 }}>On time</th><th style={{ padding: 9 }}>Late</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}><td style={{ padding: 9 }}>{session.name}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length}</td></tr>)}</tbody></table></div></div>;
 }
 
-function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit }) {
+function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit, onDuplicate }) {
   const color = getTypeColor(session.type, sessionTypes);
   const pillarTagNames = sessionPillarNames(session, pillarTags);
   const [reqOpen, setReqOpen] = useState(false);
@@ -2272,6 +2334,7 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(r => r.name + ' · ' + (r.facilitator || 'Facilitator not set')).join(', ') || '--'}</DetailRow>
         {auth.role !== 'fellow' && <button onClick={onAssign} className={btnSecondary + ' w-full justify-center mt-1'}>Assign rooms</button>}
         {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#9DB09D]'}><Edit size={12} /> Edit session</button>}
+        {auth.role !== 'fellow' && onDuplicate && <button onClick={() => { onClose(); onDuplicate(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#D0A023]'}><CopyIcon size={12} /> Duplicate session</button>}
 
         {session.resources && session.resources.length > 0 && (
           <div style={{ marginTop: 18 }}>
@@ -2777,12 +2840,19 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
     return list;
   };
 
+  const editDuration = durationBetween(form.start, form.end, 60);
+  const [editCustomMode, setEditCustomMode] = useState(false);
+  const onEditStart = (v) => setForm(f => ({ ...f, start: v, end: v ? endFromDuration(v, durationBetween(v, f.end, 60)) || f.end : f.end }));
+  const onEditEnd = (v) => set('end', v);
+  const onEditDurationPreset = (val) => { if (val === 'custom') { setEditCustomMode(true); return; } setEditCustomMode(false); if (form.start) set('end', endFromDuration(form.start, Number(val)) || form.end); };
+  const onEditCustomDuration = (raw) => { const v = raw === '' ? 60 : Number(raw); if (form.start) set('end', endFromDuration(form.start, v) || form.end); };
   const handleSave = () => {
     const weekday = form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '';
     const derivedWeek = form.date && startDate ? weekForDate(form.date, startDate) : null;
+    const finalEnd = endFromDuration(form.start, durationBetween(form.start, form.end, 60)) || form.end || null;
     onSave({
       id: form.id, week: derivedWeek != null ? derivedWeek : (form.date ? form.week : (form.week === '' ? null : Number(form.week))),
-      date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: form.end || null,
+      date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: finalEnd,
       name: form.name, type: form.type, pillarIds: form.pillarIds || [], mode: form.mode,
       facilitators: form.facilitators.map(f => { const rec = { id: f.id || newResId(), staffName: (f.staffName || '').trim(), roomId: (f.roomId || '').trim() }; if (f.group) rec.group = f.group; return rec; }).filter(f => f.staffName || f.roomId || f.group),
       roomIds: form.roomIds || [],
@@ -2803,12 +2873,17 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
         <Field label="Session name"><input disabled={!canEditSchedule} className={inputStyle + (canEditSchedule ? '' : ' opacity-60')} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Backward Planning Workshop" /></Field>
         <div style={{ display: 'flex', gap: 10, opacity: canEditSchedule ? 1 : 0.6 }}>
           <Field label="Date" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="date" className={inputStyle} value={form.date || ''} onChange={e => set('date', e.target.value)} /></Field>
-          <Field label="Week" style={{ width: 110 }}><select disabled={!canEditSchedule} className={inputStyle} value={form.week ?? ''} onChange={e => set('week', e.target.value)}><option value="">--</option>{(weeks || WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}</select></Field>
+          <Field label="Week (auto)" style={{ flex: 1 }}><div className={inputStyle} style={{ background: '#EEF0F2', color: '#003223', fontWeight: 600, lineHeight: '1.5' }}>{(form.date && startDate) ? 'Week ' + String(weekForDate(form.date, startDate)).padStart(2, '0') : ((form.week !== '' && form.week != null && form.week !== 0) ? 'Week ' + String(form.week).padStart(2, '0') : 'Assigned from date')}</div></Field>
         </div>
         <div style={{ display: 'flex', gap: 10, opacity: canEditSchedule ? 1 : 0.6 }}>
-          <Field label="Start time" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.start || ''} onChange={e => set('start', e.target.value)} /></Field>
-          <Field label="End time" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.end || ''} onChange={e => set('end', e.target.value)} /></Field>
+          <Field label="Start time" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.start || ''} onChange={e => onEditStart(e.target.value)} /></Field>
+          <Field label="End time" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.end || ''} onChange={e => onEditEnd(e.target.value)} /></Field>
         </div>
+        <div style={{ display: 'flex', gap: 10, opacity: canEditSchedule ? 1 : 0.6 }}>
+          <Field label="Duration (min)" style={{ flex: 1 }}><select disabled={!canEditSchedule} className={inputStyle} value={editCustomMode || !DURATION_PRESETS.includes(Number(editDuration)) ? 'custom' : Number(editDuration)} onChange={e => onEditDurationPreset(e.target.value)}>{DURATION_PRESETS.map(d => <option key={d} value={d}>{d}m</option>)}<option value="custom">Custom…</option></select></Field>
+          <Field label="Duration display" style={{ flex: 1 }}><div className={inputStyle} style={{ background: '#EEF0F2', color: '#003223', fontWeight: 600 }}>{form.start ? fmtDur(editDuration) : '--'}</div></Field>
+        </div>
+        {(editCustomMode || !DURATION_PRESETS.includes(Number(editDuration))) && <Field label="Custom duration (minutes)"><input disabled={!canEditSchedule} type="number" min="1" max="1439" className={inputStyle} value={editDuration} onChange={e => onEditCustomDuration(e.target.value)} placeholder="e.g. 75" /></Field>}
         <Field label="Type of session"><select disabled={!canEditSchedule} className={inputStyle} value={form.type} onChange={e => set('type', e.target.value)}>{(sessionTypes || DEFAULT_SESSION_TYPES).map(p => <option key={p.id || p.name} value={p.name}>{p.name}</option>)}</select></Field>
         <Field label="Pillars (tags)"><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{(pillarTags || []).length === 0 && <span style={{ fontSize: 12, color: '#9DB09D' }}>No pillars defined yet -- add them under Pillars.</span>}{(pillarTags || []).map(p => { const on = (form.pillarIds || []).map(String).includes(String(p.id)); return <button type="button" key={p.id} onClick={() => set('pillarIds', on ? (form.pillarIds || []).filter(id => String(id) !== String(p.id)) : [...(form.pillarIds || []), p.id])} className={on ? btnPrimary : btnSecondary} style={{ fontSize: 12, padding: '4px 10px' }}>{p.name}</button>; })}</div></Field>
         <Field label="Work mode (for time tracking)"><select disabled={!canEditSchedule} className={inputStyle} value={form.mode} onChange={e => set('mode', e.target.value)}>{(modes || DEFAULT_MODES).map(m => <option key={m.id || m.name} value={m.name}>{m.name}</option>)}</select></Field>
@@ -2819,7 +2894,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
                 {staffOptions().length > 0 ? (
                   <select disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[130px]'} value={f.staffName || ''} onChange={e => updateFacilitator(f.id, 'staffName', e.target.value)}>
                     <option value="">Facilitator name…</option>
-                    {staffOptions().map(p => <option key={p.id || p.email || p.name} value={p.name}>{p.name}{p.callSign ? ' (' + p.callSign + ')' : ''}{p.role && AFA_ROLES.includes(p.role) && p.group ? ' -- ' + p.group : ''}</option>)}
+                    {staffOptions().map(p => { const cs = p.callSign || callSignFromName(p.name); return <option key={p.id || p.email || p.name} value={p.name}>{cs || p.name}{p.role && AFA_ROLES.includes(p.role) && p.group ? ' -- ' + p.group : ''}</option>; })}
                   </select>
                 ) : (
                   <input disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[130px]'} placeholder="Facilitator name" value={f.staffName || ''} onChange={e => updateFacilitator(f.id, 'staffName', e.target.value)} />
@@ -2877,4 +2952,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'w-full px-2.5 py-2 rounded-md border border-[#C9CDD2] text-[13px] bg-white text-[#252625] box-border';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowOverview, AttendanceCodePanel, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, generateAttendanceCodes, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowOverview, AttendanceCodePanel, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, generateAttendanceCodes, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween };
