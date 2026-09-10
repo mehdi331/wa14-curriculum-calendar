@@ -1,45 +1,45 @@
-﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon } from '@phosphor-icons/react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon, NotePencil as Edit } from '@phosphor-icons/react';
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, GoogleAuthProvider } from 'firebase/auth';
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
 import { storage, ASSESSMENT_KEYS, parseStoredArray } from './storage';
 
-const SEED = [{"id":1,"week":0,"date":"2026-10-24","weekday":"Saturday","start":"15:00","end":"15:30","name":"Welcome & Basecamp Arrival","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":2,"week":0,"date":"2026-10-24","weekday":"Saturday","start":"15:30","end":"17:30","name":"WA 14 Opening Ceremony","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":3,"week":0,"date":"2026-10-24","weekday":"Saturday","start":"18:00","end":"19:00","name":"IT Skills 1 - Setup & Onboarding","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":4,"week":0,"date":"2026-10-24","weekday":"Saturday","start":"19:30","end":"20:30","name":"Basecamp House Rules & Onboarding","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":5,"week":0,"date":"2026-10-24","weekday":"Saturday","start":"20:30","end":"21:30","name":"CS, Academy Lead & AFA Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":6,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":7,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"09:00","end":"10:15","name":"Welcome to Academy (WA 14 Onboarding)","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":8,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"10:30","end":"11:30","name":"Introduction to Journaling","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":9,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"11:45","end":"12:45","name":"WA 14 Content & Curriculum Overview","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":10,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"14:00","end":"15:15","name":"WA 14 Vision & Pillars","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":11,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"15:30","end":"16:45","name":"WA 14 Goals & Culture","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":12,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"17:00","end":"18:15","name":"Fellow Reflection & Journal Writing","pillar":"Personal & Prof. Dev.","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":13,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"18:30","end":"19:30","name":"Weekly Fellow Briefing 1","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":14,"week":1,"date":"2026-10-25","weekday":"Sunday","start":"19:30","end":"20:30","name":"Office Hours (Optional Support)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":15,"week":1,"date":"2026-10-26","weekday":"Monday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":16,"week":1,"date":"2026-10-26","weekday":"Monday","start":"09:00","end":"10:15","name":"LC1: The Purpose of LC Space, Who Are We?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":17,"week":1,"date":"2026-10-26","weekday":"Monday","start":"10:30","end":"11:45","name":"Professional Communication: Email Etiquette","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":18,"week":1,"date":"2026-10-26","weekday":"Monday","start":"12:00","end":"13:30","name":"Core Values of Teach For Bangladesh","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":19,"week":1,"date":"2026-10-26","weekday":"Monday","start":"14:30","end":"16:00","name":"Expectation from Fellows & Confirmation Policy","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":20,"week":1,"date":"2026-10-26","weekday":"Monday","start":"16:15","end":"17:15","name":"Clinic: Tech Support (Optional)","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":21,"week":1,"date":"2026-10-26","weekday":"Monday","start":"17:30","end":"18:30","name":"Fellow Reflection & Journal Writing","pillar":"Personal & Prof. Dev.","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":22,"week":1,"date":"2026-10-26","weekday":"Monday","start":"18:30","end":"19:30","name":"AFA & Curriculum Specialist Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":23,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":24,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"09:00","end":"10:15","name":"Backward Planning Theory & Framework","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":25,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"10:30","end":"11:45","name":"Lesson Planning for Teachers (The Template)","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":26,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"12:00","end":"13:00","name":"Blooms Taxonomy & Bloom's Verbs","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":27,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"14:00","end":"15:30","name":"Learning Outcome Driven Assessment Making","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":28,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"15:45","end":"17:00","name":"Theory of Problem (ToP) Part 1","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":29,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"17:15","end":"18:30","name":"Classroom Basics: What to do","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":30,"week":1,"date":"2026-10-27","weekday":"Tuesday","start":"18:30","end":"19:30","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":31,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":32,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"09:00","end":"10:30","name":"Key Points: What, Why & How Key Points","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":33,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"10:45","end":"11:45","name":"Clinic: Key Point Writing","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":34,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"12:00","end":"13:15","name":"6 Step Lesson Method Decoded","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":35,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"14:30","end":"15:45","name":"Phonics: Introduction to Phonics and Reading","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":36,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"16:00","end":"17:15","name":"Theory of Problem (ToP) Part 2","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":37,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"17:30","end":"18:45","name":"Classroom Basics: 100%","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":38,"week":1,"date":"2026-10-28","weekday":"Wednesday","start":"19:00","end":"20:00","name":"First Weekly Clearing & Group Game","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":39,"week":1,"date":"2026-10-29","weekday":"Thursday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":40,"week":1,"date":"2026-10-29","weekday":"Thursday","start":"09:00","end":"10:30","name":"Clinic: Create Your First Lesson Plan (Math/Eng/Ban)","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":41,"week":1,"date":"2026-10-29","weekday":"Thursday","start":"10:45","end":"12:00","name":"Understanding the Logic Behind Planning Process","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":42,"week":1,"date":"2026-10-29","weekday":"Thursday","start":"12:15","end":"13:30","name":"TFB as an NGO & Educational Ecosystem Overview","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":43,"week":1,"date":"2026-10-29","weekday":"Thursday","start":"14:30","end":"16:00","name":"Building Excellence: Average vs. Excellence","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":44,"week":1,"date":"2026-10-29","weekday":"Thursday","start":"16:15","end":"17:30","name":"LC2: Exploring my Life Journey: Who Am I? (Life Map)","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":45,"week":1,"date":"2026-10-29","weekday":"Thursday","start":"17:30","end":"18:30","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":46,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"09:00","end":"09:30","name":"Daily Central Huddle & Community Prep","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":47,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"09:30","end":"10:30","name":"Connect with a Child: Framing & Prep","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":48,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"10:45","end":"11:15","name":"Travel to Community Placement Sites","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":49,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"11:15","end":"12:30","name":"Connect with a Child: Community Execution","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":50,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"12:30","end":"13:15","name":"Travel back to Basecamp (BLC)","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":51,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"13:15","end":"14:00","name":"Lunch Break","pillar":"Meal / Break","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":52,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"14:00","end":"15:15","name":"Connect with a Child: Debrief & Reflection","pillar":"System Inequity","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":53,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"15:30","end":"17:00","name":"CMIP: Classroom Management Investment Plan (Concept)","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":54,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"17:15","end":"20:15","name":"CMIP Clinic: Design and Draft Classroom Rules","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":55,"week":2,"date":"2026-10-31","weekday":"Saturday","start":"20:30","end":"21:30","name":"Weekly Fellow Briefing 2","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":56,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":57,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"09:00","end":"10:30","name":"Subject Specific Pedagogy: Mathematics (Primary-CPA)","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":58,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"09:00","end":"10:30","name":"Subject Specific Pedagogy: Mathematics (Secondary-Authentic)","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":59,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"10:45","end":"12:00","name":"Clinic: Math Lesson Planning & Resource Modeling","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":60,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"12:15","end":"13:45","name":"Reading Strategies as part of Balanced Literacy","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":61,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"14:45","end":"16:15","name":"Student Outcomes Framework at TFB","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":62,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"16:30","end":"17:45","name":"Introduction to Community Project","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":63,"week":2,"date":"2026-11-01","weekday":"Sunday","start":"17:45","end":"18:45","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":64,"week":2,"date":"2026-11-02","weekday":"Monday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":65,"week":2,"date":"2026-11-02","weekday":"Monday","start":"09:00","end":"10:00","name":"Yellow Hat Framing: The Power of Positive Thinking","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":66,"week":2,"date":"2026-11-02","weekday":"Monday","start":"10:15","end":"11:30","name":"Yellow Hat Execution: Role Play & Boundary Pushing","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":67,"week":2,"date":"2026-11-02","weekday":"Monday","start":"11:45","end":"13:00","name":"Yellow Hat Reflection & Fellowship Connection","pillar":"Personal & Prof. Dev.","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":68,"week":2,"date":"2026-11-02","weekday":"Monday","start":"14:00","end":"15:15","name":"LC3: What is my Purpose?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":69,"week":2,"date":"2026-11-02","weekday":"Monday","start":"15:30","end":"16:45","name":"Community Project: Feel (Empathy & Need Analysis)","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":70,"week":2,"date":"2026-11-02","weekday":"Monday","start":"17:00","end":"18:00","name":"Work time: Finalize Batch 1 LP 2","pillar":"Teaching Skills","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":71,"week":2,"date":"2026-11-02","weekday":"Monday","start":"18:00","end":"19:00","name":"AFA Office Hours (SOP & Mentorship Support)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":72,"week":2,"date":"2026-11-03","weekday":"Tuesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":73,"week":2,"date":"2026-11-03","weekday":"Tuesday","start":"09:00","end":"10:30","name":"Classroom Basics: Positive Framing & Precise Praise","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":74,"week":2,"date":"2026-11-03","weekday":"Tuesday","start":"10:45","end":"12:00","name":"Classroom Basics: Wait Time","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":75,"week":2,"date":"2026-11-03","weekday":"Tuesday","start":"12:15","end":"13:45","name":"Growth Mindset: Theoretical Framework & Classroom","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":76,"week":2,"date":"2026-11-03","weekday":"Tuesday","start":"14:45","end":"16:00","name":"Lesson Vision Workshop: Objectives & SAR","pillar":"Teaching Skills","mode":"Workshop","facilitators":[],"calendared":true,"resources":[]},{"id":77,"week":2,"date":"2026-11-03","weekday":"Tuesday","start":"16:15","end":"17:30","name":"Growth Mindset - Identifying growth mindset within","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":78,"week":2,"date":"2026-11-03","weekday":"Tuesday","start":"17:30","end":"18:30","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":79,"week":2,"date":"2026-11-04","weekday":"Wednesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":80,"week":2,"date":"2026-11-04","weekday":"Wednesday","start":"09:00","end":"10:30","name":"Subject Specific Pedagogy: English","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":81,"week":2,"date":"2026-11-04","weekday":"Wednesday","start":"10:45","end":"12:00","name":"Clinic: English Lesson Planning (CPA & Gradual Release)","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":82,"week":2,"date":"2026-11-04","weekday":"Wednesday","start":"12:15","end":"13:30","name":"LC4: What do I know about student community?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":83,"week":2,"date":"2026-11-04","weekday":"Wednesday","start":"14:30","end":"15:45","name":"Introduction to Central Dashboard & Tech Onboarding","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":84,"week":2,"date":"2026-11-04","weekday":"Wednesday","start":"16:00","end":"17:15","name":"Optional (Need-Based Math/Eng Clinic)","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":85,"week":2,"date":"2026-11-04","weekday":"Wednesday","start":"17:15","end":"18:15","name":"Curriculum Specialists Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":86,"week":2,"date":"2026-11-05","weekday":"Thursday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":87,"week":2,"date":"2026-11-05","weekday":"Thursday","start":"09:00","end":"10:30","name":"Subject Specific Pedagogy: Bangla","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":88,"week":2,"date":"2026-11-05","weekday":"Thursday","start":"10:45","end":"12:00","name":"Clinic: Bangla Lesson Planning","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":89,"week":2,"date":"2026-11-05","weekday":"Thursday","start":"12:15","end":"13:30","name":"Optional session: Learn from an Alum","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":90,"week":2,"date":"2026-11-05","weekday":"Thursday","start":"14:30","end":"15:45","name":"Classroom Basics: 100% and Wait Time Practice","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":91,"week":2,"date":"2026-11-05","weekday":"Thursday","start":"16:00","end":"17:15","name":"Week 2 Clearing Conversation & Goal Check","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":92,"week":2,"date":"2026-11-05","weekday":"Thursday","start":"17:15","end":"18:15","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":93,"week":3,"date":"2026-11-07","weekday":"Saturday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":94,"week":3,"date":"2026-11-07","weekday":"Saturday","start":"09:00","end":"10:00","name":"Service Day: Framing and Prep","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":95,"week":3,"date":"2026-11-07","weekday":"Saturday","start":"10:15","end":"13:15","name":"Service Day Execution Block","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":96,"week":3,"date":"2026-11-07","weekday":"Saturday","start":"13:15","end":"14:15","name":"Lunch & Community Rest","pillar":"Meal / Break","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":97,"week":3,"date":"2026-11-07","weekday":"Saturday","start":"14:15","end":"15:45","name":"Service Day: Reflection & Debrief","pillar":"Team Culture","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":98,"week":3,"date":"2026-11-07","weekday":"Saturday","start":"16:00","end":"17:00","name":"Weekly Fellow Briefing 3","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":99,"week":3,"date":"2026-11-07","weekday":"Saturday","start":"17:00","end":"18:00","name":"SP&O & AFA Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":100,"week":3,"date":"2026-11-08","weekday":"Sunday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 1","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":101,"week":3,"date":"2026-11-08","weekday":"Sunday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":102,"week":3,"date":"2026-11-08","weekday":"Sunday","start":"15:00","end":"16:15","name":"Reflection: My First Day as Teacher in the Classroom","pillar":"Debrief","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":103,"week":3,"date":"2026-11-08","weekday":"Sunday","start":"16:30","end":"18:30","name":"Theory of Change: Where Do We Begin?","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":104,"week":3,"date":"2026-11-08","weekday":"Sunday","start":"18:45","end":"20:00","name":"Work time: LP Feedback and Daily Post-Task","pillar":"Teaching Skills","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":105,"week":3,"date":"2026-11-08","weekday":"Sunday","start":"20:00","end":"21:00","name":"Curriculum Specialist Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":106,"week":3,"date":"2026-11-09","weekday":"Monday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 2","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":107,"week":3,"date":"2026-11-09","weekday":"Monday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":108,"week":3,"date":"2026-11-09","weekday":"Monday","start":"15:00","end":"16:15","name":"Teach Like A Champion (TLAC): Practical Execution","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":109,"week":3,"date":"2026-11-09","weekday":"Monday","start":"16:30","end":"18:00","name":"Theory of Change: Power & Privileges","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":110,"week":3,"date":"2026-11-09","weekday":"Monday","start":"18:15","end":"19:30","name":"LC5: Who are My People?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":111,"week":3,"date":"2026-11-09","weekday":"Monday","start":"19:30","end":"20:30","name":"AFA & SP&O Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":112,"week":3,"date":"2026-11-10","weekday":"Tuesday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 3","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":113,"week":3,"date":"2026-11-10","weekday":"Tuesday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":114,"week":3,"date":"2026-11-10","weekday":"Tuesday","start":"15:00","end":"16:15","name":"Subject Pedagogy Deep Dive: Writing","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":115,"week":3,"date":"2026-11-10","weekday":"Tuesday","start":"16:30","end":"17:30","name":"TLAC: CFU, No opt out, Right is right","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":116,"week":3,"date":"2026-11-10","weekday":"Tuesday","start":"17:45","end":"19:00","name":"Mid-Academy Leadership Conversation (Intro)","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":117,"week":3,"date":"2026-11-10","weekday":"Tuesday","start":"19:00","end":"20:00","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":118,"week":3,"date":"2026-11-11","weekday":"Wednesday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 4","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":119,"week":3,"date":"2026-11-11","weekday":"Wednesday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":120,"week":3,"date":"2026-11-11","weekday":"Wednesday","start":"15:00","end":"16:15","name":"Data Tracking & Data Driven Decision (Introduction)","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":121,"week":3,"date":"2026-11-11","weekday":"Wednesday","start":"16:30","end":"17:45","name":"Data Tracking (Personal Work Time with Live Data)","pillar":"Teaching Skills","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":122,"week":3,"date":"2026-11-11","weekday":"Wednesday","start":"18:00","end":"19:15","name":"Data Tracking & Data Driven Decision (Closing Loop)","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":123,"week":3,"date":"2026-11-11","weekday":"Wednesday","start":"19:30","end":"20:45","name":"LC6: What are my Values?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":124,"week":3,"date":"2026-11-11","weekday":"Wednesday","start":"20:45","end":"21:45","name":"CS Office Hours: Data Analytics Help","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":125,"week":3,"date":"2026-11-12","weekday":"Thursday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 5","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":126,"week":3,"date":"2026-11-12","weekday":"Thursday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":127,"week":3,"date":"2026-11-12","weekday":"Thursday","start":"15:00","end":"16:00","name":"Mid-Academy Leadership Reflection & Debrief Session","pillar":"Personal & Prof. Dev.","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":128,"week":3,"date":"2026-11-12","weekday":"Thursday","start":"16:15","end":"17:45","name":"WA 14 Town Hall & Open Forum","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":129,"week":3,"date":"2026-11-12","weekday":"Thursday","start":"18:00","end":"19:30","name":"The Diversity Walk Session","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":130,"week":3,"date":"2026-11-12","weekday":"Thursday","start":"19:30","end":"20:30","name":"Office Hours (Optional Support)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":131,"week":4,"date":"2026-11-14","weekday":"Saturday","start":"13:00","end":"14:30","name":"LC7: What are my biases?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":132,"week":4,"date":"2026-11-14","weekday":"Saturday","start":"14:45","end":"16:00","name":"CMIP Re-alignment: Troubleshooting Classroom Behavior","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":133,"week":4,"date":"2026-11-14","weekday":"Saturday","start":"16:15","end":"17:45","name":"Inspired Speaker Series: Network Learning 1","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":134,"week":4,"date":"2026-11-14","weekday":"Saturday","start":"18:00","end":"19:30","name":"Inspired Speaker Series: Network Learning 2","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":135,"week":4,"date":"2026-11-14","weekday":"Saturday","start":"19:30","end":"20:30","name":"Weekly Fellow Briefing 4","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":136,"week":4,"date":"2026-11-14","weekday":"Saturday","start":"20:30","end":"21:30","name":"AFA & SP&O Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":137,"week":4,"date":"2026-11-15","weekday":"Sunday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 6","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":138,"week":4,"date":"2026-11-15","weekday":"Sunday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":139,"week":4,"date":"2026-11-15","weekday":"Sunday","start":"15:00","end":"16:15","name":"Community Project: Proposal Template & Planning","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":140,"week":4,"date":"2026-11-15","weekday":"Sunday","start":"16:30","end":"18:00","name":"Collab Community Project Preparation","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":141,"week":4,"date":"2026-11-15","weekday":"Sunday","start":"18:00","end":"19:00","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":142,"week":4,"date":"2026-11-16","weekday":"Monday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 7","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":143,"week":4,"date":"2026-11-16","weekday":"Monday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":144,"week":4,"date":"2026-11-16","weekday":"Monday","start":"15:00","end":"16:15","name":"LC8: What limits me?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":145,"week":4,"date":"2026-11-16","weekday":"Monday","start":"16:30","end":"17:45","name":"Community Project Proposal Workshop","pillar":"System Inequity","mode":"Workshop","facilitators":[],"calendared":true,"resources":[]},{"id":146,"week":4,"date":"2026-11-16","weekday":"Monday","start":"18:00","end":"19:15","name":"Inspired Speaker Series: Network Learning 3","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":147,"week":4,"date":"2026-11-16","weekday":"Monday","start":"19:15","end":"20:15","name":"AFA Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":148,"week":4,"date":"2026-11-17","weekday":"Tuesday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 8","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":149,"week":4,"date":"2026-11-17","weekday":"Tuesday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":150,"week":4,"date":"2026-11-17","weekday":"Tuesday","start":"15:00","end":"16:30","name":"Diversity, Equity, and Inclusiveness (DEI)","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":151,"week":4,"date":"2026-11-17","weekday":"Tuesday","start":"16:45","end":"17:45","name":"Work Time: Community Project Pitch Prep","pillar":"System Inequity","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":152,"week":4,"date":"2026-11-17","weekday":"Tuesday","start":"18:00","end":"19:15","name":"Progress Check Lesson Plan Workshop","pillar":"Teaching Skills","mode":"Workshop","facilitators":[],"calendared":true,"resources":[]},{"id":153,"week":4,"date":"2026-11-17","weekday":"Tuesday","start":"19:15","end":"20:15","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":154,"week":4,"date":"2026-11-18","weekday":"Wednesday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 9","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":155,"week":4,"date":"2026-11-18","weekday":"Wednesday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":156,"week":4,"date":"2026-11-18","weekday":"Wednesday","start":"15:00","end":"18:00","name":"Community Project: Implementation Block (The 'Do')","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":157,"week":4,"date":"2026-11-18","weekday":"Wednesday","start":"18:15","end":"21:15","name":"Community Engagement & Project Execution Debrief","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":158,"week":4,"date":"2026-11-18","weekday":"Wednesday","start":"21:15","end":"22:15","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":159,"week":4,"date":"2026-11-19","weekday":"Thursday","start":"08:00","end":"13:00","name":"In-person Class & Practice Teaching: Day 10","pillar":"Practice Teaching","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":160,"week":4,"date":"2026-11-19","weekday":"Thursday","start":"13:00","end":"14:00","name":"Travel back to Basecamp / Debriefs","pillar":"Debrief","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":161,"week":4,"date":"2026-11-19","weekday":"Thursday","start":"15:00","end":"16:30","name":"Inspired Speaker Series: Network Learning 4","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":162,"week":4,"date":"2026-11-19","weekday":"Thursday","start":"16:45","end":"17:45","name":"End of Practice Teaching Celebration & Clearing","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":163,"week":4,"date":"2026-11-19","weekday":"Thursday","start":"18:00","end":"19:30","name":"Power of Gratitude: The Giving Tree","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":164,"week":4,"date":"2026-11-19","weekday":"Thursday","start":"19:30","end":"20:30","name":"Office Hours (Optional Support)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":165,"week":5,"date":"2026-11-21","weekday":"Saturday","start":"13:00","end":"14:30","name":"Introduction to School Placement & Regions","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":166,"week":5,"date":"2026-11-21","weekday":"Saturday","start":"14:45","end":"17:45","name":"School Placement Form Filling & Consultation","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":167,"week":5,"date":"2026-11-21","weekday":"Saturday","start":"18:00","end":"19:00","name":"Weekly Fellow Briefing 5","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":168,"week":5,"date":"2026-11-21","weekday":"Saturday","start":"19:00","end":"20:00","name":"SP&O Team Placement Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":169,"week":5,"date":"2026-11-22","weekday":"Sunday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":170,"week":5,"date":"2026-11-22","weekday":"Sunday","start":"09:00","end":"10:15","name":"Balanced Literacy: Advanced Instruction Models","pillar":"Academic Content","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":171,"week":5,"date":"2026-11-22","weekday":"Sunday","start":"10:30","end":"12:00","name":"Trauma-informed practices (Session 01)","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":172,"week":5,"date":"2026-11-22","weekday":"Sunday","start":"12:15","end":"13:30","name":"Social Media Communication Norms & Guidelines","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":173,"week":5,"date":"2026-11-22","weekday":"Sunday","start":"14:30","end":"16:00","name":"Internet Safety for Kids & Parental Control","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":174,"week":5,"date":"2026-11-22","weekday":"Sunday","start":"16:15","end":"17:45","name":"Consolidation of Academy assessment (Prep)","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":175,"week":5,"date":"2026-11-22","weekday":"Sunday","start":"17:45","end":"18:45","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":176,"week":5,"date":"2026-11-23","weekday":"Monday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":177,"week":5,"date":"2026-11-23","weekday":"Monday","start":"09:00","end":"10:30","name":"Blended Learning: Framework and Practice","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":178,"week":5,"date":"2026-11-23","weekday":"Monday","start":"10:45","end":"12:15","name":"Fellow Health Insurance Policies","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":179,"week":5,"date":"2026-11-23","weekday":"Monday","start":"12:30","end":"13:45","name":"LC9: What will keep me going?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":180,"week":5,"date":"2026-11-23","weekday":"Monday","start":"14:45","end":"16:00","name":"Decoding School Eco-system & Relationship Mgt","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":181,"week":5,"date":"2026-11-23","weekday":"Monday","start":"16:15","end":"17:15","name":"Ghost Night / Social Games Night (Optional)","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":182,"week":5,"date":"2026-11-23","weekday":"Monday","start":"17:15","end":"18:15","name":"AFA Office Hours (Pastoral & Support Session)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":183,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":184,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"09:00","end":"10:15","name":"Understanding Stakeholders: Govt Stakeholder Series","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":185,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"10:30","end":"12:00","name":"Professional Wellbeing & Stress Management","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":186,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"12:15","end":"13:30","name":"Futures of Education","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":187,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"14:30","end":"16:00","name":"Reimagining Education System with Stakeholders","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":188,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"16:15","end":"17:30","name":"Work time: Portfolio Compilation","pillar":"Teaching Skills","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":189,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"17:45","end":"19:15","name":"TFB Olympics: Collaborative Team Event","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":190,"week":5,"date":"2026-11-24","weekday":"Tuesday","start":"19:15","end":"20:15","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":191,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":192,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"09:00","end":"10:30","name":"Classroom Basics Clinic: Wait Time & 100% Retest","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":193,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"10:45","end":"12:00","name":"Lesson Vision Workshop: Retest & Quality Alignment","pillar":"Teaching Skills","mode":"Workshop","facilitators":[],"calendared":true,"resources":[]},{"id":194,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"12:15","end":"13:30","name":"Work time: Mid-Academy Reflection Prep","pillar":"Personal & Prof. Dev.","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":195,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"14:30","end":"15:45","name":"Saturday Debrief: Mid-Academy Reflection (Framing)","pillar":"Personal & Prof. Dev.","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":196,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"16:00","end":"17:00","name":"Final Prep: Region-Wise Unit Planning","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":197,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"17:15","end":"18:30","name":"Adda Space & Cultural Prep (Optional)","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":198,"week":5,"date":"2026-11-25","weekday":"Wednesday","start":"18:30","end":"19:30","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":199,"week":5,"date":"2026-11-26","weekday":"Thursday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":200,"week":5,"date":"2026-11-26","weekday":"Thursday","start":"09:00","end":"10:30","name":"Consolidation of Academy assessment (Submission)","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":201,"week":5,"date":"2026-11-26","weekday":"Thursday","start":"10:45","end":"12:00","name":"Headteacher Engagement Strategies","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":202,"week":5,"date":"2026-11-26","weekday":"Thursday","start":"12:15","end":"13:30","name":"Govt Stakeholders Series: DG DPE Panel","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":203,"week":5,"date":"2026-11-26","weekday":"Thursday","start":"14:30","end":"19:00","name":"Teach For Bangladesh Day (The Grand Celebration)","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":204,"week":5,"date":"2026-11-26","weekday":"Thursday","start":"19:00","end":"20:00","name":"Office Hours (Optional Support)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":205,"week":6,"date":"2026-11-28","weekday":"Saturday","start":"13:00","end":"14:30","name":"2026 School Placement & Region Announcement","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":206,"week":6,"date":"2026-11-28","weekday":"Saturday","start":"14:45","end":"17:45","name":"School Placement Office Hour (One-on-One)","pillar":"Team Culture","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":207,"week":6,"date":"2026-11-28","weekday":"Saturday","start":"18:00","end":"19:00","name":"Weekly Fellow Briefing 6 (Final Briefing)","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":208,"week":6,"date":"2026-11-28","weekday":"Saturday","start":"19:00","end":"20:00","name":"SP&O & AFA Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":209,"week":6,"date":"2026-11-29","weekday":"Sunday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":210,"week":6,"date":"2026-11-29","weekday":"Sunday","start":"09:00","end":"10:15","name":"SMART Goals Based on TOC","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":211,"week":6,"date":"2026-11-29","weekday":"Sunday","start":"10:30","end":"11:45","name":"Introduction to City Planning & Relocation Guide","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":212,"week":6,"date":"2026-11-29","weekday":"Sunday","start":"12:00","end":"13:15","name":"Introduction to Unit Plan","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":213,"week":6,"date":"2026-11-29","weekday":"Sunday","start":"14:30","end":"16:00","name":"Sync: Unit Plan Curriculum Mapping","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":214,"week":6,"date":"2026-11-29","weekday":"Sunday","start":"16:15","end":"17:30","name":"Unit Plan Curriculum Mapping Clinic","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":215,"week":6,"date":"2026-11-29","weekday":"Sunday","start":"17:30","end":"18:30","name":"Unit Planning Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":216,"week":6,"date":"2026-11-30","weekday":"Monday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":217,"week":6,"date":"2026-11-30","weekday":"Monday","start":"09:00","end":"10:15","name":"Unit Plan Assessment Making","pillar":"Teaching Skills","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":218,"week":6,"date":"2026-11-30","weekday":"Monday","start":"10:30","end":"11:45","name":"Clinic: Unit 01 Assessment & Draft Plan","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":219,"week":6,"date":"2026-11-30","weekday":"Monday","start":"12:00","end":"13:15","name":"Theory of Change: Approaching the Achievement Gap","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":220,"week":6,"date":"2026-11-30","weekday":"Monday","start":"14:30","end":"15:45","name":"LC9: What will keep me going?","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":221,"week":6,"date":"2026-11-30","weekday":"Monday","start":"16:00","end":"17:15","name":"Adda Space / Bonding Activity (Optional)","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":222,"week":6,"date":"2026-11-30","weekday":"Monday","start":"17:15","end":"18:15","name":"Office Hours (Optional)","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":223,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":224,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"09:00","end":"10:15","name":"LC: How am I operating? (Year 1 Prep)","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":225,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"10:30","end":"11:45","name":"Clinic: Unit Plan (Feedback and Peer Review)","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":226,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"12:00","end":"13:15","name":"Clinic: Unit Plan (Update & Polish)","pillar":"Teaching Skills","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":227,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"14:30","end":"16:00","name":"Child Protection Policy Session","pillar":"System Inequity","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":228,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"16:15","end":"17:15","name":"Story of Us Preparation Space","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":229,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"17:15","end":"18:15","name":"Final Unit Plan Submission & Office Hours","pillar":"Team Support","mode":"Coaching","facilitators":[],"calendared":true,"resources":[]},{"id":230,"week":6,"date":"2026-12-02","weekday":"Wednesday","start":"08:30","end":"09:00","name":"Daily Central Huddle","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":231,"week":6,"date":"2026-12-02","weekday":"Wednesday","start":"09:00","end":"10:15","name":"Open Forum with CEO (Q&A)","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":232,"week":6,"date":"2026-12-02","weekday":"Wednesday","start":"10:30","end":"13:30","name":"LC10: Story of Us (The Final Huddle)","pillar":"Learning Circle","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":233,"week":6,"date":"2026-12-02","weekday":"Wednesday","start":"14:30","end":"17:00","name":"WA 14 Closing Ceremony","pillar":"Team Culture","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":234,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"18:30","end":"19:45","name":"AI For Educators - Sync","pillar":"Personal & Prof. Dev.","mode":"Sync","facilitators":[],"calendared":true,"resources":[]},{"id":235,"week":6,"date":"2026-12-01","weekday":"Tuesday","start":"19:45","end":"20:00","name":"AI For Educators - Async","pillar":"Personal & Prof. Dev.","mode":"Async","facilitators":[],"calendared":true,"resources":[]},{"id":236,"week":null,"date":null,"weekday":null,"start":null,"end":null,"name":"AI For Educators - Workshop (deprioritized / TBD)","pillar":"Personal & Prof. Dev.","mode":"Workshop","facilitators":[],"calendared":false,"resources":[]}];
+const SEED = [{ "id": 1, "week": 0, "date": "2026-10-24", "weekday": "Saturday", "start": "15:00", "end": "15:30", "name": "Welcome & Basecamp Arrival", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 2, "week": 0, "date": "2026-10-24", "weekday": "Saturday", "start": "15:30", "end": "17:30", "name": "WA 14 Opening Ceremony", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 3, "week": 0, "date": "2026-10-24", "weekday": "Saturday", "start": "18:00", "end": "19:00", "name": "IT Skills 1 - Setup & Onboarding", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 4, "week": 0, "date": "2026-10-24", "weekday": "Saturday", "start": "19:30", "end": "20:30", "name": "Basecamp House Rules & Onboarding", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 5, "week": 0, "date": "2026-10-24", "weekday": "Saturday", "start": "20:30", "end": "21:30", "name": "CS, Academy Lead & AFA Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 6, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 7, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "09:00", "end": "10:15", "name": "Welcome to Academy (WA 14 Onboarding)", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 8, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "10:30", "end": "11:30", "name": "Introduction to Journaling", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 9, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "11:45", "end": "12:45", "name": "WA 14 Content & Curriculum Overview", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 10, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "14:00", "end": "15:15", "name": "WA 14 Vision & Pillars", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 11, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "15:30", "end": "16:45", "name": "WA 14 Goals & Culture", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 12, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "17:00", "end": "18:15", "name": "Fellow Reflection & Journal Writing", "pillar": "Personal & Prof. Dev.", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 13, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "18:30", "end": "19:30", "name": "Weekly Fellow Briefing 1", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 14, "week": 1, "date": "2026-10-25", "weekday": "Sunday", "start": "19:30", "end": "20:30", "name": "Office Hours (Optional Support)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 15, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 16, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "09:00", "end": "10:15", "name": "LC1: The Purpose of LC Space, Who Are We?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 17, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "10:30", "end": "11:45", "name": "Professional Communication: Email Etiquette", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 18, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "12:00", "end": "13:30", "name": "Core Values of Teach For Bangladesh", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 19, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "14:30", "end": "16:00", "name": "Expectation from Fellows & Confirmation Policy", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 20, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "16:15", "end": "17:15", "name": "Clinic: Tech Support (Optional)", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 21, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "17:30", "end": "18:30", "name": "Fellow Reflection & Journal Writing", "pillar": "Personal & Prof. Dev.", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 22, "week": 1, "date": "2026-10-26", "weekday": "Monday", "start": "18:30", "end": "19:30", "name": "AFA & Curriculum Specialist Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 23, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 24, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "09:00", "end": "10:15", "name": "Backward Planning Theory & Framework", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 25, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "10:30", "end": "11:45", "name": "Lesson Planning for Teachers (The Template)", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 26, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "12:00", "end": "13:00", "name": "Blooms Taxonomy & Bloom's Verbs", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 27, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "14:00", "end": "15:30", "name": "Learning Outcome Driven Assessment Making", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 28, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "15:45", "end": "17:00", "name": "Theory of Problem (ToP) Part 1", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 29, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "17:15", "end": "18:30", "name": "Classroom Basics: What to do", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 30, "week": 1, "date": "2026-10-27", "weekday": "Tuesday", "start": "18:30", "end": "19:30", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 31, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 32, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "09:00", "end": "10:30", "name": "Key Points: What, Why & How Key Points", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 33, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "10:45", "end": "11:45", "name": "Clinic: Key Point Writing", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 34, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "12:00", "end": "13:15", "name": "6 Step Lesson Method Decoded", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 35, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "14:30", "end": "15:45", "name": "Phonics: Introduction to Phonics and Reading", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 36, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "16:00", "end": "17:15", "name": "Theory of Problem (ToP) Part 2", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 37, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "17:30", "end": "18:45", "name": "Classroom Basics: 100%", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 38, "week": 1, "date": "2026-10-28", "weekday": "Wednesday", "start": "19:00", "end": "20:00", "name": "First Weekly Clearing & Group Game", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 39, "week": 1, "date": "2026-10-29", "weekday": "Thursday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 40, "week": 1, "date": "2026-10-29", "weekday": "Thursday", "start": "09:00", "end": "10:30", "name": "Clinic: Create Your First Lesson Plan (Math/Eng/Ban)", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 41, "week": 1, "date": "2026-10-29", "weekday": "Thursday", "start": "10:45", "end": "12:00", "name": "Understanding the Logic Behind Planning Process", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 42, "week": 1, "date": "2026-10-29", "weekday": "Thursday", "start": "12:15", "end": "13:30", "name": "TFB as an NGO & Educational Ecosystem Overview", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 43, "week": 1, "date": "2026-10-29", "weekday": "Thursday", "start": "14:30", "end": "16:00", "name": "Building Excellence: Average vs. Excellence", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 44, "week": 1, "date": "2026-10-29", "weekday": "Thursday", "start": "16:15", "end": "17:30", "name": "LC2: Exploring my Life Journey: Who Am I? (Life Map)", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 45, "week": 1, "date": "2026-10-29", "weekday": "Thursday", "start": "17:30", "end": "18:30", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 46, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "09:00", "end": "09:30", "name": "Daily Central Huddle & Community Prep", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 47, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "09:30", "end": "10:30", "name": "Connect with a Child: Framing & Prep", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 48, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "10:45", "end": "11:15", "name": "Travel to Community Placement Sites", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 49, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "11:15", "end": "12:30", "name": "Connect with a Child: Community Execution", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 50, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "12:30", "end": "13:15", "name": "Travel back to Basecamp (BLC)", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 51, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "13:15", "end": "14:00", "name": "Lunch Break", "pillar": "Meal / Break", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 52, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "14:00", "end": "15:15", "name": "Connect with a Child: Debrief & Reflection", "pillar": "System Inequity", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 53, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "15:30", "end": "17:00", "name": "CMIP: Classroom Management Investment Plan (Concept)", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 54, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "17:15", "end": "20:15", "name": "CMIP Clinic: Design and Draft Classroom Rules", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 55, "week": 2, "date": "2026-10-31", "weekday": "Saturday", "start": "20:30", "end": "21:30", "name": "Weekly Fellow Briefing 2", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 56, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 57, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "09:00", "end": "10:30", "name": "Subject Specific Pedagogy: Mathematics (Primary-CPA)", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 58, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "09:00", "end": "10:30", "name": "Subject Specific Pedagogy: Mathematics (Secondary-Authentic)", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 59, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "10:45", "end": "12:00", "name": "Clinic: Math Lesson Planning & Resource Modeling", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 60, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "12:15", "end": "13:45", "name": "Reading Strategies as part of Balanced Literacy", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 61, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "14:45", "end": "16:15", "name": "Student Outcomes Framework at TFB", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 62, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "16:30", "end": "17:45", "name": "Introduction to Community Project", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 63, "week": 2, "date": "2026-11-01", "weekday": "Sunday", "start": "17:45", "end": "18:45", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 64, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 65, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "09:00", "end": "10:00", "name": "Yellow Hat Framing: The Power of Positive Thinking", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 66, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "10:15", "end": "11:30", "name": "Yellow Hat Execution: Role Play & Boundary Pushing", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 67, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "11:45", "end": "13:00", "name": "Yellow Hat Reflection & Fellowship Connection", "pillar": "Personal & Prof. Dev.", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 68, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "14:00", "end": "15:15", "name": "LC3: What is my Purpose?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 69, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "15:30", "end": "16:45", "name": "Community Project: Feel (Empathy & Need Analysis)", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 70, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "17:00", "end": "18:00", "name": "Work time: Finalize Batch 1 LP 2", "pillar": "Teaching Skills", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 71, "week": 2, "date": "2026-11-02", "weekday": "Monday", "start": "18:00", "end": "19:00", "name": "AFA Office Hours (SOP & Mentorship Support)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 72, "week": 2, "date": "2026-11-03", "weekday": "Tuesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 73, "week": 2, "date": "2026-11-03", "weekday": "Tuesday", "start": "09:00", "end": "10:30", "name": "Classroom Basics: Positive Framing & Precise Praise", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 74, "week": 2, "date": "2026-11-03", "weekday": "Tuesday", "start": "10:45", "end": "12:00", "name": "Classroom Basics: Wait Time", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 75, "week": 2, "date": "2026-11-03", "weekday": "Tuesday", "start": "12:15", "end": "13:45", "name": "Growth Mindset: Theoretical Framework & Classroom", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 76, "week": 2, "date": "2026-11-03", "weekday": "Tuesday", "start": "14:45", "end": "16:00", "name": "Lesson Vision Workshop: Objectives & SAR", "pillar": "Teaching Skills", "mode": "Workshop", "facilitators": [], "calendared": true, "resources": [] }, { "id": 77, "week": 2, "date": "2026-11-03", "weekday": "Tuesday", "start": "16:15", "end": "17:30", "name": "Growth Mindset - Identifying growth mindset within", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 78, "week": 2, "date": "2026-11-03", "weekday": "Tuesday", "start": "17:30", "end": "18:30", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 79, "week": 2, "date": "2026-11-04", "weekday": "Wednesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 80, "week": 2, "date": "2026-11-04", "weekday": "Wednesday", "start": "09:00", "end": "10:30", "name": "Subject Specific Pedagogy: English", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 81, "week": 2, "date": "2026-11-04", "weekday": "Wednesday", "start": "10:45", "end": "12:00", "name": "Clinic: English Lesson Planning (CPA & Gradual Release)", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 82, "week": 2, "date": "2026-11-04", "weekday": "Wednesday", "start": "12:15", "end": "13:30", "name": "LC4: What do I know about student community?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 83, "week": 2, "date": "2026-11-04", "weekday": "Wednesday", "start": "14:30", "end": "15:45", "name": "Introduction to Central Dashboard & Tech Onboarding", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 84, "week": 2, "date": "2026-11-04", "weekday": "Wednesday", "start": "16:00", "end": "17:15", "name": "Optional (Need-Based Math/Eng Clinic)", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 85, "week": 2, "date": "2026-11-04", "weekday": "Wednesday", "start": "17:15", "end": "18:15", "name": "Curriculum Specialists Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 86, "week": 2, "date": "2026-11-05", "weekday": "Thursday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 87, "week": 2, "date": "2026-11-05", "weekday": "Thursday", "start": "09:00", "end": "10:30", "name": "Subject Specific Pedagogy: Bangla", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 88, "week": 2, "date": "2026-11-05", "weekday": "Thursday", "start": "10:45", "end": "12:00", "name": "Clinic: Bangla Lesson Planning", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 89, "week": 2, "date": "2026-11-05", "weekday": "Thursday", "start": "12:15", "end": "13:30", "name": "Optional session: Learn from an Alum", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 90, "week": 2, "date": "2026-11-05", "weekday": "Thursday", "start": "14:30", "end": "15:45", "name": "Classroom Basics: 100% and Wait Time Practice", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 91, "week": 2, "date": "2026-11-05", "weekday": "Thursday", "start": "16:00", "end": "17:15", "name": "Week 2 Clearing Conversation & Goal Check", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 92, "week": 2, "date": "2026-11-05", "weekday": "Thursday", "start": "17:15", "end": "18:15", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 93, "week": 3, "date": "2026-11-07", "weekday": "Saturday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 94, "week": 3, "date": "2026-11-07", "weekday": "Saturday", "start": "09:00", "end": "10:00", "name": "Service Day: Framing and Prep", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 95, "week": 3, "date": "2026-11-07", "weekday": "Saturday", "start": "10:15", "end": "13:15", "name": "Service Day Execution Block", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 96, "week": 3, "date": "2026-11-07", "weekday": "Saturday", "start": "13:15", "end": "14:15", "name": "Lunch & Community Rest", "pillar": "Meal / Break", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 97, "week": 3, "date": "2026-11-07", "weekday": "Saturday", "start": "14:15", "end": "15:45", "name": "Service Day: Reflection & Debrief", "pillar": "Team Culture", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 98, "week": 3, "date": "2026-11-07", "weekday": "Saturday", "start": "16:00", "end": "17:00", "name": "Weekly Fellow Briefing 3", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 99, "week": 3, "date": "2026-11-07", "weekday": "Saturday", "start": "17:00", "end": "18:00", "name": "SP&O & AFA Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 100, "week": 3, "date": "2026-11-08", "weekday": "Sunday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 1", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 101, "week": 3, "date": "2026-11-08", "weekday": "Sunday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 102, "week": 3, "date": "2026-11-08", "weekday": "Sunday", "start": "15:00", "end": "16:15", "name": "Reflection: My First Day as Teacher in the Classroom", "pillar": "Debrief", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 103, "week": 3, "date": "2026-11-08", "weekday": "Sunday", "start": "16:30", "end": "18:30", "name": "Theory of Change: Where Do We Begin?", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 104, "week": 3, "date": "2026-11-08", "weekday": "Sunday", "start": "18:45", "end": "20:00", "name": "Work time: LP Feedback and Daily Post-Task", "pillar": "Teaching Skills", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 105, "week": 3, "date": "2026-11-08", "weekday": "Sunday", "start": "20:00", "end": "21:00", "name": "Curriculum Specialist Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 106, "week": 3, "date": "2026-11-09", "weekday": "Monday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 2", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 107, "week": 3, "date": "2026-11-09", "weekday": "Monday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 108, "week": 3, "date": "2026-11-09", "weekday": "Monday", "start": "15:00", "end": "16:15", "name": "Teach Like A Champion (TLAC): Practical Execution", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 109, "week": 3, "date": "2026-11-09", "weekday": "Monday", "start": "16:30", "end": "18:00", "name": "Theory of Change: Power & Privileges", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 110, "week": 3, "date": "2026-11-09", "weekday": "Monday", "start": "18:15", "end": "19:30", "name": "LC5: Who are My People?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 111, "week": 3, "date": "2026-11-09", "weekday": "Monday", "start": "19:30", "end": "20:30", "name": "AFA & SP&O Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 112, "week": 3, "date": "2026-11-10", "weekday": "Tuesday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 3", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 113, "week": 3, "date": "2026-11-10", "weekday": "Tuesday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 114, "week": 3, "date": "2026-11-10", "weekday": "Tuesday", "start": "15:00", "end": "16:15", "name": "Subject Pedagogy Deep Dive: Writing", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 115, "week": 3, "date": "2026-11-10", "weekday": "Tuesday", "start": "16:30", "end": "17:30", "name": "TLAC: CFU, No opt out, Right is right", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 116, "week": 3, "date": "2026-11-10", "weekday": "Tuesday", "start": "17:45", "end": "19:00", "name": "Mid-Academy Leadership Conversation (Intro)", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 117, "week": 3, "date": "2026-11-10", "weekday": "Tuesday", "start": "19:00", "end": "20:00", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 118, "week": 3, "date": "2026-11-11", "weekday": "Wednesday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 4", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 119, "week": 3, "date": "2026-11-11", "weekday": "Wednesday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 120, "week": 3, "date": "2026-11-11", "weekday": "Wednesday", "start": "15:00", "end": "16:15", "name": "Data Tracking & Data Driven Decision (Introduction)", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 121, "week": 3, "date": "2026-11-11", "weekday": "Wednesday", "start": "16:30", "end": "17:45", "name": "Data Tracking (Personal Work Time with Live Data)", "pillar": "Teaching Skills", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 122, "week": 3, "date": "2026-11-11", "weekday": "Wednesday", "start": "18:00", "end": "19:15", "name": "Data Tracking & Data Driven Decision (Closing Loop)", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 123, "week": 3, "date": "2026-11-11", "weekday": "Wednesday", "start": "19:30", "end": "20:45", "name": "LC6: What are my Values?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 124, "week": 3, "date": "2026-11-11", "weekday": "Wednesday", "start": "20:45", "end": "21:45", "name": "CS Office Hours: Data Analytics Help", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 125, "week": 3, "date": "2026-11-12", "weekday": "Thursday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 5", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 126, "week": 3, "date": "2026-11-12", "weekday": "Thursday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 127, "week": 3, "date": "2026-11-12", "weekday": "Thursday", "start": "15:00", "end": "16:00", "name": "Mid-Academy Leadership Reflection & Debrief Session", "pillar": "Personal & Prof. Dev.", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 128, "week": 3, "date": "2026-11-12", "weekday": "Thursday", "start": "16:15", "end": "17:45", "name": "WA 14 Town Hall & Open Forum", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 129, "week": 3, "date": "2026-11-12", "weekday": "Thursday", "start": "18:00", "end": "19:30", "name": "The Diversity Walk Session", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 130, "week": 3, "date": "2026-11-12", "weekday": "Thursday", "start": "19:30", "end": "20:30", "name": "Office Hours (Optional Support)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 131, "week": 4, "date": "2026-11-14", "weekday": "Saturday", "start": "13:00", "end": "14:30", "name": "LC7: What are my biases?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 132, "week": 4, "date": "2026-11-14", "weekday": "Saturday", "start": "14:45", "end": "16:00", "name": "CMIP Re-alignment: Troubleshooting Classroom Behavior", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 133, "week": 4, "date": "2026-11-14", "weekday": "Saturday", "start": "16:15", "end": "17:45", "name": "Inspired Speaker Series: Network Learning 1", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 134, "week": 4, "date": "2026-11-14", "weekday": "Saturday", "start": "18:00", "end": "19:30", "name": "Inspired Speaker Series: Network Learning 2", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 135, "week": 4, "date": "2026-11-14", "weekday": "Saturday", "start": "19:30", "end": "20:30", "name": "Weekly Fellow Briefing 4", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 136, "week": 4, "date": "2026-11-14", "weekday": "Saturday", "start": "20:30", "end": "21:30", "name": "AFA & SP&O Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 137, "week": 4, "date": "2026-11-15", "weekday": "Sunday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 6", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 138, "week": 4, "date": "2026-11-15", "weekday": "Sunday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 139, "week": 4, "date": "2026-11-15", "weekday": "Sunday", "start": "15:00", "end": "16:15", "name": "Community Project: Proposal Template & Planning", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 140, "week": 4, "date": "2026-11-15", "weekday": "Sunday", "start": "16:30", "end": "18:00", "name": "Collab Community Project Preparation", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 141, "week": 4, "date": "2026-11-15", "weekday": "Sunday", "start": "18:00", "end": "19:00", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 142, "week": 4, "date": "2026-11-16", "weekday": "Monday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 7", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 143, "week": 4, "date": "2026-11-16", "weekday": "Monday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 144, "week": 4, "date": "2026-11-16", "weekday": "Monday", "start": "15:00", "end": "16:15", "name": "LC8: What limits me?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 145, "week": 4, "date": "2026-11-16", "weekday": "Monday", "start": "16:30", "end": "17:45", "name": "Community Project Proposal Workshop", "pillar": "System Inequity", "mode": "Workshop", "facilitators": [], "calendared": true, "resources": [] }, { "id": 146, "week": 4, "date": "2026-11-16", "weekday": "Monday", "start": "18:00", "end": "19:15", "name": "Inspired Speaker Series: Network Learning 3", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 147, "week": 4, "date": "2026-11-16", "weekday": "Monday", "start": "19:15", "end": "20:15", "name": "AFA Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 148, "week": 4, "date": "2026-11-17", "weekday": "Tuesday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 8", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 149, "week": 4, "date": "2026-11-17", "weekday": "Tuesday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 150, "week": 4, "date": "2026-11-17", "weekday": "Tuesday", "start": "15:00", "end": "16:30", "name": "Diversity, Equity, and Inclusiveness (DEI)", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 151, "week": 4, "date": "2026-11-17", "weekday": "Tuesday", "start": "16:45", "end": "17:45", "name": "Work Time: Community Project Pitch Prep", "pillar": "System Inequity", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 152, "week": 4, "date": "2026-11-17", "weekday": "Tuesday", "start": "18:00", "end": "19:15", "name": "Progress Check Lesson Plan Workshop", "pillar": "Teaching Skills", "mode": "Workshop", "facilitators": [], "calendared": true, "resources": [] }, { "id": 153, "week": 4, "date": "2026-11-17", "weekday": "Tuesday", "start": "19:15", "end": "20:15", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 154, "week": 4, "date": "2026-11-18", "weekday": "Wednesday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 9", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 155, "week": 4, "date": "2026-11-18", "weekday": "Wednesday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 156, "week": 4, "date": "2026-11-18", "weekday": "Wednesday", "start": "15:00", "end": "18:00", "name": "Community Project: Implementation Block (The 'Do')", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 157, "week": 4, "date": "2026-11-18", "weekday": "Wednesday", "start": "18:15", "end": "21:15", "name": "Community Engagement & Project Execution Debrief", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 158, "week": 4, "date": "2026-11-18", "weekday": "Wednesday", "start": "21:15", "end": "22:15", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 159, "week": 4, "date": "2026-11-19", "weekday": "Thursday", "start": "08:00", "end": "13:00", "name": "In-person Class & Practice Teaching: Day 10", "pillar": "Practice Teaching", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 160, "week": 4, "date": "2026-11-19", "weekday": "Thursday", "start": "13:00", "end": "14:00", "name": "Travel back to Basecamp / Debriefs", "pillar": "Debrief", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 161, "week": 4, "date": "2026-11-19", "weekday": "Thursday", "start": "15:00", "end": "16:30", "name": "Inspired Speaker Series: Network Learning 4", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 162, "week": 4, "date": "2026-11-19", "weekday": "Thursday", "start": "16:45", "end": "17:45", "name": "End of Practice Teaching Celebration & Clearing", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 163, "week": 4, "date": "2026-11-19", "weekday": "Thursday", "start": "18:00", "end": "19:30", "name": "Power of Gratitude: The Giving Tree", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 164, "week": 4, "date": "2026-11-19", "weekday": "Thursday", "start": "19:30", "end": "20:30", "name": "Office Hours (Optional Support)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 165, "week": 5, "date": "2026-11-21", "weekday": "Saturday", "start": "13:00", "end": "14:30", "name": "Introduction to School Placement & Regions", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 166, "week": 5, "date": "2026-11-21", "weekday": "Saturday", "start": "14:45", "end": "17:45", "name": "School Placement Form Filling & Consultation", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 167, "week": 5, "date": "2026-11-21", "weekday": "Saturday", "start": "18:00", "end": "19:00", "name": "Weekly Fellow Briefing 5", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 168, "week": 5, "date": "2026-11-21", "weekday": "Saturday", "start": "19:00", "end": "20:00", "name": "SP&O Team Placement Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 169, "week": 5, "date": "2026-11-22", "weekday": "Sunday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 170, "week": 5, "date": "2026-11-22", "weekday": "Sunday", "start": "09:00", "end": "10:15", "name": "Balanced Literacy: Advanced Instruction Models", "pillar": "Academic Content", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 171, "week": 5, "date": "2026-11-22", "weekday": "Sunday", "start": "10:30", "end": "12:00", "name": "Trauma-informed practices (Session 01)", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 172, "week": 5, "date": "2026-11-22", "weekday": "Sunday", "start": "12:15", "end": "13:30", "name": "Social Media Communication Norms & Guidelines", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 173, "week": 5, "date": "2026-11-22", "weekday": "Sunday", "start": "14:30", "end": "16:00", "name": "Internet Safety for Kids & Parental Control", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 174, "week": 5, "date": "2026-11-22", "weekday": "Sunday", "start": "16:15", "end": "17:45", "name": "Consolidation of Academy assessment (Prep)", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 175, "week": 5, "date": "2026-11-22", "weekday": "Sunday", "start": "17:45", "end": "18:45", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 176, "week": 5, "date": "2026-11-23", "weekday": "Monday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 177, "week": 5, "date": "2026-11-23", "weekday": "Monday", "start": "09:00", "end": "10:30", "name": "Blended Learning: Framework and Practice", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 178, "week": 5, "date": "2026-11-23", "weekday": "Monday", "start": "10:45", "end": "12:15", "name": "Fellow Health Insurance Policies", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 179, "week": 5, "date": "2026-11-23", "weekday": "Monday", "start": "12:30", "end": "13:45", "name": "LC9: What will keep me going?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 180, "week": 5, "date": "2026-11-23", "weekday": "Monday", "start": "14:45", "end": "16:00", "name": "Decoding School Eco-system & Relationship Mgt", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 181, "week": 5, "date": "2026-11-23", "weekday": "Monday", "start": "16:15", "end": "17:15", "name": "Ghost Night / Social Games Night (Optional)", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 182, "week": 5, "date": "2026-11-23", "weekday": "Monday", "start": "17:15", "end": "18:15", "name": "AFA Office Hours (Pastoral & Support Session)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 183, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 184, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "09:00", "end": "10:15", "name": "Understanding Stakeholders: Govt Stakeholder Series", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 185, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "10:30", "end": "12:00", "name": "Professional Wellbeing & Stress Management", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 186, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "12:15", "end": "13:30", "name": "Futures of Education", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 187, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "14:30", "end": "16:00", "name": "Reimagining Education System with Stakeholders", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 188, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "16:15", "end": "17:30", "name": "Work time: Portfolio Compilation", "pillar": "Teaching Skills", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 189, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "17:45", "end": "19:15", "name": "TFB Olympics: Collaborative Team Event", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 190, "week": 5, "date": "2026-11-24", "weekday": "Tuesday", "start": "19:15", "end": "20:15", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 191, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 192, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "09:00", "end": "10:30", "name": "Classroom Basics Clinic: Wait Time & 100% Retest", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 193, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "10:45", "end": "12:00", "name": "Lesson Vision Workshop: Retest & Quality Alignment", "pillar": "Teaching Skills", "mode": "Workshop", "facilitators": [], "calendared": true, "resources": [] }, { "id": 194, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "12:15", "end": "13:30", "name": "Work time: Mid-Academy Reflection Prep", "pillar": "Personal & Prof. Dev.", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 195, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "14:30", "end": "15:45", "name": "Saturday Debrief: Mid-Academy Reflection (Framing)", "pillar": "Personal & Prof. Dev.", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 196, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "16:00", "end": "17:00", "name": "Final Prep: Region-Wise Unit Planning", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 197, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "17:15", "end": "18:30", "name": "Adda Space & Cultural Prep (Optional)", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 198, "week": 5, "date": "2026-11-25", "weekday": "Wednesday", "start": "18:30", "end": "19:30", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 199, "week": 5, "date": "2026-11-26", "weekday": "Thursday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 200, "week": 5, "date": "2026-11-26", "weekday": "Thursday", "start": "09:00", "end": "10:30", "name": "Consolidation of Academy assessment (Submission)", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 201, "week": 5, "date": "2026-11-26", "weekday": "Thursday", "start": "10:45", "end": "12:00", "name": "Headteacher Engagement Strategies", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 202, "week": 5, "date": "2026-11-26", "weekday": "Thursday", "start": "12:15", "end": "13:30", "name": "Govt Stakeholders Series: DG DPE Panel", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 203, "week": 5, "date": "2026-11-26", "weekday": "Thursday", "start": "14:30", "end": "19:00", "name": "Teach For Bangladesh Day (The Grand Celebration)", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 204, "week": 5, "date": "2026-11-26", "weekday": "Thursday", "start": "19:00", "end": "20:00", "name": "Office Hours (Optional Support)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 205, "week": 6, "date": "2026-11-28", "weekday": "Saturday", "start": "13:00", "end": "14:30", "name": "2026 School Placement & Region Announcement", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 206, "week": 6, "date": "2026-11-28", "weekday": "Saturday", "start": "14:45", "end": "17:45", "name": "School Placement Office Hour (One-on-One)", "pillar": "Team Culture", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 207, "week": 6, "date": "2026-11-28", "weekday": "Saturday", "start": "18:00", "end": "19:00", "name": "Weekly Fellow Briefing 6 (Final Briefing)", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 208, "week": 6, "date": "2026-11-28", "weekday": "Saturday", "start": "19:00", "end": "20:00", "name": "SP&O & AFA Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 209, "week": 6, "date": "2026-11-29", "weekday": "Sunday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 210, "week": 6, "date": "2026-11-29", "weekday": "Sunday", "start": "09:00", "end": "10:15", "name": "SMART Goals Based on TOC", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 211, "week": 6, "date": "2026-11-29", "weekday": "Sunday", "start": "10:30", "end": "11:45", "name": "Introduction to City Planning & Relocation Guide", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 212, "week": 6, "date": "2026-11-29", "weekday": "Sunday", "start": "12:00", "end": "13:15", "name": "Introduction to Unit Plan", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 213, "week": 6, "date": "2026-11-29", "weekday": "Sunday", "start": "14:30", "end": "16:00", "name": "Sync: Unit Plan Curriculum Mapping", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 214, "week": 6, "date": "2026-11-29", "weekday": "Sunday", "start": "16:15", "end": "17:30", "name": "Unit Plan Curriculum Mapping Clinic", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 215, "week": 6, "date": "2026-11-29", "weekday": "Sunday", "start": "17:30", "end": "18:30", "name": "Unit Planning Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 216, "week": 6, "date": "2026-11-30", "weekday": "Monday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 217, "week": 6, "date": "2026-11-30", "weekday": "Monday", "start": "09:00", "end": "10:15", "name": "Unit Plan Assessment Making", "pillar": "Teaching Skills", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 218, "week": 6, "date": "2026-11-30", "weekday": "Monday", "start": "10:30", "end": "11:45", "name": "Clinic: Unit 01 Assessment & Draft Plan", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 219, "week": 6, "date": "2026-11-30", "weekday": "Monday", "start": "12:00", "end": "13:15", "name": "Theory of Change: Approaching the Achievement Gap", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 220, "week": 6, "date": "2026-11-30", "weekday": "Monday", "start": "14:30", "end": "15:45", "name": "LC9: What will keep me going?", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 221, "week": 6, "date": "2026-11-30", "weekday": "Monday", "start": "16:00", "end": "17:15", "name": "Adda Space / Bonding Activity (Optional)", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 222, "week": 6, "date": "2026-11-30", "weekday": "Monday", "start": "17:15", "end": "18:15", "name": "Office Hours (Optional)", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 223, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 224, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "09:00", "end": "10:15", "name": "LC: How am I operating? (Year 1 Prep)", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 225, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "10:30", "end": "11:45", "name": "Clinic: Unit Plan (Feedback and Peer Review)", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 226, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "12:00", "end": "13:15", "name": "Clinic: Unit Plan (Update & Polish)", "pillar": "Teaching Skills", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 227, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "14:30", "end": "16:00", "name": "Child Protection Policy Session", "pillar": "System Inequity", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 228, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "16:15", "end": "17:15", "name": "Story of Us Preparation Space", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 229, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "17:15", "end": "18:15", "name": "Final Unit Plan Submission & Office Hours", "pillar": "Team Support", "mode": "Coaching", "facilitators": [], "calendared": true, "resources": [] }, { "id": 230, "week": 6, "date": "2026-12-02", "weekday": "Wednesday", "start": "08:30", "end": "09:00", "name": "Daily Central Huddle", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 231, "week": 6, "date": "2026-12-02", "weekday": "Wednesday", "start": "09:00", "end": "10:15", "name": "Open Forum with CEO (Q&A)", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 232, "week": 6, "date": "2026-12-02", "weekday": "Wednesday", "start": "10:30", "end": "13:30", "name": "LC10: Story of Us (The Final Huddle)", "pillar": "Learning Circle", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 233, "week": 6, "date": "2026-12-02", "weekday": "Wednesday", "start": "14:30", "end": "17:00", "name": "WA 14 Closing Ceremony", "pillar": "Team Culture", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 234, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "18:30", "end": "19:45", "name": "AI For Educators - Sync", "pillar": "Personal & Prof. Dev.", "mode": "Sync", "facilitators": [], "calendared": true, "resources": [] }, { "id": 235, "week": 6, "date": "2026-12-01", "weekday": "Tuesday", "start": "19:45", "end": "20:00", "name": "AI For Educators - Async", "pillar": "Personal & Prof. Dev.", "mode": "Async", "facilitators": [], "calendared": true, "resources": [] }, { "id": 236, "week": null, "date": null, "weekday": null, "start": null, "end": null, "name": "AI For Educators - Workshop (deprioritized / TBD)", "pillar": "Personal & Prof. Dev.", "mode": "Workshop", "facilitators": [], "calendared": false, "resources": [] }];
 
 // "Type of session" -- the color-coded category used for calendar colors and time tracking.
 const SESSION_TYPES = [
-  'Team Culture','Personal & Prof. Dev.','Team Support','Academic Content',
-  'Learning Circle','Teaching Skills','System Inequity','Meal / Break',
-  'Practice Teaching','Debrief'
+  'Team Culture', 'Personal & Prof. Dev.', 'Team Support', 'Academic Content',
+  'Learning Circle', 'Teaching Skills', 'System Inequity', 'Meal / Break',
+  'Practice Teaching', 'Debrief'
 ];
 const TYPE_COLOR = {
-  'Team Culture':'#E8B23D','Personal & Prof. Dev.':'#9DB09D','Team Support':'#5FA97E',
-  'Academic Content':'#D97355','Learning Circle':'#8A78C2','Teaching Skills':'#3E8FA0',
-  'System Inequity':'#C79236','Meal / Break':'#2A5C4B','Practice Teaching':'#D786A8',
-  'Debrief':'#A6ABB2'
+  'Team Culture': '#E8B23D', 'Personal & Prof. Dev.': '#9DB09D', 'Team Support': '#5FA97E',
+  'Academic Content': '#D97355', 'Learning Circle': '#8A78C2', 'Teaching Skills': '#3E8FA0',
+  'System Inequity': '#C79236', 'Meal / Break': '#2A5C4B', 'Practice Teaching': '#D786A8',
+  'Debrief': '#A6ABB2'
 };
-const DEFAULT_SESSION_TYPES = Object.keys(TYPE_COLOR).map((name, index) => ({id:'type'+index, name, color:TYPE_COLOR[name]}));
+const DEFAULT_SESSION_TYPES = Object.keys(TYPE_COLOR).map((name, index) => ({ id: 'type' + index, name, color: TYPE_COLOR[name] }));
 // "Pillars" -- a separate, non-color-coded tag that can be added to sessions.
 const DEFAULT_PILLAR_TAGS = [
-  {id:'ptag0', name:'Leadership'},
-  {id:'ptag1', name:'Equity & Inclusion'},
-  {id:'ptag2', name:'Community & Culture'},
-  {id:'ptag3', name:'Learning & Growth'},
+  { id: 'ptag0', name: 'Leadership' },
+  { id: 'ptag1', name: 'Equity & Inclusion' },
+  { id: 'ptag2', name: 'Community & Culture' },
+  { id: 'ptag3', name: 'Learning & Growth' },
 ];
 // Work modes -- editable by full admins.
 const DEFAULT_MODES = [
-  {id:'mode0', name:'Sync',     color:'#D65641'},
-  {id:'mode1', name:'Async',    color:'#B8863B'},
-  {id:'mode2', name:'Coaching', color:'#6B5CA5'},
-  {id:'mode3', name:'Workshop', color:'#A64D4D'},
+  { id: 'mode0', name: 'Sync', color: '#D65641' },
+  { id: 'mode1', name: 'Async', color: '#B8863B' },
+  { id: 'mode2', name: 'Coaching', color: '#6B5CA5' },
+  { id: 'mode3', name: 'Workshop', color: '#A64D4D' },
 ];
-const DEFAULT_MODE_COLORS = DEFAULT_MODES.reduce((acc,m)=>{acc[m.name]=m.color; return acc;},{});
-const RESOURCE_KINDS = ['Session plan','Slides','Async work','Exit ticket','Old folder','Other'];
-const ASSESSMENT_TYPES = ['single','multiple','check','paragraph','mcq_grid','checkbox_grid'];
-const WEEKS = [0,1,2,3,4,5,6];
+const DEFAULT_MODE_COLORS = DEFAULT_MODES.reduce((acc, m) => { acc[m.name] = m.color; return acc; }, {});
+const RESOURCE_KINDS = ['Session plan', 'Slides', 'Async work', 'Exit ticket', 'Old folder', 'Other'];
+const ASSESSMENT_TYPES = ['single', 'multiple', 'check', 'paragraph', 'mcq_grid', 'checkbox_grid'];
+const WEEKS = [0, 1, 2, 3, 4, 5, 6];
 const GRID_START = 0;      // 00:00 -- full-day grid
-const GRID_END = 24*60;    // 24:00 (end-of-day boundary)
+const GRID_END = 24 * 60;    // 24:00 (end-of-day boundary)
 const PX_PER_MIN = 0.95;
 
 // ---- Access rule ---------------------------------------------------------
@@ -57,71 +57,71 @@ const STAFF_EMAIL_RE = /^[a-z]+@teachforbangladesh\.org$/i;
 const FELLOW_EMAIL_RE = /^[a-z]+\.[a-z]+@teachforbangladesh\.org$/i;
 const SUPERADMIN_EMAIL = 'mehdi@teachforbangladesh.org';
 const DEFAULT_STAFF_ROLES = [
-  { id:'academy_lead',            label:'Academy Lead' },
-  { id:'afa_lead',                label:'Academy Fellow Advisor Lead' },
-  { id:'curriculum_specialist',  label:'Curriculum Specialist' },
-  { id:'afa',                     label:'Academy Fellow Advisor (AFA)' },
-  { id:'placement_ops',          label:'School Placement and Operations' },
+  { id: 'academy_lead', label: 'Academy Lead' },
+  { id: 'afa_lead', label: 'Academy Fellow Advisor Lead' },
+  { id: 'curriculum_specialist', label: 'Curriculum Specialist' },
+  { id: 'afa', label: 'Academy Fellow Advisor (AFA)' },
+  { id: 'placement_ops', label: 'School Placement and Operations' },
 ];
 const ROLE_LABEL = {
-  superadmin:'Superadmin',
-  planner:'Planning team (legacy)',
-  resource_planner:'Resources only',
-  staff:'Staff',
-  fellow:'Fellow',
-  academy_lead:'Academy Lead',
-  afa_lead:'Academy Fellow Advisor Lead',
-  curriculum_specialist:'Curriculum Specialist',
-  afa:'AFA',
-  placement_ops:'School Placement & Ops',
+  superadmin: 'Superadmin',
+  planner: 'Planning team (legacy)',
+  resource_planner: 'Resources only',
+  staff: 'Staff',
+  fellow: 'Fellow',
+  academy_lead: 'Academy Lead',
+  afa_lead: 'Academy Fellow Advisor Lead',
+  curriculum_specialist: 'Curriculum Specialist',
+  afa: 'AFA',
+  placement_ops: 'School Placement & Ops',
 };
 // Built-in Superadmin record so the Superadmin can also be picked as a facilitator.
-const SUPERADMIN_ACCOUNT = { id:'superadmin', name:'Mehdi Morshed Chowdhury', email:SUPERADMIN_EMAIL, role:'superadmin' };
+const SUPERADMIN_ACCOUNT = { id: 'superadmin', name: 'Mehdi Morshed Chowdhury', email: SUPERADMIN_EMAIL, role: 'superadmin' };
 // Derive a call sign from a full name: "Mehdi Morshed Chowdhury" → "MMC",
 // "Md Asifur Rahman" → "AR" (common prefixes like Md/Dr/Mr are skipped).
-function callSignFromName(name){
-  const skip = new Set(['md','md.','dr','dr.','mr','mr.','mrs','mrs.','ms','ms.','prof','prof.']);
-  const initials = String(name||'').trim().split(/\s+/).filter(Boolean)
+function callSignFromName(name) {
+  const skip = new Set(['md', 'md.', 'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'prof', 'prof.']);
+  const initials = String(name || '').trim().split(/\s+/).filter(Boolean)
     .filter(w => !skip.has(w.toLowerCase()))
     .map(w => w[0].toUpperCase()).join('');
   return initials.slice(0, 4);
 }
 // Role label lookup: custom (stored) roles first, then built-in labels.
-function getRoleLabel(roleId, roles){
-  const custom = (roles||[]).find(r=>r.id===roleId);
+function getRoleLabel(roleId, roles) {
+  const custom = (roles || []).find(r => r.id === roleId);
   if (custom) return custom.label;
-  return ROLE_LABEL[roleId] || (roleId ? String(roleId).replace(/_/g,' ') : 'Staff');
+  return ROLE_LABEL[roleId] || (roleId ? String(roleId).replace(/_/g, ' ') : 'Staff');
 }
-const roleIdFromLabel = label => label.trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'role_'+Date.now();
+const roleIdFromLabel = label => label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'role_' + Date.now();
 
 const DEFAULT_ACCOUNTS = [
-  {email:'mehdi@teachforbangladesh.org',    name:'Mehdi Morshed Chowdhury', role:'academy_lead'},
-  {email:'asifur@teachforbangladesh.org',    name:'Md Asifur Rahman',             role:'afa_lead'},
-  {email:'hasibur@teachforbangladesh.org',    name:'Hasibur Rahman Sohan',        role:'curriculum_specialist'}
+  { email: 'mehdi@teachforbangladesh.org', name: 'Mehdi Morshed Chowdhury', role: 'academy_lead' },
+  { email: 'asifur@teachforbangladesh.org', name: 'Md Asifur Rahman', role: 'afa_lead' },
+  { email: 'hasibur@teachforbangladesh.org', name: 'Hasibur Rahman Sohan', role: 'curriculum_specialist' }
 ];
 
 // Access level for each WA Staff member: what they can manage.
 const STAFF_ACCESS = [
-  { id:'full',                   label:'Full control' },
-  { id:'resources_assessments', label:'Resources + assessments' },
-  { id:'resources',             label:'Resources only' },
+  { id: 'full', label: 'Full control' },
+  { id: 'resources_assessments', label: 'Resources + assessments' },
+  { id: 'resources', label: 'Resources only' },
 ];
 const DEFAULT_ACCESS = 'resources';
 
 // Staff roles that act as traditional managers/full admins of the calendar.
-const STAFF_ADMIN_ROLES = ['academy_lead','afa_lead','curriculum_specialist','placement_ops','resource_planner'];
-const AFA_ROLES = ['afa','afa_lead'];
+const STAFF_ADMIN_ROLES = ['academy_lead', 'afa_lead', 'curriculum_specialist', 'placement_ops', 'resource_planner'];
+const AFA_ROLES = ['afa', 'afa_lead'];
 
-function toMin(t){ if(!t) return null; const [h,m]=t.split(':').map(Number); return h*60+m; }
+function toMin(t) { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; }
 // Format a Date object to YYYY-MM-DD in local time (avoids UTC shift from toISOString)
-function toIsoDate(d){
+function toIsoDate(d) {
   const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return y+'-'+m+'-'+day;
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
 }
 // Responsive design, attendance codes, grade release & assessment integrity helpers
-function generateAttendanceCodes(count, length){
+function generateAttendanceCodes(count, length) {
   const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const codes = new Set();
   const size = Math.max(4, Math.min(10, Number(length) || 6));
@@ -135,75 +135,75 @@ function generateAttendanceCodes(count, length){
   }
   return Array.from(codes);
 }
-function friendlyFellowName(entry, roster){
+function friendlyFellowName(entry, roster) {
   if (!entry) return 'Fellow';
-  const found = (roster||[]).find(item=>String(item.id)===String(entry.fellowId||entry.fellow_id||entry.id));
+  const found = (roster || []).find(item => String(item.id) === String(entry.fellowId || entry.fellow_id || entry.id));
   return found?.name || entry.fellowName || entry.name || entry.email || String(entry.fellowId || 'Fellow');
 }
-function attemptGradeStatus(attempt, assessment){
+function attemptGradeStatus(attempt, assessment) {
   if (!attempt) return 'not_submitted';
-  if (attempt.status==='in_progress') return 'in_progress';
+  if (attempt.status === 'in_progress') return 'in_progress';
   const qs = assessment?.questions || [];
-  const paragraph = qs.filter(q=>q.type==='paragraph' && (attempt.questionOrder||[]).includes(q.id));
+  const paragraph = qs.filter(q => q.type === 'paragraph' && (attempt.questionOrder || []).includes(q.id));
   if (!paragraph.length) return 'graded';
   const reviews = attempt.reviews || {};
-  return paragraph.every(q=>reviews[q.id]?.status==='reviewed') ? 'graded' : 'pending_review';
+  return paragraph.every(q => reviews[q.id]?.status === 'reviewed') ? 'graded' : 'pending_review';
 }
-function isGradeReleased(assessment){ return Boolean(assessment?.gradesReleased || assessment?.grades_released); }
-function getDeviceFingerprint(){
+function isGradeReleased(assessment) { return Boolean(assessment?.gradesReleased || assessment?.grades_released); }
+function getDeviceFingerprint() {
   const nav = typeof navigator !== 'undefined' ? navigator : {};
   const scr = typeof screen !== 'undefined' ? screen : {};
-  const raw = [nav.userAgent||'', nav.language||'', nav.platform||'', scr.width||'', scr.height||'', scr.colorDepth||'', new Date().getTimezoneOffset()].join('|');
+  const raw = [nav.userAgent || '', nav.language || '', nav.platform || '', scr.width || '', scr.height || '', scr.colorDepth || '', new Date().getTimezoneOffset()].join('|');
   let hash = 0;
-  for (let i=0;i<raw.length;i+=1){ hash = ((hash<<5)-hash+raw.charCodeAt(i))|0; }
-  return 'dev-' + Math.abs(hash).toString(36) + '-' + String(scr.width||0) + 'x' + String(scr.height||0);
+  for (let i = 0; i < raw.length; i += 1) { hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0; }
+  return 'dev-' + Math.abs(hash).toString(36) + '-' + String(scr.width || 0) + 'x' + String(scr.height || 0);
 }
-function storageKeyForAttemptDraft(attemptId){ return 'wa14-attempt-draft-' + attemptId; }
-function readAttemptDraft(attemptId){
-  try { const raw = (typeof localStorage!=='undefined') ? localStorage.getItem(storageKeyForAttemptDraft(attemptId)) : null; return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+function storageKeyForAttemptDraft(attemptId) { return 'wa14-attempt-draft-' + attemptId; }
+function readAttemptDraft(attemptId) {
+  try { const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem(storageKeyForAttemptDraft(attemptId)) : null; return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
 }
-function writeAttemptDraft(attemptId, data){
-  try { if (typeof localStorage!=='undefined') localStorage.setItem(storageKeyForAttemptDraft(attemptId), JSON.stringify({...(data||{}), savedAt:new Date().toISOString()})); } catch (e) {}
+function writeAttemptDraft(attemptId, data) {
+  try { if (typeof localStorage !== 'undefined') localStorage.setItem(storageKeyForAttemptDraft(attemptId), JSON.stringify({ ...(data || {}), savedAt: new Date().toISOString() })); } catch (e) { }
 }
-function clearAttemptDraft(attemptId){
-  try { if (typeof localStorage!=='undefined') localStorage.removeItem(storageKeyForAttemptDraft(attemptId)); } catch (e) {}
+function clearAttemptDraft(attemptId) {
+  try { if (typeof localStorage !== 'undefined') localStorage.removeItem(storageKeyForAttemptDraft(attemptId)); } catch (e) { }
 }
 
 // Week index for a date, derived from the academy start date (Sunday-anchored).
 // Week 00 is the full week (Sunday-Saturday) before the start date's week.
 // Week 01 is the start date's week, etc.
-function weekForDate(date, startDate){
+function weekForDate(date, startDate) {
   if (!startDate) return null;
-  const s = new Date(startDate+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); // Go to Sunday of the week BEFORE
-  const d = new Date(date+'T00:00:00');
-  const diff = Math.floor((d - s) / (24*60*60*1000));
+  const s = new Date(startDate + 'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); // Go to Sunday of the week BEFORE
+  const d = new Date(date + 'T00:00:00');
+  const diff = Math.floor((d - s) / (24 * 60 * 60 * 1000));
   return Math.floor(diff / 7);
 }
 // A session whose end <= start flows past midnight into the next day (e.g. 23:00 → 01:00)
-function wrapsMidnight(s){ const a=toMin(s.start), b=toMin(s.end); return a!=null && b!=null && b<=a; }
-function durationMin(s){ const a=toMin(s.start), b=toMin(s.end); if(a==null||b==null) return 0; let d=b-a; if(d<=0) d+=24*60; return d; }
-function fmtDur(mins){
-  if (mins==null || isNaN(mins)) return '--';
-  const h = Math.floor(mins/60), m = mins%60;
-  if (h===0) return m+'m';
-  if (m===0) return h+'h';
-  return h+'h '+m+'m';
+function wrapsMidnight(s) { const a = toMin(s.start), b = toMin(s.end); return a != null && b != null && b <= a; }
+function durationMin(s) { const a = toMin(s.start), b = toMin(s.end); if (a == null || b == null) return 0; let d = b - a; if (d <= 0) d += 24 * 60; return d; }
+function fmtDur(mins) {
+  if (mins == null || isNaN(mins)) return '--';
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 0) return m + 'm';
+  if (m === 0) return h + 'h';
+  return h + 'h ' + m + 'm';
 }
-function dateLabel(d){
-  if(!d) return 'Unscheduled';
-  const dt = new Date(d+'T00:00:00');
-  return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+function dateLabel(d) {
+  if (!d) return 'Unscheduled';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
-function fmtWhen(iso){
+function fmtWhen(iso) {
   const dt = new Date(iso);
-  return dt.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' · ' + dt.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · ' + dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
 let uid = 10000;
-function newId(){ return uid++; }
-function newResId(){ return 'r'+(uid++); }
+function newId() { return uid++; }
+function newResId() { return 'r' + (uid++); }
 
-function normalizeImageUrl(value){
+function normalizeImageUrl(value) {
   const raw = (value || '').trim();
   if (!raw) return '';
   const fileMatch = raw.match(/drive\.google\.com\/file\/d\/([^/]+)/i);
@@ -212,7 +212,7 @@ function normalizeImageUrl(value){
   return id ? `https://drive.google.com/uc?export=view&id=${id}` : raw;
 }
 
-function normalizeFellow(fellow){
+function normalizeFellow(fellow) {
   return {
     ...fellow,
     track: (fellow.track || fellow.level || '').toLowerCase(),
@@ -222,8 +222,8 @@ function normalizeFellow(fellow){
   };
 }
 
-function normalizeQuestion(question, assessmentId){
-  const options = (Array.isArray(question.options) ? question.options : []).map((option, index) => typeof option === 'string' ? {id:`option-${question.id || newId()}-${index}`, text:option} : {id:option.id || `option-${question.id || newId()}-${index}`, text:option.text || ''});
+function normalizeQuestion(question, assessmentId) {
+  const options = (Array.isArray(question.options) ? question.options : []).map((option, index) => typeof option === 'string' ? { id: `option-${question.id || newId()}-${index}`, text: option } : { id: option.id || `option-${question.id || newId()}-${index}`, text: option.text || '' });
   const legacyCorrect = Array.isArray(question.correct) ? question.correct : [];
   return {
     ...question,
@@ -232,18 +232,18 @@ function normalizeQuestion(question, assessmentId){
     options,
     gridRows: Array.isArray(question.gridRows) ? question.gridRows : [],
     gridCols: Array.isArray(question.gridCols) ? question.gridCols : [],
-    correct: legacyCorrect.map(answer => options.find(option => option.id===answer || option.text===answer)?.id || answer).filter(Boolean),
+    correct: legacyCorrect.map(answer => options.find(option => option.id === answer || option.text === answer)?.id || answer).filter(Boolean),
     imageUrl: normalizeImageUrl(question.imageUrl),
     rubric: question.rubric || '',
     expectedConcepts: Array.isArray(question.expectedConcepts) ? question.expectedConcepts : [],
-    gradingMode: question.gradingMode || (question.type==='paragraph' ? 'manual_review' : 'automatic'),
+    gradingMode: question.gradingMode || (question.type === 'paragraph' ? 'manual_review' : 'automatic'),
     points: Number(question.points) || 1,
   };
 }
 
-function normalizeAssessment(assessment, legacyQuestions){
+function normalizeAssessment(assessment, legacyQuestions) {
   const localQuestions = Array.isArray(assessment.questions) ? assessment.questions :
-    (assessment.questionIds || []).map(id => legacyQuestions.find(question => String(question.id)===String(id))).filter(Boolean);
+    (assessment.questionIds || []).map(id => legacyQuestions.find(question => String(question.id) === String(id))).filter(Boolean);
   const questions = [];
   const seen = new Set();
   localQuestions.forEach(question => {
@@ -253,7 +253,7 @@ function normalizeAssessment(assessment, legacyQuestions){
   return {
     ...assessment,
     questions,
-    questionIds: questions.map(question=>question.id),
+    questionIds: questions.map(question => question.id),
     assignmentGroups: (assessment.assignmentGroups || []).map(group => ({
       ...group,
       track: (group.track || '').toLowerCase(),
@@ -267,44 +267,44 @@ function normalizeAssessment(assessment, legacyQuestions){
 }
 
 // Facilitator record: { id, staffName, roomId } (+ optional legacy `group`)
-function facilitatorLabel(f, rooms, staff){
+function facilitatorLabel(f, rooms, staff) {
   if (typeof f === 'string') return f;
   if (!f) return '';
-  const room = f.roomId ? (rooms||[]).find(x=>''+x.id===String(f.roomId)) : null;
+  const room = f.roomId ? (rooms || []).find(x => '' + x.id === String(f.roomId)) : null;
   const roomName = room ? room.name : '';
-  const staffMember = (staff||[]).find(s=>s.name === f.staffName);
-  const displayName = staffMember?.callSign || f.staffName||f.name||'';
-  const parts = [ displayName, roomName ].filter(Boolean);
+  const staffMember = (staff || []).find(s => s.name === f.staffName);
+  const displayName = staffMember?.callSign || f.staffName || f.name || '';
+  const parts = [displayName, roomName].filter(Boolean);
   if (parts.length) return parts.join(' · ');
-  if (f.kind === 'room') return roomName || (f.roomId||'');   // legacy shape
+  if (f.kind === 'room') return roomName || (f.roomId || '');   // legacy shape
   return f.group || f.afaGroup || '';                          // legacy shape
 }
-function fmtFacilitators(facs, rooms, staff){
-  return (facs||[]).map(f=>facilitatorLabel(f, rooms, staff)).filter(Boolean).join(', ');
+function fmtFacilitators(facs, rooms, staff) {
+  return (facs || []).map(f => facilitatorLabel(f, rooms, staff)).filter(Boolean).join(', ');
 }
-function fellowMatchesGroup(fellow, group){
+function fellowMatchesGroup(fellow, group) {
   const track = (fellow.track || '').toLowerCase();
   const groupTrack = (group.track || '').toLowerCase();
-  return (!groupTrack || groupTrack==='all' || track===groupTrack) &&
-    (!group.afaGroup || fellow.afaGroup===group.afaGroup) &&
-    (!group.placementCity || fellow.placementCity===group.placementCity) &&
-    (!(group.roomIds||[]).length || (group.roomIds||[]).some(id=>(fellow.roomIds||[]).includes(id)));
+  return (!groupTrack || groupTrack === 'all' || track === groupTrack) &&
+    (!group.afaGroup || fellow.afaGroup === group.afaGroup) &&
+    (!group.placementCity || fellow.placementCity === group.placementCity) &&
+    (!(group.roomIds || []).length || (group.roomIds || []).some(id => (fellow.roomIds || []).includes(id)));
 }
 
-function resolveAssignmentGroup(group, roster){
-  return roster.filter(fellow=>fellowMatchesGroup(fellow, group)).map(fellow=>fellow.id);
+function resolveAssignmentGroup(group, roster) {
+  return roster.filter(fellow => fellowMatchesGroup(fellow, group)).map(fellow => fellow.id);
 }
 
-function effectiveQuestions(assessment, fellowId, roster){
+function effectiveQuestions(assessment, fellowId, roster) {
   const groups = assessment.assignmentGroups || [];
-  const assigned = groups.filter(group => (group.fellowIds||[]).includes(fellowId));
-  const targeted = new Set(assigned.flatMap(group=>group.questionIds||[]));
-  return (assessment.questions || []).filter(question => !question.targetGroupIds?.length || assigned.some(group=>question.targetGroupIds.includes(group.id)) || targeted.has(question.id));
+  const assigned = groups.filter(group => (group.fellowIds || []).includes(fellowId));
+  const targeted = new Set(assigned.flatMap(group => group.questionIds || []));
+  return (assessment.questions || []).filter(question => !question.targetGroupIds?.length || assigned.some(group => question.targetGroupIds.includes(group.id)) || targeted.has(question.id));
 }
 
 const FONT = "-apple-system, 'Inter', 'Segoe UI', sans-serif";
 
-export default function App(){
+export default function App() {
   const [auth, setAuth] = useState(null);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -369,9 +369,9 @@ export default function App(){
   const handleLocalLogin = role => {
     if (!import.meta.env.DEV) return;
     const localUser = role === 'superadmin' ? {
-      email:'local-superuser@localhost', name:'Local Superuser', role:'superadmin', uid:'local-superuser', localTest:true
+      email: 'local-superuser@localhost', name: 'Local Superuser', role: 'superadmin', uid: 'local-superuser', localTest: true
     } : {
-      email:'demo.fellow1@teachforbangladesh.org', name:'DEMO Fellow 01', role:'fellow', fellowId:'demo-fellow-1', afaGroup:'DEMO AFA 1', uid:'local-fellow', localTest:true
+      email: 'demo.fellow1@teachforbangladesh.org', name: 'DEMO Fellow 01', role: 'fellow', fellowId: 'demo-fellow-1', afaGroup: 'DEMO AFA 1', uid: 'local-fellow', localTest: true
     };
     localStorage.setItem('wa14-local-test-auth', JSON.stringify(localUser));
     setAuth(localUser);
@@ -384,12 +384,12 @@ export default function App(){
     return handleLogout();
   };
 
-  if (!authLoaded) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'400px',color:'#9DB09D',fontFamily:FONT}}>Loading…</div>;
+  if (!authLoaded) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading…</div>;
   if (!auth) return <LoginGate onLogin={handleLogin} onLocalLogin={handleLocalLogin} onRedirectLogin={handleRedirectLogin} error={authError} busy={authBusy} />;
   return <MainApp auth={auth} onLogout={handleLogoutAll} />;
 }
 
-function getLocalTestUser(){
+function getLocalTestUser() {
   try {
     const raw = localStorage.getItem('wa14-local-test-auth');
     return raw ? JSON.parse(raw) : null;
@@ -398,7 +398,7 @@ function getLocalTestUser(){
   }
 }
 
-function authErrorMessage(error){
+function authErrorMessage(error) {
   const messages = {
     'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Use the redirect option below or allow popups for this site.',
     'auth/unauthorized-domain': 'This site is not authorized in Firebase. Add its domain under Authentication settings.',
@@ -410,60 +410,75 @@ function authErrorMessage(error){
   return messages[error?.code] || 'Google sign-in could not be completed. Check your browser settings and try again.';
 }
 
-async function resolveRole(user){
-  const em = (user.email||'').trim().toLowerCase();
+async function resolveRole(user) {
+  const em = (user.email || '').trim().toLowerCase();
   let accounts = [];
   try {
     const res = await storage.get('wa14-accounts');
     accounts = res && res.value ? JSON.parse(res.value) : [];
-  } catch (e) { return { ok:false, error:'Could not verify right now -- please try again.' }; }
+  } catch (e) { return { ok: false, error: 'Could not verify right now -- please try again.' }; }
 
-  if (em === SUPERADMIN_EMAIL) return { ok:true, email:em, role:'superadmin', access:'full', name:user.displayName || 'Superadmin', uid:user.uid };
+  if (em === SUPERADMIN_EMAIL) return { ok: true, email: em, role: 'superadmin', access: 'full', name: user.displayName || 'Superadmin', uid: user.uid };
 
   if (STAFF_EMAIL_RE.test(em)) {
-    const match = accounts.find(a => a.email.toLowerCase()===em);
+    const match = accounts.find(a => a.email.toLowerCase() === em);
     const role = match?.role || 'staff';
-    const access = match?.access || (STAFF_ADMIN_ROLES.includes(role) || role==='planner' ? 'full' : DEFAULT_ACCESS);
-    return { ok:true, email:em, role, access, name:match?.name || user.displayName || em.split('@')[0], uid:user.uid };
+    const access = match?.access || (STAFF_ADMIN_ROLES.includes(role) || role === 'planner' ? 'full' : DEFAULT_ACCESS);
+    return { ok: true, email: em, role, access, name: match?.name || user.displayName || em.split('@')[0], uid: user.uid };
   }
 
   if (FELLOW_EMAIL_RE.test(em)) {
     try {
       const res = await storage.get('wa14-roster');
       const roster = res && res.value ? JSON.parse(res.value) : [];
-      const match = roster.find(r => r.email.toLowerCase()===em);
+      const match = roster.find(r => r.email.toLowerCase() === em);
       if (match) {
-        return { ok:true, email:em, role:'fellow', name:match.name, fellowId:match.id, afaGroup:match.afaGroup || '', uid:user.uid };
+        return { ok: true, email: em, role: 'fellow', name: match.name, fellowId: match.id, afaGroup: match.afaGroup || '', uid: user.uid };
       }
-    } catch (e) { return { ok:false, error:'Could not verify right now -- please try again.' }; }
-    return { ok:false, error:"This email isn't on the approved Fellow list yet. Ask a planner to add it." };
+    } catch (e) { return { ok: false, error: 'Could not verify right now -- please try again.' }; }
+    return { ok: false, error: "This email isn't on the approved Fellow list yet. Ask a planner to add it." };
   }
 
-  return { ok:false, error:'Enter a valid @teachforbangladesh.org email -- staff use name@teachforbangladesh.org, Fellows use firstname.lastname@teachforbangladesh.org.' };
+  return { ok: false, error: 'Enter a valid @teachforbangladesh.org email -- staff use name@teachforbangladesh.org, Fellows use firstname.lastname@teachforbangladesh.org.' };
 }
 
-function LoginGate({ onLogin, onLocalLogin, onRedirectLogin, error, busy }){
+function LoginGate({ onLogin, onLocalLogin, onRedirectLogin, error, busy }) {
   return (
-    <div className="wa14-app" style={{fontFamily:FONT, minHeight:'480px', display:'flex', alignItems:'center', justifyContent:'center', background:'#252625'}}>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:10, padding:32, width:340, maxWidth:'88vw'}}>
-        <div style={{fontWeight:800, fontSize:20, marginBottom:2}}>Training and Design</div>
-        <div style={{fontSize:12, color:'#9DB09D', marginBottom:4}}>Teach For Bangladesh</div>
-        <div style={{fontSize:12.5, color:'#9DB09D', marginBottom:20}}>Sign in with your Teach For Bangladesh Google account.</div>
-        {error && <div style={{color:'#D0A023', fontSize:12, marginBottom:10, lineHeight:1.4}}>{error}</div>}
-        <button type="button" onClick={onLogin} disabled={busy} className={btnPrimary+' w-full justify-center py-2.5 mt-1.5'} style={{opacity:busy?0.65:1}}>{busy ? 'Opening Google…' : 'Continue with Google'}</button>
-        {error && <button type="button" onClick={onRedirectLogin} disabled={busy} className={btnGhost+' w-full justify-center mt-2'}>Use redirect sign-in</button>}
-        {import.meta.env.DEV && <div style={{marginTop:22,paddingTop:16,borderTop:'1px solid #1F4A3C'}}><div style={{fontSize:11.5,color:'#9DB09D',marginBottom:8}}>Local testing only. These buttons are disabled in production.</div><div style={{display:'flex',gap:8}}><button type="button" onClick={()=>onLocalLogin('superadmin')} className={btnSecondary+' flex-1 justify-center'}>Test superuser</button><button type="button" onClick={()=>onLocalLogin('fellow')} className={btnSecondary+' flex-1 justify-center'}>Test Fellow</button></div></div>}
+    <div className="wa14-app" style={{ fontFamily: FONT, minHeight: '480px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#252625' }}>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 10, padding: 32, width: 340, maxWidth: '88vw' }}>
+        <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>Training and Design</div>
+        <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 4 }}>Teach For Bangladesh</div>
+        <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 20 }}>Sign in with your Teach For Bangladesh Google account.</div>
+        {error && <div style={{ color: '#D0A023', fontSize: 12, marginBottom: 10, lineHeight: 1.4 }}>{error}</div>}
+        <button type="button" onClick={onLogin} disabled={busy} className={btnPrimary + ' w-full justify-center py-2.5 mt-1.5'} style={{ opacity: busy ? 0.65 : 1 }}>{busy ? 'Opening Google…' : 'Continue with Google'}</button>
+        {error && <button type="button" onClick={onRedirectLogin} disabled={busy} className={btnGhost + ' w-full justify-center mt-2'}>Use redirect sign-in</button>}
+        {import.meta.env.DEV && <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid #1F4A3C' }}><div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 8 }}>Local testing only. These buttons are disabled in production.</div><div style={{ display: 'flex', gap: 8 }}><button type="button" onClick={() => onLocalLogin('superadmin')} className={btnSecondary + ' flex-1 justify-center'}>Test superuser</button><button type="button" onClick={() => onLocalLogin('fellow')} className={btnSecondary + ' flex-1 justify-center'}>Test Fellow</button></div></div>}
       </div>
     </div>
   );
 }
 
-function MainApp({ auth, onLogout }){
+const HASH_TABS = ['calendar', 'sessions', 'attendance', 'summary', 'fellows', 'rooms', 'sessionTypes', 'pillarTags', 'modes', 'requests', 'assessments', 'review', 'analytics', 'incidents', 'devices', 'planners', 'roles', 'staffCalendar'];
+
+function normalizeHashTab(hash, isAdmin, isFullAdmin, isSuperadmin) {
+  const base = HASH_TABS.includes(hash) ? hash : 'calendar';
+  if (base === 'staffCalendar' && isAdmin) return 'staffCalendar';
+  if (base === 'calendar') return 'calendar';
+  if (base === 'sessions' && isAdmin) return 'sessions';
+  if (base === 'attendance' && isFullAdmin) return 'attendance';
+  if ((base === 'summary' || base === 'fellows' || base === 'rooms' || base === 'sessionTypes' || base === 'pillarTags' || base === 'modes' || base === 'requests') && isFullAdmin) return base;
+  if ((base === 'assessments' || base === 'review' || base === 'analytics') && isAdmin) return base;
+  if ((base === 'incidents' || base === 'devices') && isFullAdmin) return base;
+  if ((base === 'planners' || base === 'roles') && isSuperadmin) return base;
+  return 'calendar';
+}
+
+function MainApp({ auth, onLogout }) {
   const isSuperadmin = auth.role === 'superadmin';
-  const access = auth.access || (isSuperadmin ? 'full' : (STAFF_ADMIN_ROLES.includes(auth.role) || auth.role==='planner' ? 'full' : DEFAULT_ACCESS));
-  const isFullControl = access==='full';
-  const isAssessmentsEditor = access==='full' || access==='resources_assessments';
-  const isAdmin = auth.role !== 'fellow' && (isFullControl || access==='resources' || isAssessmentsEditor);
+  const access = auth.access || (isSuperadmin ? 'full' : (STAFF_ADMIN_ROLES.includes(auth.role) || auth.role === 'planner' ? 'full' : DEFAULT_ACCESS));
+  const isFullControl = access === 'full';
+  const isAssessmentsEditor = access === 'full' || access === 'resources_assessments';
+  const isAdmin = auth.role !== 'fellow' && (isFullControl || access === 'resources' || isAssessmentsEditor);
   const isFullAdmin = isSuperadmin || isFullControl;
   const isViewer = !isAdmin; // read-only staff/fellow
   const canEditAssessments = isAssessmentsEditor;
@@ -486,11 +501,13 @@ function MainApp({ auth, onLogout }){
   const [attendanceCodes, setAttendanceCodes] = useState(null);
   const [assessmentIncidents, setAssessmentIncidents] = useState(null);
   const [deviceRequests, setDeviceRequests] = useState(null);
+  const [staffTasks, setStaffTasks] = useState(null);
   const [loaded, setLoaded] = useState(false);
-  const [tab, setTab] = useState('calendar');
+  const [tab, setTab] = useState(() => normalizeHashTab(window.location.hash.slice(1), isAdmin, isFullAdmin, isSuperadmin));
   const [activeWeek, setActiveWeek] = useState(0);
   const [hiddenDays, setHiddenDays] = useState({});
   const [editing, setEditing] = useState(null);
+  const [staffEditing, setStaffEditing] = useState(null);
   const [placement, setPlacement] = useState(null);
   const [assigning, setAssigning] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -501,8 +518,14 @@ function MainApp({ auth, onLogout }){
   const [sessionSearch, setSessionSearch] = useState('');
   const [toast, setToast] = useState('');
   const saveTimer = useRef(null);
+  const staffSaveTimer = useRef(null);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
+  const staffTasksRef = useRef(staffTasks);
+  staffTasksRef.current = staffTasks;
+  const lastRemoteSessions = useRef(null);
+  const lastRemoteStaff = useRef(null);
+  const duplicateGuard = useRef(0);
   const rosterSaveTimer = useRef(null);
   const plannerSaveTimer = useRef(null);
   const roomSaveTimer = useRef(null);
@@ -544,7 +567,7 @@ function MainApp({ auth, onLogout }){
         else {
           const a = await storage.get('wa14-accounts');
           const accounts = a && a.value ? JSON.parse(a.value) : DEFAULT_ACCOUNTS;
-          setPlanners(accounts.filter(x=>x.role==='planner' || x.role==='resource_planner').map((x,i)=>({...x,id:x.id||'p'+i})));
+          setPlanners(accounts.filter(x => x.role === 'planner' || x.role === 'resource_planner').map((x, i) => ({ ...x, id: x.id || 'p' + i })));
         }
       }
       catch (e) { setPlanners([]); }
@@ -577,11 +600,11 @@ function MainApp({ auth, onLogout }){
         setCityCodes(r && r.value ? JSON.parse(r.value) : []);
       }
       catch (e) { setCityCodes([]); }
-      try { const r = await storage.get('wa14-settings'); const settings = r && r.value ? JSON.parse(r.value) : {}; setAcademySettings({...settings, fellowWeeks:Array.isArray(settings.fellowWeeks) ? settings.fellowWeeks : WEEKS}); }
-      catch (e) { setAcademySettings({fellowWeeks:WEEKS}); }
+      try { const r = await storage.get('wa14-settings'); const settings = r && r.value ? JSON.parse(r.value) : {}; setAcademySettings({ ...settings, fellowWeeks: Array.isArray(settings.fellowWeeks) ? settings.fellowWeeks : WEEKS }); }
+      catch (e) { setAcademySettings({ fellowWeeks: WEEKS }); }
       try { loadedQuestions = parseStoredArray(await storage.get(ASSESSMENT_KEYS.questions)); setAssessmentQuestions(loadedQuestions); }
       catch (e) { setAssessmentQuestions([]); }
-      try { setAssessments(parseStoredArray(await storage.get(ASSESSMENT_KEYS.assessments)).map(assessment=>normalizeAssessment(assessment, loadedQuestions))); }
+      try { setAssessments(parseStoredArray(await storage.get(ASSESSMENT_KEYS.assessments)).map(assessment => normalizeAssessment(assessment, loadedQuestions))); }
       catch (e) { setAssessments([]); }
       try { setAssessmentAttempts(parseStoredArray(await storage.get(ASSESSMENT_KEYS.attempts))); }
       catch (e) { setAssessmentAttempts([]); }
@@ -593,8 +616,41 @@ function MainApp({ auth, onLogout }){
       catch (e) { setAssessmentIncidents([]); }
       try { setDeviceRequests(parseStoredArray(await storage.get(ASSESSMENT_KEYS.deviceRequests))); }
       catch (e) { setDeviceRequests([]); }
+      try {
+        const r = await storage.get('wa14-staff-tasks');
+        const raw = r && r.value ? JSON.parse(r.value) : [];
+        setStaffTasks(Array.isArray(raw) ? raw : []);
+      }
+      catch (e) { setStaffTasks([]); }
       setLoaded(true);
     })();
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => setTab(normalizeHashTab(window.location.hash.slice(1), isAdmin, isFullAdmin, isSuperadmin));
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [isAdmin, isFullAdmin, isSuperadmin]);
+
+  useEffect(() => {
+    lastRemoteSessions.current = JSON.stringify(sessions);
+    lastRemoteStaff.current = JSON.stringify(staffTasks);
+    const unsubSessions = storage.subscribe('wa14-sessions', (rec) => {
+      const next = rec && rec.value ? JSON.parse(rec.value) : [];
+      const serialized = JSON.stringify(next);
+      if (serialized === lastRemoteSessions.current) return;
+      lastRemoteSessions.current = serialized;
+      setSessions(next.map(s => ({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [] })));
+    });
+    const unsubStaff = storage.subscribe('wa14-staff-tasks', (rec) => {
+      const next = rec && rec.value ? JSON.parse(rec.value) : [];
+      if (!Array.isArray(next)) return;
+      const serialized = JSON.stringify(next);
+      if (serialized === lastRemoteStaff.current) return;
+      lastRemoteStaff.current = serialized;
+      setStaffTasks(next);
+    });
+    return () => { unsubSessions(); unsubStaff(); };
   }, []);
 
   const debouncedPersist = (setter, timerRef, key, onError) => (next) => {
@@ -606,6 +662,7 @@ function MainApp({ auth, onLogout }){
     }, 250);
   };
   const persist = debouncedPersist(setSessions, saveTimer, 'wa14-sessions');
+  const persistStaffTasks = debouncedPersist(setStaffTasks, staffSaveTimer, 'wa14-staff-tasks');
   const persistRoster = debouncedPersist(setRoster, rosterSaveTimer, 'wa14-roster');
   const persistPlanners = debouncedPersist(setPlanners, plannerSaveTimer, 'wa14-planners');
   const persistRequests = debouncedPersist(setRequests, requestSaveTimer, 'wa14-requests');
@@ -618,402 +675,622 @@ function MainApp({ auth, onLogout }){
   const persistSettings = debouncedPersist(setAcademySettings, settingsSaveTimer, 'wa14-settings');
   const persistAssessments = debouncedPersist(setAssessments, assessmentsSaveTimer, ASSESSMENT_KEYS.assessments);
   const persistAssessmentQuestions = debouncedPersist(setAssessmentQuestions, questionsSaveTimer, ASSESSMENT_KEYS.questions);
-  const persistAssessmentAttempts = debouncedPersist(setAssessmentAttempts, attemptsSaveTimer, ASSESSMENT_KEYS.attempts, err => { if (err) showToast('Save failed: '+(err.code || err.message)+' -- check that you are signed in with a Teach For Bangladesh account.'); });
+  const persistAssessmentAttempts = debouncedPersist(setAssessmentAttempts, attemptsSaveTimer, ASSESSMENT_KEYS.attempts, err => { if (err) showToast('Save failed: ' + (err.code || err.message) + ' -- check that you are signed in with a Teach For Bangladesh account.'); });
   const persistAttendance = debouncedPersist(setAttendance, attendanceSaveTimer, ASSESSMENT_KEYS.attendance);
   const persistAttendanceCodes = debouncedPersist(setAttendanceCodes, attendanceCodesSaveTimer, ASSESSMENT_KEYS.attendanceCodes);
   const persistAssessmentIncidents = debouncedPersist(setAssessmentIncidents, incidentsSaveTimer, ASSESSMENT_KEYS.incidents);
   const persistDeviceRequests = debouncedPersist(setDeviceRequests, deviceRequestsSaveTimer, ASSESSMENT_KEYS.deviceRequests);
   const persistRoomsAndRoster = nextRooms => {
     persistRooms(nextRooms);
-    if (roster) persistRoster(roster.map(fellow=>({...fellow,roomIds:nextRooms.filter(room=>(room.fellowIds||[]).includes(fellow.id)).map(room=>room.id)})));
+    if (roster) persistRoster(roster.map(fellow => ({ ...fellow, roomIds: nextRooms.filter(room => (room.fellowIds || []).includes(fellow.id)).map(room => room.id) })));
   };
-
   const addAccount = async (person, role) => {
     try {
       const res = await storage.get('wa14-accounts');
       const accounts = res && res.value ? JSON.parse(res.value) : DEFAULT_ACCOUNTS;
-      const next = accounts.filter(a=>a.email.toLowerCase()!==person.email.toLowerCase());
-      next.push({email:person.email, name:person.name, role, access:person.access || (STAFF_ADMIN_ROLES.includes(role) || role==='planner' ? 'full' : DEFAULT_ACCESS)});
+      const next = accounts.filter(a => a.email.toLowerCase() !== person.email.toLowerCase());
+      const access = person.access || (STAFF_ADMIN_ROLES.includes(role) || role === 'planner' ? 'full' : DEFAULT_ACCESS);
+      next.push({ email: person.email, name: person.name, role, access });
       await storage.set('wa14-accounts', JSON.stringify(next));
     } catch (e) { console.error('account save failed', e); }
   };
 
   const recordIncident = (incident) => {
-    const entry = { id:'inc'+Date.now()+Math.floor(Math.random()*1000), createdAt:new Date().toISOString(), ...(incident||{}) };
-    persistAssessmentIncidents([...(assessmentIncidents||[]), entry]);
-  };
-  const reportAttendanceCode = (session, code, fellowEntry) => {
-    const normalized = String(code||'').trim().toUpperCase();
-    const match = (attendanceCodes||[]).find(c=>String(c.sessionId)===String(session.id) && String(c.code).toUpperCase()===normalized);
-    if (!match) { showToast('Invalid code for this session'); return false; }
-    if (match.used) { showToast('This code has already been used'); return false; }
-    const fellowId = fellowEntry?.fellowId || auth.fellowId;
-    const fellowName = friendlyFellowName({...fellowEntry, fellowId}, roster);
-    persistAttendanceCodes((attendanceCodes||[]).map(c=>String(c.id)===String(match.id) ? {...c, used:true, usedBy:fellowId, usedByName:fellowName, usedAt:new Date().toISOString()} : c));
-    persistAttendance([...(attendance||[]), { id:'att'+Date.now(), sessionId:session.id, fellowId, fellowName, status:'on_time', recordedAt:new Date().toISOString(), codeUsed:match.code }]);
-    showToast('Attendance recorded');
-    return true;
-  };
-  const generateSessionCodes = (session, count, length) => {
-    const list = generateAttendanceCodes(count, length).map(code=>({ id:'code-'+Date.now()+'-'+code, sessionId:session.id, sessionName:session.name, date:session.date||'', code, used:false, usedBy:'', usedByName:'', usedAt:'', createdAt:new Date().toISOString() }));
-    persistAttendanceCodes([...(attendanceCodes||[]).filter(c=>String(c.sessionId)!==String(session.id)), ...list]);
-    showToast('Generated '+list.length+' codes for '+session.name);
-  };
-  const exportAttendanceCodes = (sessionId) => {
-    const targetSessions = sessionId ? sessions.filter(s=>String(s.id)===String(sessionId)) : sessions.slice();
-    const rows = targetSessions.flatMap(session=>{
-      const list = (attendanceCodes||[]).filter(c=>String(c.sessionId)===String(session.id));
-      if (!list.length) return [{ Session:session.name, Date:session.date||'', 'Start Time':session.start||'', Code:'(no codes generated yet)', Used:'', 'Fellow Name':'', 'Used At':'' }];
-      return list.map(c=>({ Session:session.name, Date:session.date||'', 'Start Time':session.start||'', Code:c.code, Used:c.used?'Yes':'No', 'Fellow Name':c.usedByName||friendlyFellowName({fellowId:c.usedBy}, roster), 'Used At':c.usedAt||'' }));
-    });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Attendance Codes');
-    XLSX.writeFile(wb, 'WA14_Attendance_Codes.xlsx');
-    showToast('Attendance codes exported');
-  };
-  const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(''), 2200); };
+  const entry = { id: 'inc' + Date.now() + Math.floor(Math.random() * 1000), createdAt: new Date().toISOString(), ...(incident || {}) };
+  persistAssessmentIncidents([...(assessmentIncidents || []), entry]);
+};
+const reportAttendanceCode = (session, code, fellowEntry) => {
+  const normalized = String(code || '').trim().toUpperCase();
+  const match = (attendanceCodes || []).find(c => String(c.sessionId) === String(session.id) && String(c.code).toUpperCase() === normalized);
+  if (!match) { showToast('Invalid code for this session'); return false; }
+  if (match.used) { showToast('This code has already been used'); return false; }
+  const fellowId = fellowEntry?.fellowId || auth.fellowId;
+  const fellowName = friendlyFellowName({ ...fellowEntry, fellowId }, roster);
+  persistAttendanceCodes((attendanceCodes || []).map(c => String(c.id) === String(match.id) ? { ...c, used: true, usedBy: fellowId, usedByName: fellowName, usedAt: new Date().toISOString() } : c));
+  persistAttendance([...(attendance || []), { id: 'att' + Date.now(), sessionId: session.id, fellowId, fellowName, status: 'on_time', recordedAt: new Date().toISOString(), codeUsed: match.code }]);
+  showToast('Attendance recorded');
+  return true;
+};
+const generateSessionCodes = (session, count, length) => {
+  const list = generateAttendanceCodes(count, length).map(code => ({ id: 'code-' + Date.now() + '-' + code, sessionId: session.id, sessionName: session.name, date: session.date || '', code, used: false, usedBy: '', usedByName: '', usedAt: '', createdAt: new Date().toISOString() }));
+  persistAttendanceCodes([...(attendanceCodes || []).filter(c => String(c.sessionId) !== String(session.id)), ...list]);
+  showToast('Generated ' + list.length + ' codes for ' + session.name);
+};
+const exportAttendanceCodes = (sessionId) => {
+  const targetSessions = sessionId ? sessions.filter(s => String(s.id) === String(sessionId)) : sessions.slice();
+  const rows = targetSessions.flatMap(session => {
+    const list = (attendanceCodes || []).filter(c => String(c.sessionId) === String(session.id));
+    if (!list.length) return [{ Session: session.name, Date: session.date || '', 'Start Time': session.start || '', Code: '(no codes generated yet)', Used: '', 'Fellow Name': '', 'Used At': '' }];
+    return list.map(c => ({ Session: session.name, Date: session.date || '', 'Start Time': session.start || '', Code: c.code, Used: c.used ? 'Yes' : 'No', 'Fellow Name': c.usedByName || friendlyFellowName({ fellowId: c.usedBy }, roster), 'Used At': c.usedAt || '' }));
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Attendance Codes');
+  XLSX.writeFile(wb, 'WA14_Attendance_Codes.xlsx');
+  showToast('Attendance codes exported');
+};
+const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
 
-  const importExcel = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.xlsx,.xls,.csv';
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        const data = await file.arrayBuffer();
-        const wb = XLSX.read(data, { type: 'array' });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        if (!rows.length) { showToast('No data found in file'); return; }
+const importExcel = () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx,.xls,.csv';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      if (!rows.length) { showToast('No data found in file'); return; }
 
-        // Helper to find a value from row by possible keys (case-insensitive, trimmed)
-        const findValue = (row, possibleKeys) => {
-          // First try exact match
-          for (const key of possibleKeys) {
-            if (row[key] !== undefined && row[key] !== '') return String(row[key]).trim();
-          }
-          // Then try case-insensitive match with trimmed keys
-          const rowKeys = Object.keys(row);
-          for (const key of possibleKeys) {
-            const match = rowKeys.find(k => k.trim().toLowerCase() === key.toLowerCase());
-            if (match && row[match] !== undefined && row[match] !== '') return String(row[match]).trim();
-          }
-          return '';
-        };
-
-        const startDate = academySettings?.startDate;
-        const newSessions = [];
-        const skippedRows = [];
-
-        rows.forEach((row, idx) => {
-          const date = findValue(row, ['Date', 'date', 'DATE', 'Session Date', 'session date', 'Day', 'day']);
-          const start = findValue(row, ['Start', 'start', 'START', 'Start Time', 'start time', 'Time Start', 'Begin', 'begin']);
-          const end = findValue(row, ['End', 'end', 'END', 'End Time', 'end time', 'Time End', 'Finish', 'finish']);
-          const name = findValue(row, ['Session Name', 'name', 'NAME', 'Session', 'session', 'SESSION', 'Session Title', 'session title', 'Title', 'title', 'Activity', 'activity']);
-
-          if (!date || !name) {
-            skippedRows.push({ row: idx + 1, reason: !date ? 'missing date' : 'missing name', data: JSON.stringify(row).substring(0, 100) });
-            return;
-          }
-
-          // Parse date - handle various formats
-          let dateObj;
-          if (date.includes('-')) {
-            // ISO format: YYYY-MM-DD
-            dateObj = new Date(date + 'T00:00:00');
-          } else if (date.includes('/')) {
-            // Format: MM/DD/YYYY or DD/MM/YYYY
-            const parts = date.split('/');
-            if (parts[0].length === 4) {
-              // YYYY/MM/DD
-              dateObj = new Date(date.replace(/\//g, '-') + 'T00:00:00');
-            } else {
-              // Assume MM/DD/YYYY
-              dateObj = new Date(parts[2], parseInt(parts[0]) - 1, parts[1]);
-            }
-          } else {
-            // Try parsing as-is
-            dateObj = new Date(date);
-          }
-
-          if (isNaN(dateObj.getTime())) {
-            skippedRows.push({ row: idx + 1, reason: 'invalid date: ' + date });
-            return;
-          }
-
-          // Format date as YYYY-MM-DD
-          const isoDate = dateObj.getFullYear() + '-' +
-            String(dateObj.getMonth() + 1).padStart(2, '0') + '-' +
-            String(dateObj.getDate()).padStart(2, '0');
-
-          const weekday = dateObj.toLocaleDateString(undefined, { weekday: 'long' });
-          const week = startDate ? weekForDate(isoDate, startDate) : parseInt(findValue(row, ['Week', 'week', 'WEEK'])) || 0;
-
-          newSessions.push({
-            id: 'imp-' + Date.now() + '-' + idx,
-            week: week,
-            date: isoDate,
-            weekday,
-            start,
-            end,
-            name,
-            type: findValue(row, ['Type', 'type', 'TYPE', 'Session Type', 'session type', 'Category', 'category']) || findValue(row, ['Pillar', 'pillar', 'PILLAR']) || SESSION_TYPES[0],
-            pillarIds: [],
-            mode: findValue(row, ['Mode', 'mode', 'MODE', 'Format', 'format']) || 'Sync',
-            facilitators: findValue(row, ['Facilitators', 'facilitators', 'FACILITATORS', 'Facilitator', 'facilitator', 'Presenter', 'presenter', 'Lead', 'lead']).split(',').map(s => s.trim()).filter(Boolean),
-            rooms: [],
-            resources: [],
-            outcomes: findValue(row, ['Outcomes', 'outcomes', 'OUTCOMES', 'Outcome', 'outcome', 'Objectives', 'objectives', 'Objective', 'objective']).split('|').map(s => s.trim()).filter(Boolean),
-            notes: findValue(row, ['Notes', 'notes', 'NOTES', 'Note', 'note', 'Description', 'description']),
-            fellowNotes: findValue(row, ['Fellow Notes', 'fellow notes', 'Fellow Note', 'fellow note']),
-            afaGroup: findValue(row, ['AFA Group', 'afa group', 'AFA', 'afa', 'Group', 'group']),
-            calendared: true,
-          });
-        });
-
-        if (skippedRows.length > 0) {
-          console.log('Import skipped rows:', skippedRows);
+      // Helper to find a value from row by possible keys (case-insensitive, trimmed)
+      const findValue = (row, possibleKeys) => {
+        // First try exact match
+        for (const key of possibleKeys) {
+          if (row[key] !== undefined && row[key] !== '') return String(row[key]).trim();
         }
+        // Then try case-insensitive match with trimmed keys
+        const rowKeys = Object.keys(row);
+        for (const key of possibleKeys) {
+          const match = rowKeys.find(k => k.trim().toLowerCase() === key.toLowerCase());
+          if (match && row[match] !== undefined && row[match] !== '') return String(row[match]).trim();
+        }
+        return '';
+      };
 
-        if (!newSessions.length) {
-          const skipInfo = skippedRows.slice(0, 3).map(s => `Row ${s.row}: ${s.reason}`).join('; ');
-          showToast('No valid sessions. ' + (skipInfo ? 'Issues: ' + skipInfo : 'Check column names'));
+      const startDate = academySettings?.startDate;
+      const newSessions = [];
+      const skippedRows = [];
+
+      rows.forEach((row, idx) => {
+        const date = findValue(row, ['Date', 'date', 'DATE', 'Session Date', 'session date', 'Day', 'day']);
+        const start = findValue(row, ['Start', 'start', 'START', 'Start Time', 'start time', 'Time Start', 'Begin', 'begin']);
+        const end = findValue(row, ['End', 'end', 'END', 'End Time', 'end time', 'Time End', 'Finish', 'finish']);
+        const name = findValue(row, ['Session Name', 'name', 'NAME', 'Session', 'session', 'SESSION', 'Session Title', 'session title', 'Title', 'title', 'Activity', 'activity']);
+
+        if (!date || !name) {
+          skippedRows.push({ row: idx + 1, reason: !date ? 'missing date' : 'missing name', data: JSON.stringify(row).substring(0, 100) });
           return;
         }
 
-        const next = [...sessions, ...newSessions];
-        persist(next);
-        showToast('Imported ' + newSessions.length + ' session' + (newSessions.length === 1 ? '' : 's') + (skippedRows.length ? ' (' + skippedRows.length + ' skipped)' : ''));
-      } catch (err) {
-        console.error('Import failed', err);
-        showToast('Import failed: ' + err.message);
+        // Parse date - handle various formats
+        let dateObj;
+        if (date.includes('-')) {
+          // ISO format: YYYY-MM-DD
+          dateObj = new Date(date + 'T00:00:00');
+        } else if (date.includes('/')) {
+          // Format: MM/DD/YYYY or DD/MM/YYYY
+          const parts = date.split('/');
+          if (parts[0].length === 4) {
+            // YYYY/MM/DD
+            dateObj = new Date(date.replace(/\//g, '-') + 'T00:00:00');
+          } else {
+            // Assume MM/DD/YYYY
+            dateObj = new Date(parts[2], parseInt(parts[0]) - 1, parts[1]);
+          }
+        } else {
+          // Try parsing as-is
+          dateObj = new Date(date);
+        }
+
+        if (isNaN(dateObj.getTime())) {
+          skippedRows.push({ row: idx + 1, reason: 'invalid date: ' + date });
+          return;
+        }
+
+        // Format date as YYYY-MM-DD
+        const isoDate = dateObj.getFullYear() + '-' +
+          String(dateObj.getMonth() + 1).padStart(2, '0') + '-' +
+          String(dateObj.getDate()).padStart(2, '0');
+
+        const weekday = dateObj.toLocaleDateString(undefined, { weekday: 'long' });
+        const week = startDate ? weekForDate(isoDate, startDate) : parseInt(findValue(row, ['Week', 'week', 'WEEK'])) || 0;
+
+        newSessions.push({
+          id: 'imp-' + Date.now() + '-' + idx,
+          week: week,
+          date: isoDate,
+          weekday,
+          start,
+          end,
+          name,
+          type: findValue(row, ['Type', 'type', 'TYPE', 'Session Type', 'session type', 'Category', 'category']) || findValue(row, ['Pillar', 'pillar', 'PILLAR']) || SESSION_TYPES[0],
+          pillarIds: [],
+          mode: findValue(row, ['Mode', 'mode', 'MODE', 'Format', 'format']) || 'Sync',
+          facilitators: findValue(row, ['Facilitators', 'facilitators', 'FACILITATORS', 'Facilitator', 'facilitator', 'Presenter', 'presenter', 'Lead', 'lead']).split(',').map(s => s.trim()).filter(Boolean),
+          rooms: [],
+          resources: [],
+          outcomes: findValue(row, ['Outcomes', 'outcomes', 'OUTCOMES', 'Outcome', 'outcome', 'Objectives', 'objectives', 'Objective', 'objective']).split('|').map(s => s.trim()).filter(Boolean),
+          notes: findValue(row, ['Notes', 'notes', 'NOTES', 'Note', 'note', 'Description', 'description']),
+          fellowNotes: findValue(row, ['Fellow Notes', 'fellow notes', 'Fellow Note', 'fellow note']),
+          afaGroup: findValue(row, ['AFA Group', 'afa group', 'AFA', 'afa', 'Group', 'group']),
+          calendared: true,
+        });
+      });
+
+      if (skippedRows.length > 0) {
+        console.log('Import skipped rows:', skippedRows);
       }
-    };
-    input.click();
+
+      if (!newSessions.length) {
+        const skipInfo = skippedRows.slice(0, 3).map(s => `Row ${s.row}: ${s.reason}`).join('; ');
+        showToast('No valid sessions. ' + (skipInfo ? 'Issues: ' + skipInfo : 'Check column names'));
+        return;
+      }
+
+      const next = [...sessions, ...newSessions];
+      persist(next);
+      showToast('Imported ' + newSessions.length + ' session' + (newSessions.length === 1 ? '' : 's') + (skippedRows.length ? ' (' + skippedRows.length + ' skipped)' : ''));
+    } catch (err) {
+      console.error('Import failed', err);
+      showToast('Import failed: ' + err.message);
+    }
   };
+  input.click();
+};
 
 
-  const saveSession = (s) => {
-    const current = sessionsRef.current;
-    const next = current.find(x=>x.id===s.id) ? current.map(x => x.id===s.id ? s : x) : [...current, s];
-    persist(next); setEditing(null); showToast('Session saved');
-  };
-  const deleteSession = (id) => { persist(sessions.filter(x=>x.id!==id)); setEditing(null); showToast('Session removed'); };
-  const duplicateSession = (s) => {
-    const copy = { ...s, id:newId(), name:(s.name||'Untitled session')+' (copy)', date:'', weekday:'', start:'', end:'', week:0, calendared:false };
-    persist([...sessionsRef.current, copy]);
-    setEditing(copy);
-    showToast('Session duplicated -- it is unscheduled; set a date/time and save');
-  };
-  const resetSeed = () => {
-    if (!window.confirm('Reset all sessions back to the original WA14 schedule? Your edits will be lost.')) return;
-    persist(SEED); showToast('Reset to original schedule');
-  };
-  const exportExcel = async () => {
-    const rows = sessions.map(s => ({
-      Week: s.week!=null ? 'Week '+String(s.week).padStart(2,'0') : '',
-      Date: s.date || '', Weekday: s.weekday || '', Start: s.start || '', End: s.end || '',
-      'Duration (min)': (s.start && s.end) ? durationMin(s) : '',
-      'Session Name': s.name, Type: s.type, Pillars: sessionPillarNames(s, pillarTags).join(' | '), Mode: s.mode,
-      Facilitators: fmtFacilitators(s.facilitators, rooms, planners),
-      Resources: (s.resources||[]).map(r=>r.label+': '+r.url).join(' | '),
-      Outcomes: (s.outcomes||[]).join(' | '),
-      Calendared: s.calendared ? 'Yes' : 'No',
-    }));
-    rows.sort((a,b) => (a.Date||'zzzz').localeCompare(b.Date||'zzzz') || (a.Start||'').localeCompare(b.Start||''));
-    const wb = XLSX.utils.book_new();
-    const append = (name, data) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name);
-    append('Calendar', rows);
-    append('Sessions', rows);
-    append('Time Summary', sessions.map(session=>({Week:session.week,Mode:session.mode,Session:session.name,DurationMinutes:session.start&&session.end?durationMin(session):''})));
-    append('Fellows', roster.map(fellow=>({Name:fellow.name,Email:fellow.email,Track:fellow.track,Grade:fellow.grade,PlacementCity:fellow.placementCity,AFAGroup:fellow.afaGroup,RoomIds:(fellow.roomIds||[]).join(', ')})));
-    append('Assessments', assessments.map(assessment=>({Title:assessment.title,SessionId:assessment.sessionId,Status:assessment.status,Questions:(assessment.questions||[]).length,Fellows:(assessment.assignmentGroups||[]).flatMap(group=>group.fellowIds||[]).length})));
-    append('Questions', assessments.flatMap(assessment=>(assessment.questions||[]).map(question=>({Assessment:assessment.title,Question:question.text,Type:question.type,ImageUrl:question.imageUrl||'',Options:(question.options||[]).map(option=>typeof option==='string'?option:option.text).join(' | '),Correct:(question.correct||[]).join(' | '),Rubric:question.rubric||'',ExpectedConcepts:(question.expectedConcepts||[]).join(' | '),Points:question.points}))));
-    append('Attempts', assessmentAttempts.map(attempt=>({AssessmentId:attempt.assessmentId,FellowId:attempt.fellowId,Status:attempt.status,StartedAt:attempt.startedAt,SubmittedAt:attempt.submittedAt||'',Answers:JSON.stringify(attempt.answers||{}),Reviews:JSON.stringify(attempt.reviews||{})})));
-    append('Paragraph reviews', assessmentAttempts.flatMap(attempt=>Object.entries(attempt.reviews||{}).map(([questionId,review])=>({AssessmentId:attempt.assessmentId,FellowId:attempt.fellowId,QuestionId:questionId,Status:review.status||'',Score:review.score??'',Feedback:review.feedback||'',Reviewer:review.reviewer||'',ReviewedAt:review.reviewedAt||'',AISuggestedScore:review.aiSuggestion?.suggestedScore??'',AIConfidence:review.aiSuggestion?.confidence??'',AIFeedback:review.aiSuggestion?.feedback||''}))));
-    append('Attendance', attendance.map(entry=>({SessionId:entry.sessionId,FellowId:entry.fellowId,Status:entry.status,RecordedAt:entry.recordedAt})));
-    append('Analytics', sessions.map(session=>({Session:session.name,OnTime:attendance.filter(entry=>entry.sessionId===session.id&&entry.status==='on_time').length,Late:attendance.filter(entry=>entry.sessionId===session.id&&entry.status==='late').length})));
-    XLSX.writeFile(wb, 'WA14_Training_Design_Export.xlsx');
-    showToast('Exported to Excel');
-  };
+const saveSession = (s) => {
+  const current = sessionsRef.current;
+  const next = current.find(x => String(x.id) === String(s.id)) ? current.map(x => String(x.id) === String(s.id) ? s : x) : [...current, s];
+  persist(next); setEditing(null); showToast('Session saved');
+};
+const deleteSession = (id) => { persist(sessions.filter(x => String(x.id) !== String(id))); setEditing(null); showToast('Session removed'); };
+const duplicateSession = (s) => {
+  const now = Date.now();
+  if (now - duplicateGuard.current < 400) return;
+  duplicateGuard.current = now;
+  const base = sessionsRef.current;
+  if (base.some(x => String(x.name) === String((s.name || 'Untitled session') + ' (copy)') && !x.date)) return;
+  const copy = { ...s, id: 'dup-' + now + '-' + Math.floor(Math.random() * 1000), name: (s.name || 'Untitled session') + ' (copy)', date: '', weekday: '', start: '', end: '', week: 0, calendared: false };
+  setSessions(prev => prev ? [...prev, copy] : [copy]);
+  persist([...base, copy]);
+  setEditing(copy);
+  showToast('Session duplicated -- it is unscheduled; set a date/time and save');
+};
+const resetSeed = () => {
+  if (!window.confirm('Reset all sessions back to the original WA14 schedule? Your edits will be lost.')) return;
+  persist(SEED); showToast('Reset to original schedule');
+};
 
-  const requestUpdate = (req) => {
-    const entry = { id:'req'+Date.now(), ...req, createdAt:new Date().toISOString(), resolved:false };
-    persistRequests([...(requests||[]), entry]);
-    showToast('Request sent to the planning team');
-  };
-  const resolveRequest = (id, resolved) => persistRequests(requests.map(r => r.id===id ? {...r, resolved} : r));
-  const deleteRequest = (id) => persistRequests(requests.filter(r=>r.id!==id));
-  const seedDemo = () => {
-    if (!window.confirm('Create demo Fellows, sessions, questions, and assessments?')) return;
-    const demoFellows = Array.from({length:10},(_,index)=>({id:`demo-fellow-${index+1}`,name:`DEMO Fellow ${String(index+1).padStart(2,'0')}`,email:`demo.fellow${index+1}@teachforbangladesh.org`,afaGroup:`DEMO AFA ${index%3+1}`,track:index%2?'secondary':'primary',placementCity:['Dhaka','Chattogram','Rajshahi'][index%3]}));
-    const demoSessions = Array.from({length:5},(_,index)=>({id:90000+index,week:index%3,date:`2026-11-${String(1+index).padStart(2,'0')}`,weekday:'Sunday',start:'10:00',end:'11:00',name:`DEMO Session ${index+1}`,pillar:'Academic Content',mode:'Workshop',facilitators:['Demo Facilitator'],resources:[],outcomes:['Demo outcome'],notes:'',fellowNotes:'',afaGroup:`DEMO AFA ${index%3+1}`,attendanceCode:`DEMO${index+1}`,calendared:true}));
-    const demoQuestions = Array.from({length:5},(_,index)=>({id:`demo-question-${index+1}`,type:'single',text:`DEMO Question ${index+1}`,options:['Option A','Option B','Option C'],gridRows:['Row 1'],gridCols:['Column 1'],correct:['Option A'],points:1,timeLimit:0,imageUrl:''}));
-    const demoAssessments = demoSessions.map((session,index)=>({id:`demo-assessment-${index+1}`,sessionId:session.id,title:`DEMO Assessment ${index+1}`,description:'Demo assessment',status:'published',startsAt:'2026-10-01T00:00',endsAt:'2026-12-31T23:59',durationMinutes:20,questionIds:demoQuestions.map(question=>question.id),assignmentGroups:[{id:`demo-group-${index+1}`,track:index%2?'secondary':'primary',fellowIds:demoFellows.filter(fellow=>fellow.track===(index%2?'secondary':'primary')).map(fellow=>fellow.id),questionIds:demoQuestions.map(question=>question.id)}],demo:true}));
-    demoQuestions.push({id:'demo-paragraph-question',type:'paragraph',text:'DEMO reflection: Describe one teaching practice you will apply and why.',options:[],correct:[],points:3,timeLimit:0,imageUrl:'',rubric:'Name a specific teaching practice and explain why it supports learning.',expectedConcepts:['specific practice','reasoning']});
-    demoAssessments.forEach(assessment=>{
-      assessment.startsAt='2026-01-01T00:00';
-      assessment.endsAt='2026-12-31T23:59';
-      assessment.questions=demoQuestions.map(question=>normalizeQuestion(question,assessment.id));
-      assessment.questionIds=assessment.questions.map(question=>question.id);
-      assessment.assignmentGroups.forEach(group=>{group.questionIds=assessment.questionIds;});
-    });
-    persistRoster([...roster.filter(fellow=>!fellow.id?.toString().startsWith('demo-')), ...demoFellows]);
-    persist([...sessions.filter(session=>!session.name?.startsWith('DEMO ')), ...demoSessions]);
-    persistAssessmentQuestions([...assessmentQuestions.filter(question=>!question.id?.toString().startsWith('demo-')), ...demoQuestions]);
-    persistAssessments([...assessments.filter(assessment=>!assessment.id?.toString().startsWith('demo-')), ...demoAssessments]);
-    showToast('Demo data created');
-  };
-  const deleteDemo = () => {
-    if (!window.confirm('Delete all DEMO records?')) return;
-    persistRoster(roster.filter(fellow=>!fellow.id?.toString().startsWith('demo-')));
-    persist(sessions.filter(session=>!session.name?.startsWith('DEMO ')));
-    persistAssessmentQuestions(assessmentQuestions.filter(question=>!question.id?.toString().startsWith('demo-')));
-    persistAssessments(assessments.filter(assessment=>!assessment.id?.toString().startsWith('demo-')));
-    persistAssessmentAttempts(assessmentAttempts.filter(attempt=>!attempt.id?.toString().startsWith('demo-')));
-    persistAttendance(attendance.filter(entry=>!entry.id?.toString().startsWith('demo-')));
-    showToast('Demo data deleted');
-  };
+const saveStaffTask = (t) => {
+  const current = staffTasksRef.current;
+  const next = current.find(x => String(x.id) === String(t.id)) ? current.map(x => String(x.id) === String(t.id) ? t : x) : [...current, t];
+  persistStaffTasks(next); setStaffEditing(null); showToast('Staff task saved');
+};
+const deleteStaffTask = (id) => { persistStaffTasks(staffTasks.filter(x => String(x.id) !== String(id))); setStaffEditing(null); showToast('Staff task removed'); };
+const exportExcel = async () => {
+  const rows = sessions.map(s => ({
+    Week: s.week != null ? 'Week ' + String(s.week).padStart(2, '0') : '',
+    Date: s.date || '', Weekday: s.weekday || '', Start: s.start || '', End: s.end || '',
+    'Duration (min)': (s.start && s.end) ? durationMin(s) : '',
+    'Session Name': s.name, Type: s.type, Pillars: sessionPillarNames(s, pillarTags).join(' | '), Mode: s.mode,
+    Facilitators: fmtFacilitators(s.facilitators, rooms, planners),
+    Resources: (s.resources || []).map(r => r.label + ': ' + r.url).join(' | '),
+    Outcomes: (s.outcomes || []).join(' | '),
+    Calendared: s.calendared ? 'Yes' : 'No',
+  }));
+  rows.sort((a, b) => (a.Date || 'zzzz').localeCompare(b.Date || 'zzzz') || (a.Start || '').localeCompare(b.Start || ''));
+  const wb = XLSX.utils.book_new();
+  const append = (name, data) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name);
+  append('Calendar', rows);
+  append('Sessions', rows);
+  append('Time Summary', sessions.map(session => ({ Week: session.week, Mode: session.mode, Session: session.name, DurationMinutes: session.start && session.end ? durationMin(session) : '' })));
+  append('Fellows', roster.map(fellow => ({ Name: fellow.name, Email: fellow.email, Track: fellow.track, Grade: fellow.grade, PlacementCity: fellow.placementCity, AFAGroup: fellow.afaGroup, RoomIds: (fellow.roomIds || []).join(', ') })));
+  append('Assessments', assessments.map(assessment => ({ Title: assessment.title, SessionId: assessment.sessionId, Status: assessment.status, Questions: (assessment.questions || []).length, Fellows: (assessment.assignmentGroups || []).flatMap(group => group.fellowIds || []).length })));
+  append('Questions', assessments.flatMap(assessment => (assessment.questions || []).map(question => ({ Assessment: assessment.title, Question: question.text, Type: question.type, ImageUrl: question.imageUrl || '', Options: (question.options || []).map(option => typeof option === 'string' ? option : option.text).join(' | '), Correct: (question.correct || []).join(' | '), Rubric: question.rubric || '', ExpectedConcepts: (question.expectedConcepts || []).join(' | '), Points: question.points }))));
+  append('Attempts', assessmentAttempts.map(attempt => ({ AssessmentId: attempt.assessmentId, FellowId: attempt.fellowId, Status: attempt.status, StartedAt: attempt.startedAt, SubmittedAt: attempt.submittedAt || '', Answers: JSON.stringify(attempt.answers || {}), Reviews: JSON.stringify(attempt.reviews || {}) })));
+  append('Paragraph reviews', assessmentAttempts.flatMap(attempt => Object.entries(attempt.reviews || {}).map(([questionId, review]) => ({ AssessmentId: attempt.assessmentId, FellowId: attempt.fellowId, QuestionId: questionId, Status: review.status || '', Score: review.score ?? '', Feedback: review.feedback || '', Reviewer: review.reviewer || '', ReviewedAt: review.reviewedAt || '', AISuggestedScore: review.aiSuggestion?.suggestedScore ?? '', AIConfidence: review.aiSuggestion?.confidence ?? '', AIFeedback: review.aiSuggestion?.feedback || '' }))));
+  append('Attendance', attendance.map(entry => ({ SessionId: entry.sessionId, FellowId: entry.fellowId, Status: entry.status, RecordedAt: entry.recordedAt })));
+  append('Analytics', sessions.map(session => ({ Session: session.name, OnTime: attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length, Late: attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length })));
+  XLSX.writeFile(wb, 'WA14_Training_Design_Export.xlsx');
+  showToast('Exported to Excel');
+};
 
-  const filtered = useMemo(() => {
-    if (!sessions) return [];
-    return sessions.filter(s =>
-      (typeFilter==='all' || s.type===typeFilter) &&
-      (modeFilter==='all' || s.mode===modeFilter) &&
-      (pillarTagFilter==='all' || (s.pillarIds||[]).map(String).includes(String(pillarTagFilter)))
-    );
-  }, [sessions, typeFilter, modeFilter, pillarTagFilter]);
-  const fellowWeeks = academySettings?.fellowWeeks || WEEKS;
-  const academyWeeks = useMemo(() => {
-    const start = academySettings?.startDate, end = academySettings?.endDate;
-    if (!start || !end) return null;
-    const s = new Date(start+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); // snap to Sunday of the week BEFORE
-    const e = new Date(end+'T00:00:00');
-    const diffDays = Math.floor((e - s) / (24*60*60*1000));
-    const count = Math.floor(diffDays / 7) + 1;
-    if (count < 1 || count > 30) return null;
-    return Array.from({length:count}, (_,i) => i);
-  }, [academySettings?.startDate, academySettings?.endDate]);
-  const weeks = academyWeeks || WEEKS;
-  const afaGroups = [...new Set(
-    (planners||[]).filter(p=>AFA_ROLES.includes(p.role)).flatMap(p=>[p.group||'', p.name||'']).filter(Boolean)
-      .concat((roster||[]).map(r=>(r.afaGroup||'').trim()).filter(Boolean))
+const requestUpdate = (req) => {
+  const entry = { id: 'req' + Date.now(), ...req, createdAt: new Date().toISOString(), resolved: false };
+  persistRequests([...(requests || []), entry]);
+  showToast('Request sent to the planning team');
+};
+const resolveRequest = (id, resolved) => persistRequests(requests.map(r => r.id === id ? { ...r, resolved } : r));
+const deleteRequest = (id) => persistRequests(requests.filter(r => r.id !== id));
+const seedDemo = () => {
+  if (!window.confirm('Create demo Fellows, sessions, questions, and assessments?')) return;
+  const demoFellows = Array.from({ length: 10 }, (_, index) => ({ id: `demo-fellow-${index + 1}`, name: `DEMO Fellow ${String(index + 1).padStart(2, '0')}`, email: `demo.fellow${index + 1}@teachforbangladesh.org`, afaGroup: `DEMO AFA ${index % 3 + 1}`, track: index % 2 ? 'secondary' : 'primary', placementCity: ['Dhaka', 'Chattogram', 'Rajshahi'][index % 3] }));
+  const demoSessions = Array.from({ length: 5 }, (_, index) => ({ id: 90000 + index, week: index % 3, date: `2026-11-${String(1 + index).padStart(2, '0')}`, weekday: 'Sunday', start: '10:00', end: '11:00', name: `DEMO Session ${index + 1}`, pillar: 'Academic Content', mode: 'Workshop', facilitators: ['Demo Facilitator'], resources: [], outcomes: ['Demo outcome'], notes: '', fellowNotes: '', afaGroup: `DEMO AFA ${index % 3 + 1}`, attendanceCode: `DEMO${index + 1}`, calendared: true }));
+  const demoQuestions = Array.from({ length: 5 }, (_, index) => ({ id: `demo-question-${index + 1}`, type: 'single', text: `DEMO Question ${index + 1}`, options: ['Option A', 'Option B', 'Option C'], gridRows: ['Row 1'], gridCols: ['Column 1'], correct: ['Option A'], points: 1, timeLimit: 0, imageUrl: '' }));
+  const demoAssessments = demoSessions.map((session, index) => ({ id: `demo-assessment-${index + 1}`, sessionId: session.id, title: `DEMO Assessment ${index + 1}`, description: 'Demo assessment', status: 'published', startsAt: '2026-10-01T00:00', endsAt: '2026-12-31T23:59', durationMinutes: 20, questionIds: demoQuestions.map(question => question.id), assignmentGroups: [{ id: `demo-group-${index + 1}`, track: index % 2 ? 'secondary' : 'primary', fellowIds: demoFellows.filter(fellow => fellow.track === (index % 2 ? 'secondary' : 'primary')).map(fellow => fellow.id), questionIds: demoQuestions.map(question => question.id) }], demo: true }));
+  demoQuestions.push({ id: 'demo-paragraph-question', type: 'paragraph', text: 'DEMO reflection: Describe one teaching practice you will apply and why.', options: [], correct: [], points: 3, timeLimit: 0, imageUrl: '', rubric: 'Name a specific teaching practice and explain why it supports learning.', expectedConcepts: ['specific practice', 'reasoning'] });
+  demoAssessments.forEach(assessment => {
+    assessment.startsAt = '2026-01-01T00:00';
+    assessment.endsAt = '2026-12-31T23:59';
+    assessment.questions = demoQuestions.map(question => normalizeQuestion(question, assessment.id));
+    assessment.questionIds = assessment.questions.map(question => question.id);
+    assessment.assignmentGroups.forEach(group => { group.questionIds = assessment.questionIds; });
+  });
+  persistRoster([...roster.filter(fellow => !fellow.id?.toString().startsWith('demo-')), ...demoFellows]);
+  persist([...sessions.filter(session => !session.name?.startsWith('DEMO ')), ...demoSessions]);
+  persistAssessmentQuestions([...assessmentQuestions.filter(question => !question.id?.toString().startsWith('demo-')), ...demoQuestions]);
+  persistAssessments([...assessments.filter(assessment => !assessment.id?.toString().startsWith('demo-')), ...demoAssessments]);
+  showToast('Demo data created');
+};
+const deleteDemo = () => {
+  if (!window.confirm('Delete all DEMO records?')) return;
+  persistRoster(roster.filter(fellow => !fellow.id?.toString().startsWith('demo-')));
+  persist(sessions.filter(session => !session.name?.startsWith('DEMO ')));
+  persistAssessmentQuestions(assessmentQuestions.filter(question => !question.id?.toString().startsWith('demo-')));
+  persistAssessments(assessments.filter(assessment => !assessment.id?.toString().startsWith('demo-')));
+  persistAssessmentAttempts(assessmentAttempts.filter(attempt => !attempt.id?.toString().startsWith('demo-')));
+  persistAttendance(attendance.filter(entry => !entry.id?.toString().startsWith('demo-')));
+  showToast('Demo data deleted');
+};
+
+const filtered = useMemo(() => {
+  if (!sessions) return [];
+  return sessions.filter(s =>
+    (typeFilter === 'all' || s.type === typeFilter) &&
+    (modeFilter === 'all' || s.mode === modeFilter) &&
+    (pillarTagFilter === 'all' || (s.pillarIds || []).map(String).includes(String(pillarTagFilter)))
+  );
+}, [sessions, typeFilter, modeFilter, pillarTagFilter]);
+const fellowWeeks = academySettings?.fellowWeeks || WEEKS;
+const academyWeeks = useMemo(() => {
+  const start = academySettings?.startDate, end = academySettings?.endDate;
+  if (!start || !end) return null;
+  const s = new Date(start + 'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); // snap to Sunday of the week BEFORE
+  const e = new Date(end + 'T00:00:00');
+  const diffDays = Math.floor((e - s) / (24 * 60 * 60 * 1000));
+  const count = Math.floor(diffDays / 7) + 1;
+  if (count < 1 || count > 30) return null;
+  return Array.from({ length: count }, (_, i) => i);
+}, [academySettings?.startDate, academySettings?.endDate]);
+const weeks = academyWeeks || WEEKS;
+const afaGroups = [...new Set(
+  (planners || []).filter(p => AFA_ROLES.includes(p.role)).flatMap(p => [p.group || '', p.name || '']).filter(Boolean)
+    .concat((roster || []).map(r => (r.afaGroup || '').trim()).filter(Boolean))
 )];
-  const calendarSessions = auth.role === 'fellow' ? filtered.filter(session => fellowWeeks.includes(session.week) && isSessionVisibleToFellow(session, auth, roster, rooms)) : filtered;
+const calendarSessions = auth.role === 'fellow' ? filtered.filter(session => fellowWeeks.includes(session.week) && isSessionVisibleToFellow(session, auth, roster, rooms)) : filtered;
 
-  const openRequests = (requests||[]).filter(r=>!r.resolved).length;
+const openRequests = (requests || []).filter(r => !r.resolved).length;
 
-  if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !attendanceCodes || !assessmentIncidents || !deviceRequests) {
-    return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'400px',color:'#9DB09D',fontFamily:FONT}}>Loading schedule...</div>;
-  }
+if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !attendanceCodes || !assessmentIncidents || !deviceRequests || !staffTasks) {
+  return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading schedule...</div>;
+}
 
-  return (
-    <div className="wa14-app min-h-screen flex flex-col" style={{fontFamily:FONT, background:'#252625', color:'#D5E0D5'}}>
-      <div className="wa14-main flex flex-1 min-h-screen">
-        <Sidebar tab={tab} setTab={setTab} isAdmin={isAdmin} isFullAdmin={isFullAdmin} isSuperadmin={isSuperadmin} openRequests={openRequests} />
-        <div className="wa14-content flex-1 min-w-0">
+return (
+  <div className="wa14-app min-h-screen flex flex-col" style={{ fontFamily: FONT, background: '#252625', color: '#D5E0D5' }}>
+    <div className="wa14-main flex flex-1 min-h-screen">
+      <Sidebar tab={tab} setTab={setTab} isAdmin={isAdmin} isFullAdmin={isFullAdmin} isSuperadmin={isSuperadmin} openRequests={openRequests} />
+      <div className="wa14-content flex-1 min-w-0">
         <TopBar
           tab={tab} isFullAdmin={isFullAdmin} auth={auth} onLogout={onLogout} roles={roles}
-          onExport={exportExcel} onImport={importExcel} onReset={resetSeed} onAdd={()=>setEditing('new')}
+          onExport={exportExcel} onImport={importExcel} onReset={resetSeed} onAdd={() => setEditing('new')}
         />
         {toast && <div className={toastStyle}>{toast}</div>}
         <div className="wa14-content-inner pt-5 px-6 pb-10">
-        {(tab==='calendar' || tab==='sessions') && auth.role!=='fellow' && (
-          <FilterBar typeFilter={typeFilter} setTypeFilter={setTypeFilter} pillarTagFilter={pillarTagFilter} setPillarTagFilter={setPillarTagFilter} modeFilter={modeFilter} setModeFilter={setModeFilter} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} />
-        )}
+          {(tab === 'calendar' || tab === 'sessions') && auth.role !== 'fellow' && (
+            <FilterBar typeFilter={typeFilter} setTypeFilter={setTypeFilter} pillarTagFilter={pillarTagFilter} setPillarTagFilter={setPillarTagFilter} modeFilter={modeFilter} setModeFilter={setModeFilter} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} />
+          )}
 
-        {tab==='calendar' && (
-          <>
-          {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} codes={attendanceCodes} onAttendanceCode={(session, code)=>reportAttendanceCode(session, code)} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload)=>persistDeviceRequests([...(deviceRequests||[]), payload])} showToast={showToast} /></>}
-          <CalendarView
-            sessions={calendarSessions} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
-            hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
-            weeks={weeks} startDate={academySettings?.startDate || null}
-            academySettings={academySettings} onSettingsChange={isFullAdmin ? next => persistSettings(next) : null}
-            fellowWeeks={fellowWeeks} onFellowWeeksChange={isFullAdmin ? next => persistSettings({...academySettings,fellowWeeks:next}) : null}
-            onPlace={isFullAdmin ? (session, date, start) => setPlacement({session, date, start}) : null}
-            onSelect={setViewing} onDrop={isFullAdmin ? (session, date, start) => {
-              saveSession({...session, date, start, weekday:new Date(date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}), week:weekForDate(date, academySettings?.startDate), calendared:true});
-            } : null} auth={auth} roster={roster} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners}
-          />
-          </>
-        )}
-        {tab==='sessions' && isAdmin && (
-          <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} onDuplicate={duplicateSession} rooms={rooms} weeks={weeks} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners} />
-        )}
-        {tab==='attendance' && isFullAdmin && (
-          <AttendanceCodePanel sessions={sessions} codes={attendanceCodes} attendance={attendance} roster={roster} onGenerate={(sessionId, list)=>{ persistAttendanceCodes([...(attendanceCodes||[]).filter(c=>String(c.sessionId)!==String(sessionId)), ...list]); showToast('Generated '+list.length+' codes'); }} onDeleteSessionCodes={(sessionId)=>{ persistAttendanceCodes((attendanceCodes||[]).filter(c=>String(c.sessionId)!==String(sessionId))); showToast('Codes removed'); }} onExport={exportAttendanceCodes} />
-        )}
-        {tab==='summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} modes={modes} />}
-        {tab==='fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
-        {tab==='planners' && isSuperadmin && <PlannerPanel planners={planners} roles={roles} onChange={persistPlanners} onAccount={addAccount} showToast={showToast} />}
-        {tab==='roles' && isSuperadmin && <RolesPanel roles={roles} cityCodes={cityCodes} onRolesChange={persistRoles} onCityCodesChange={persistCityCodes} showToast={showToast} />}
-        {tab==='rooms' && isFullAdmin && <RoomsPanel rooms={rooms} roster={roster} onChange={persistRoomsAndRoster} showToast={showToast} />}
-        {tab==='sessionTypes' && isFullAdmin && <SessionTypesPanel sessionTypes={sessionTypes} onChange={persistSessionTypes} showToast={showToast} />}
-        {tab==='pillarTags' && isFullAdmin && <PillarsPanel pillarTags={pillarTags} onChange={persistPillarTags} showToast={showToast} />}
-        {tab==='modes' && isFullAdmin && <WorkModesPanel modes={modes} onChange={persistModes} showToast={showToast} />}
-        {tab==='requests' && isFullAdmin && <RequestsPanel requests={requests} roles={roles} onResolve={resolveRequest} onDelete={deleteRequest} />}
-        {tab==='assessments' && canEditAssessments && <LocalAssessmentsPanel assessments={assessments} sessions={sessions} roster={roster} rooms={rooms} onAssessmentsChange={persistAssessments} showToast={showToast} onToggleGradeRelease={(assessment)=>{ persistAssessments(assessments.map(item=>String(item.id)===String(assessment.id) ? {...item, gradesReleased:!isGradeReleased(item), grades_released:!isGradeReleased(item)} : item)); showToast(isGradeReleased(assessment) ? 'Grades hidden from fellows' : 'Grades released to fellows'); }} />}
-        {tab==='review' && canEditAssessments && <ParagraphReviewPanel attempts={assessmentAttempts} assessments={assessments} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={persistAssessmentAttempts} showToast={showToast} showUngradedOnly />}
-        {tab==='incidents' && isFullAdmin && <IncidentLogPanel incidents={assessmentIncidents} attempts={assessmentAttempts} assessments={assessments} roster={roster} sessions={sessions} />}
-        {tab==='devices' && isFullAdmin && <DeviceRequestPanel requests={deviceRequests} attempts={assessmentAttempts} assessments={assessments} roster={roster} onResolve={(id, approved)=>{ persistDeviceRequests((deviceRequests||[]).map(r=>String(r.id)===String(id) ? {...r, status:approved?'approved':'denied', resolvedAt:new Date().toISOString()} : r)); showToast(approved ? 'Device change approved' : 'Device change denied'); }} />}
-        {tab==='analytics' && canEditAssessments && <ExpandedAnalyticsPanel sessions={sessions} attendance={attendance} attempts={assessmentAttempts} assessments={assessments} roster={roster} afaGroups={afaGroups} onSeedDemo={seedDemo} onDeleteDemo={deleteDemo} />}
-      </div>
+          {tab === 'calendar' && (
+            <>
+              {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} codes={attendanceCodes} onAttendanceCode={(session, code) => reportAttendanceCode(session, code)} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload) => persistDeviceRequests([...(deviceRequests || []), payload])} showToast={showToast} /></>}
+              <CalendarView
+                sessions={calendarSessions} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
+                hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
+                weeks={weeks} startDate={academySettings?.startDate || null}
+                academySettings={academySettings} onSettingsChange={isFullAdmin ? next => persistSettings(next) : null}
+                fellowWeeks={fellowWeeks} onFellowWeeksChange={isFullAdmin ? next => persistSettings({ ...academySettings, fellowWeeks: next }) : null}
+                onPlace={isFullAdmin ? (session, date, start) => setPlacement({ session, date, start }) : null}
+                onSelect={setViewing} onDrop={isFullAdmin ? (session, date, start) => {
+                  saveSession({ ...session, date, start, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate), calendared: true });
+                } : null} auth={auth} roster={roster} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners}
+              />
+            </>
+          )}
+          {tab === 'sessions' && isAdmin && (
+            <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} onDuplicate={duplicateSession} rooms={rooms} weeks={weeks} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners} />
+          )}
+          {tab === 'staffCalendar' && isAdmin && (
+            <StaffCalendar
+              staffTasks={staffTasks} sessions={calendarSessions} weeks={weeks} startDate={academySettings?.startDate || null}
+              activeWeek={activeWeek} setActiveWeek={setActiveWeek} hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
+              isFullAdmin={isFullAdmin} onSelect={setViewing} onEditStaff={setStaffEditing} onAddStaff={() => setStaffEditing('new')}
+            />
+          )}
+          {tab === 'attendance' && isFullAdmin && (
+            <AttendanceCodePanel sessions={sessions} codes={attendanceCodes} attendance={attendance} roster={roster} onGenerate={(sessionId, list) => { persistAttendanceCodes([...(attendanceCodes || []).filter(c => String(c.sessionId) !== String(sessionId)), ...list]); showToast('Generated ' + list.length + ' codes'); }} onDeleteSessionCodes={(sessionId) => { persistAttendanceCodes((attendanceCodes || []).filter(c => String(c.sessionId) !== String(sessionId))); showToast('Codes removed'); }} onExport={exportAttendanceCodes} />
+          )}
+          {tab === 'summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} modes={modes} />}
+          {tab === 'fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
+          {tab === 'planners' && isSuperadmin && <PlannerPanel planners={planners} roles={roles} onChange={persistPlanners} onAccount={addAccount} showToast={showToast} />}
+          {tab === 'roles' && isSuperadmin && <RolesPanel roles={roles} cityCodes={cityCodes} onRolesChange={persistRoles} onCityCodesChange={persistCityCodes} showToast={showToast} />}
+          {tab === 'rooms' && isFullAdmin && <RoomsPanel rooms={rooms} roster={roster} onChange={persistRoomsAndRoster} showToast={showToast} />}
+          {tab === 'sessionTypes' && isFullAdmin && <SessionTypesPanel sessionTypes={sessionTypes} onChange={persistSessionTypes} showToast={showToast} />}
+          {tab === 'pillarTags' && isFullAdmin && <PillarsPanel pillarTags={pillarTags} onChange={persistPillarTags} showToast={showToast} />}
+          {tab === 'modes' && isFullAdmin && <WorkModesPanel modes={modes} onChange={persistModes} showToast={showToast} />}
+          {tab === 'requests' && isFullAdmin && <RequestsPanel requests={requests} roles={roles} onResolve={resolveRequest} onDelete={deleteRequest} />}
+          {tab === 'assessments' && canEditAssessments && <LocalAssessmentsPanel assessments={assessments} sessions={sessions} roster={roster} rooms={rooms} onAssessmentsChange={persistAssessments} showToast={showToast} onToggleGradeRelease={(assessment) => { persistAssessments(assessments.map(item => String(item.id) === String(assessment.id) ? { ...item, gradesReleased: !isGradeReleased(item), grades_released: !isGradeReleased(item) } : item)); showToast(isGradeReleased(assessment) ? 'Grades hidden from fellows' : 'Grades released to fellows'); }} />}
+          {tab === 'review' && canEditAssessments && <ParagraphReviewPanel attempts={assessmentAttempts} assessments={assessments} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={persistAssessmentAttempts} showToast={showToast} showUngradedOnly />}
+          {tab === 'incidents' && isFullAdmin && <IncidentLogPanel incidents={assessmentIncidents} attempts={assessmentAttempts} assessments={assessments} roster={roster} sessions={sessions} />}
+          {tab === 'devices' && isFullAdmin && <DeviceRequestPanel requests={deviceRequests} attempts={assessmentAttempts} assessments={assessments} roster={roster} onResolve={(id, approved) => { persistDeviceRequests((deviceRequests || []).map(r => String(r.id) === String(id) ? { ...r, status: approved ? 'approved' : 'denied', resolvedAt: new Date().toISOString() } : r)); showToast(approved ? 'Device change approved' : 'Device change denied'); }} />}
+          {tab === 'analytics' && canEditAssessments && <ExpandedAnalyticsPanel sessions={sessions} attendance={attendance} attempts={assessmentAttempts} assessments={assessments} roster={roster} afaGroups={afaGroups} onSeedDemo={seedDemo} onDeleteDemo={deleteDemo} />}
         </div>
       </div>
-
-      {isAdmin && editing && (
-        <EditPanel session={editing==='new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing!=='new' ? deleteSession : null} onClose={()=>setEditing(null)} canEditSchedule={isFullAdmin} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} rooms={rooms} staff={planners} weeks={weeks} startDate={academySettings?.startDate || null} />
-      )}
-      {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({...session, date, start, end, weekday:new Date(date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}), week:weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared:true}); setPlacement(null); }} onClose={()=>setPlacement(null)} />}
-      {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next)=>{saveSession(next); setAssigning(null);}} onClose={()=>setAssigning(null)} />}
-      {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={()=>setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={()=>setViewing(null)} staff={planners} />}
     </div>
-  );
+
+    {isAdmin && editing && (
+      <EditPanel session={editing === 'new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing !== 'new' ? deleteSession : null} onClose={() => setEditing(null)} canEditSchedule={isFullAdmin} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} rooms={rooms} staff={planners} weeks={weeks} startDate={academySettings?.startDate || null} />
+    )}
+    {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({ ...session, date, start, end, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared: true }); setPlacement(null); }} onClose={() => setPlacement(null)} />}
+    {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next) => { saveSession(next); setAssigning(null); }} onClose={() => setAssigning(null)} />}
+    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} />}
+    {isAdmin && staffEditing && (
+      <StaffTaskEditor task={staffEditing === 'new' ? null : staffEditing} isFullAdmin={isFullAdmin} onSave={saveStaffTask} onDelete={isFullAdmin && staffEditing !== 'new' ? deleteStaffTask : null} onClose={() => setStaffEditing(null)} />
+    )}
+  </div>
+);
 }
 
-function blankSession(){
-  return { id:newId(), week:0, date:'', weekday:'', start:'', end:'', name:'', type:SESSION_TYPES[0], pillarIds:[], mode:'Sync', facilitators:[], rooms:[], resources:[], outcomes:[], notes:'', fellowNotes:'', afaGroup:'', calendared:false };
+function blankSession() {
+  return { id: newId(), week: 0, date: '', weekday: '', start: '', end: '', name: '', type: SESSION_TYPES[0], pillarIds: [], mode: 'Sync', facilitators: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: false };
+}
+
+function blankStaffTask() {
+  return { id: 'st-' + Date.now(), kind: 'staff-task', name: '', date: '', weekday: '', start: '', end: '', week: 0, notes: '', owner: '', status: 'todo' };
 }
 
 const toastStyle = 'fixed top-4 right-6 bg-[#005B3F] text-white px-4 py-2.5 rounded-md text-[13px] z-[200] shadow-lg';
 
-function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests }){
+function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, isFullAdmin, onSelect, onEditStaff, onAddStaff }) {
+  const [showStaff, setShowStaff] = useState(true);
+  const [showMain, setShowMain] = useState(true);
+  const anchorIso = (() => {
+    if (startDate) { const s = new Date(startDate + 'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
+    const withDate = [...sessions, ...staffTasks].filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date));
+    if (withDate.length) { const s = new Date(withDate[0].date + 'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
+    return '2026-10-18';
+  })();
+  const anchorDate = new Date(anchorIso + 'T00:00:00');
+  anchorDate.setDate(anchorDate.getDate() + (activeWeek || 0) * 7);
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(anchorDate); date.setDate(anchorDate.getDate() + index);
+    return [toIsoDate(date), date.toLocaleDateString(undefined, { weekday: 'long' })];
+  });
+  const weekLabel = (w) => {
+    const s = new Date(anchorIso + 'T00:00:00'); s.setDate(s.getDate() + w * 7);
+    const e = new Date(s); e.setDate(s.getDate() + 6);
+    const fmt = d => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return fmt(s) + ' - ' + fmt(e);
+  };
+  const visibleDays = days.filter(([d]) => !hiddenDays[d]);
+  const hours = []; for (let m = GRID_START; m < GRID_END; m += 60) hours.push(m);
+  const totalHeight = (GRID_END - GRID_START) * PX_PER_MIN;
+  const staffColor = '#D0A023';
+  const staffWeekTasks = showStaff ? staffTasks.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek || 0)) : [];
+  const mainWeekTasks = showMain ? sessions.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek || 0)) : [];
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#D5E0D5' }}>Staff planning calendar</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#D5E0D5', cursor: 'pointer' }}>
+          <input type="checkbox" checked={showStaff} onChange={() => setShowStaff(v => !v)} /> Staff tasks
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#D5E0D5', cursor: 'pointer' }}>
+          <input type="checkbox" checked={showMain} onChange={() => setShowMain(v => !v)} /> Main sessions
+        </label>
+        {isFullAdmin && <button onClick={onAddStaff} className={btnPrimary}><Plus size={14} /> Add staff task</button>}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        {weeks.map(w => (
+          <button key={w} onClick={() => setActiveWeek(w)} style={{
+            padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            border: activeWeek === w ? '1px solid #1F6F78' : '1px solid #C9CDD2',
+            background: activeWeek === w ? '#1F6F78' : '#fff', color: activeWeek === w ? '#fff' : '#003223'
+          }}>Week {String(w).padStart(2, '0')} · {weekLabel(w)}</button>
+        ))}
+      </div>
+      {days.length > 1 && (
+        <div style={{ display: 'flex', gap: 14, marginBottom: 12, flexWrap: 'wrap' }}>
+          {days.map(([d, wd]) => (
+            <label key={d} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#D5E0D5', cursor: 'pointer' }}>
+              <input type="checkbox" checked={!hiddenDays[d]} onChange={() => setHiddenDays(h => ({ ...h, [d]: !h[d] }))} />
+              {wd}, {dateLabel(d)}
+            </label>
+          ))}
+        </div>
+      )}
+      {staffWeekTasks.length === 0 && mainWeekTasks.length === 0 ? (
+        <div style={{ padding: '60px 0', textAlign: 'center', color: '#003223', fontSize: 14, background: '#fff', borderRadius: 8 }}>No staff tasks or sessions this week.</div>
+      ) : (
+        <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+          <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
+            <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
+            <div className="relative" style={{ height: totalHeight }}>
+              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: (m - GRID_START) * PX_PER_MIN - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
+            </div>
+          </div>
+          {visibleDays.map(([d, wd]) => {
+            const dayStaff = layoutOverlapping(staffWeekTasks.filter(s => s.date === d).sort((a, b) => toMin(a.start) - toMin(b.start)));
+            const dayMain = layoutOverlapping(mainWeekTasks.filter(s => s.date === d).sort((a, b) => toMin(a.start) - toMin(b.start)));
+            return (
+              <div key={d} className="flex-1 min-w-[150px] border-r border-[#EEF0F2] box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
+                <div className="h-[46px] box-border border-b border-[#EEF0F2] bg-[#F7F8F9] text-[12.5px] font-semibold text-center pt-[5px] text-[#003223]">
+                  {wd}<div className="font-normal text-[#003223] text-[11px] leading-tight">{dateLabel(d)}</div>
+                </div>
+                <div className="relative" style={{ height: totalHeight }} onClick={e => {
+                  if (!isFullAdmin || e.target !== e.currentTarget) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15));
+                  const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
+                  onEditStaff({ ...blankStaffTask(), date: d, weekday: wd, start, end: start });
+                }} onDragOver={e => e.preventDefault()} onDrop={e => {
+                  e.preventDefault();
+                  try { const item = JSON.parse(e.dataTransfer.getData('application/json')); if (item.kind !== 'staff-task' || !isFullAdmin) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15)); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); const weekday = new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }); onEditStaff({ ...item, date: d, weekday, start, end: start, week: startDate ? weekForDate(d, startDate) : 0, calendared: true }); } catch {}
+                }}>
+                  {hours.map(m => (<div key={m} style={{ position: 'absolute', top: (m - GRID_START) * PX_PER_MIN, left: 0, right: 0, borderTop: '1px solid #F2F3F4' }} />))}
+                  {dayMain.map(({ s, col, cols }) => {
+                    const start = toMin(s.start) || 0;
+                    const height = Math.max((wrapsMidnight(s) ? (24 * 60 - start) : (((toMin(s.end) || start)) - start)) * PX_PER_MIN, 16);
+                    const color = getTypeColor(s.type, null);
+                    return (
+                      <div key={'main-' + s.id} onClick={() => onSelect(s)} style={{
+                        position: 'absolute', top: start * PX_PER_MIN, left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height,
+                        background: color + '26', borderLeft: '3px solid ' + color, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', opacity: 0.7
+                      }} title={s.name + ' (main session)'}>
+                        <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}</div>
+                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end}</div>}
+                      </div>
+                    );
+                  })}
+                  {dayStaff.map(({ s, col, cols }) => {
+                    const start = toMin(s.start) || 0;
+                    const height = Math.max((wrapsMidnight(s) ? (24 * 60 - start) : (((toMin(s.end) || start)) - start)) * PX_PER_MIN, 16);
+                    return (
+                      <div key={'staff-' + s.id} draggable={isFullAdmin} onDragStart={e => e.dataTransfer.setData('application/json', JSON.stringify(s))} onClick={() => isFullAdmin ? onEditStaff(s) : onSelect(s)} style={{
+                        position: 'absolute', top: start * PX_PER_MIN, left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height,
+                        background: staffColor + '26', borderLeft: '3px solid ' + staffColor, borderRadius: 4, padding: '3px 6px', cursor: isFullAdmin ? 'grab' : 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', boxShadow: 'inset 0 0 0 1px ' + staffColor
+                      }} title={s.name + ' (staff task)'}>
+                        <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}{s.owner ? ' · ' + s.owner : ''}</div>
+                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end}</div>}
+                        {height > 42 && s.status && <div style={{ color: '#003223', fontStyle: 'italic' }}>{s.status}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div></div>
+      )}
+      <div style={{ marginTop: 18, background: '#fff', border: '1px solid #DDE2E6', borderRadius: 8, padding: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Staff task list</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, minWidth: 480 }}>
+          {staffTasks.filter(s => s.date).sort((a, b) => (a.date || '').localeCompare(b.date || '') || toMin(a.start) - toMin(b.start)).map(s => (
+            <div key={s.id} onClick={() => isFullAdmin ? onEditStaff(s) : onSelect(s)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #EEF0F2', fontSize: 12.5, cursor: 'pointer' }}>
+              <span style={{ color: '#003223' }}>{s.name || '(untitled)'}{s.owner ? ' · ' + s.owner : ''}</span>
+              <span style={{ color: '#003223', whiteSpace: 'nowrap' }}>{dateLabel(s.date)} · {s.start}–{s.end}{s.status ? ' · ' + s.status : ''}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Unscheduled staff tasks</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {staffTasks.filter(s => !s.date).map(s => (
+            <div key={s.id} draggable={isFullAdmin} onDragStart={e => e.dataTransfer.setData('application/json', JSON.stringify(s))} onClick={() => isFullAdmin ? onEditStaff(s) : onSelect(s)} style={{ padding: '8px 10px', border: '1px solid #DDE2E6', borderLeft: '3px solid ' + staffColor, borderRadius: 5, cursor: isFullAdmin ? 'grab' : 'pointer', fontSize: 12.5, background: '#fff' }}>
+              {s.name || '(untitled)'}{s.owner ? ' · ' + s.owner : ''}
+            </div>
+          ))}
+        </div>
+        {staffTasks.length === 0 && <div style={{ fontSize: 12.5, color: '#003223' }}>No staff tasks yet. {isFullAdmin ? 'Click "Add staff task" to create one.' : ''}</div>}
+      </div>
+    </div>
+  );
+}
+
+const STAFF_STATUSES = ['todo', 'in_progress', 'blocked', 'done'];
+
+function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
+  const [form, setForm] = useState(() => task ? { ...task } : blankStaffTask());
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const handleSave = () => {
+    if (!form.name.trim()) { alert('Enter a task name.'); return; }
+    onSave({
+      id: form.id, kind: 'staff-task', name: form.name.trim(), date: form.date || '', weekday: form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '',
+      start: form.start || '', end: form.end || '', week: form.date ? 0 : (form.week || 0), notes: (form.notes || '').trim(), owner: (form.owner || '').trim(), status: form.status || 'todo',
+    });
+  };
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 100 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22, boxShadow: '-8px 0 24px rgba(0,0,0,.12)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{task ? 'Edit staff task' : 'New staff task'}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9DB09D' }}><X size={18} /></button>
+        </div>
+        <Field label="Task name"><input className={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Prep slides for IT Skills" /></Field>
+        <Field label="Owner / assignee"><input className={inputStyle} value={form.owner || ''} onChange={e => set('owner', e.target.value)} placeholder="Staff name" /></Field>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Field label="Date" style={{ flex: 1 }}><input type="date" className={inputStyle} value={form.date || ''} onChange={e => set('date', e.target.value)} /></Field>
+          <Field label="Week" style={{ width: 110 }}><select className={inputStyle} value={form.week ?? 0} onChange={e => set('week', Number(e.target.value))}>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}</select></Field>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Field label="Start time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.start || ''} onChange={e => set('start', e.target.value)} /></Field>
+          <Field label="End time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.end || ''} onChange={e => set('end', e.target.value)} /></Field>
+        </div>
+        <Field label="Status"><select className={inputStyle} value={form.status || 'todo'} onChange={e => set('status', e.target.value)}>{STAFF_STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></Field>
+        <Field label="Notes"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="Planning notes (staff only)" /></Field>
+        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          <button onClick={handleSave} className={btnPrimary + ' flex-1 justify-center py-2.5'}>Save task</button>
+          {onDelete && <button onClick={() => { if (window.confirm('Delete this staff task?')) onDelete(form.id); }} className={btnSecondary + ' text-[#D0A023] border-[#E3B8B8]'}>Delete</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests }) {
   const [open, setOpen] = useState(false);
   const tabs = [
-    {id:'calendar', label:'Calendar', icon:CalendarIcon},
-    ...(isAdmin ? [{id:'sessions', label:'Sessions', icon:TableIcon}] : []),
-    ...(isFullAdmin ? [{id:'attendance', label:'Attendance', icon:KeyIcon}] : []),
+    { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
+    ...(isAdmin ? [{ id: 'sessions', label: 'Sessions', icon: TableIcon }] : []),
+    ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance', icon: KeyIcon }] : []),
     ...(isFullAdmin ? [
-      {id:'summary', label:'Time Summary', icon:BarChart3},
-      {id:'fellows', label:'Fellows', icon:UserPlus},
-      {id:'rooms', label:'Rooms', icon:DoorOpen},
-      {id:'sessionTypes', label:'Session Types', icon:ShieldCheck},
-      {id:'pillarTags', label:'Pillars', icon:ShieldCheck},
-      {id:'modes', label:'Work Modes', icon:Clock},
-      {id:'requests', label:'Requests'+(openRequests?' ('+openRequests+')':''), icon:MessageSquare},
+      { id: 'summary', label: 'Time Summary', icon: BarChart3 },
+      { id: 'fellows', label: 'Fellows', icon: UserPlus },
+      { id: 'rooms', label: 'Rooms', icon: DoorOpen },
+      { id: 'sessionTypes', label: 'Session Types', icon: ShieldCheck },
+      { id: 'pillarTags', label: 'Pillars', icon: ShieldCheck },
+      { id: 'modes', label: 'Work Modes', icon: Clock },
+      { id: 'requests', label: 'Requests' + (openRequests ? ' (' + openRequests + ')' : ''), icon: MessageSquare },
     ] : []),
-    ...(isAdmin ? [{id:'assessments', label:'Assessments', icon:ClipboardText}] : []),
-    ...(isAdmin ? [{id:'review', label:'Review', icon:GradCapIcon}] : []),
-    ...(isAdmin ? [{id:'analytics', label:'Analytics', icon:BarChart3}] : []),
-    ...(isFullAdmin ? [{id:'incidents', label:'Incidents', icon:WarnIcon}] : []),
-    ...(isFullAdmin ? [{id:'devices', label:'Devices', icon:MonitorIcon}] : []),
-    ...(isSuperadmin ? [{id:'planners', label:'WA Staff', icon:ShieldCheck}, {id:'roles', label:'Roles & Codes', icon:ShieldCheck}] : []),
+    ...(isAdmin ? [{ id: 'assessments', label: 'Assessments', icon: ClipboardText }] : []),
+    ...(isAdmin ? [{ id: 'review', label: 'Review', icon: GradCapIcon }] : []),
+    ...(isAdmin ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3 }] : []),
+    ...(isFullAdmin ? [{ id: 'incidents', label: 'Incidents', icon: WarnIcon }] : []),
+    ...(isFullAdmin ? [{ id: 'devices', label: 'Devices', icon: MonitorIcon }] : []),
+    ...(isAdmin ? [{ id: 'staffCalendar', label: 'Staff calendar', icon: ClipboardText }] : []),
+    ...(isSuperadmin ? [{ id: 'planners', label: 'WA Staff', icon: ShieldCheck }, { id: 'roles', label: 'Roles & Codes', icon: ShieldCheck }] : []),
   ];
+  const go = (id) => (e) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    window.location.hash = '#' + id;
+    setTab(id);
+    setOpen(false);
+  };
   return (
     <>
       <div className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3 py-2 bg-[#005B3F] border-b border-[#2A5C4B]">
-        <button onClick={()=>setOpen(v=>!v)} className={btnSecondary} aria-label="Toggle navigation"><ListIcon size={16}/> Menu {openRequests>0 && <span className="ml-1 text-xs font-bold text-[#D65641]">({openRequests})</span>}</button>
-        <div className="text-[13px] font-bold text-[#D5E0D5]">{tabs.find(t=>t.id===tab)?.label || 'Calendar'}</div>
+        <button onClick={() => setOpen(v => !v)} className={btnSecondary} aria-label="Toggle navigation"><ListIcon size={16} /> Menu {openRequests > 0 && <span className="ml-1 text-xs font-bold text-[#D65641]">({openRequests})</span>}</button>
+        <div className="text-[13px] font-bold text-[#D5E0D5]">{tabs.find(t => t.id === tab)?.label || 'Calendar'}</div>
       </div>
-      {open && <button aria-label="Close navigation" onClick={()=>setOpen(false)} style={{position:'fixed', inset:0, background:'rgba(15,23,32,0.35)', border:0, zIndex:40}} />}
+      {open && <button aria-label="Close navigation" onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,32,0.35)', border: 0, zIndex: 40 }} />}
       <nav className={`wa14-sidebar shrink-0 bg-[#005B3F] text-[#D5E0D5] flex flex-col sticky top-0 self-stretch overflow-hidden transition-all duration-200 ease-out ${open ? 'w-[196px] open' : 'w-[54px]'} max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-[41] max-lg:w-[220px] ${open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-[110%]'}`}>
-        <button onClick={()=>setOpen(o=>!o)} title="Toggle menu" className={`bg-transparent border-none text-[#FFFFFF] cursor-pointer py-3 text-xl leading-none ${open ? 'text-right pr-3' : 'text-center'}`}>{open ? '<' : '>'}</button>
+        <button onClick={() => setOpen(o => !o)} title="Toggle menu" className={`bg-transparent border-none text-[#FFFFFF] cursor-pointer py-3 text-xl leading-none ${open ? 'text-right pr-3' : 'text-center'}`}>{open ? '<' : '>'}</button>
         {tabs.map(t => {
-          const Icon = t.icon; const active = tab===t.id;
+          const Icon = t.icon; const active = tab === t.id;
           return (
-            <button key={t.id} onClick={()=>{setTab(t.id); setOpen(false);}} title={t.label} className={`flex items-center gap-2.5 border-none px-3 py-3 cursor-pointer text-[13px] whitespace-nowrap w-full text-left ${active ? 'bg-[#D65641] text-white font-semibold' : 'bg-transparent text-[#D5E0D5] font-medium'}`}><Icon size={17}/>{(open || typeof window==='undefined') && <span>{t.label}</span>}</button>
+            <a key={t.id} href={'#' + t.id} onClick={go(t.id)} title={t.label} className={`flex items-center gap-2.5 border-none px-3 py-3 text-[13px] whitespace-nowrap w-full text-left no-underline ${active ? 'bg-[#D65641] text-white font-semibold' : 'bg-transparent text-[#D5E0D5] font-medium'}`}><Icon size={17} />{(open || typeof window === 'undefined') && <span>{t.label}</span>}</a>
           );
         })}
       </nav>
@@ -1021,22 +1298,22 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests
   );
 }
 
-function TopBar({ tab, isFullAdmin, auth, onLogout, onExport, onImport, onReset, onAdd, roles }){
+function TopBar({ tab, isFullAdmin, auth, onLogout, onExport, onImport, onReset, onAdd, roles }) {
   return (
     <div className="bg-[#003223] border-b border-[#2A5C4B] px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 sticky top-0 z-20">
       <div className="py-2.5 min-w-[170px]"><div className="font-extrabold text-lg sm:text-xl leading-tight">Training and Design</div><div className="text-[11.5px] text-[#9DB09D] mt-[3px] wa14-hide-mobile">Teach For Bangladesh</div></div>
       <div className="flex items-center gap-3.5 py-3 flex-wrap">
         {isFullAdmin && (
           <div className="flex gap-2 flex-wrap">
-            {(tab==='calendar' || tab==='sessions') && <button onClick={onAdd} className={btnPrimary}><Plus size={14}/> Add session</button>}
-            <button onClick={onImport} className={btnSecondary}><Upload size={14}/> Import Excel</button>
-            <button onClick={onExport} className={btnSecondary}><Download size={14}/> Export Excel</button>
-            <button onClick={onReset} className={btnGhost}><RotateCcw size={14}/> Reset</button>
+            {(tab === 'calendar' || tab === 'sessions') && <button onClick={onAdd} className={btnPrimary}><Plus size={14} /> Add session</button>}
+            <button onClick={onImport} className={btnSecondary}><Upload size={14} /> Import Excel</button>
+            <button onClick={onExport} className={btnSecondary}><Download size={14} /> Export Excel</button>
+            <button onClick={onReset} className={btnGhost}><RotateCcw size={14} /> Reset</button>
           </div>
         )}
         <div className="flex items-center gap-2 text-xs text-[#9DB09D] border-l border-[#1F4A3C] pl-3.5 min-w-0">
           <span className="truncate max-w-[180px] sm:max-w-none">{auth.email} · {getRoleLabel(auth.role, roles)}</span>
-          <button onClick={onLogout} title="Switch user" className="bg-transparent border-none cursor-pointer text-[#9DB09D] flex"><LogOut size={14}/></button>
+          <button onClick={onLogout} title="Switch user" className="bg-transparent border-none cursor-pointer text-[#9DB09D] flex"><LogOut size={14} /></button>
         </div>
       </div>
     </div>
@@ -1049,148 +1326,148 @@ const btnSecondary = btnBase + ' bg-[#003223] text-[#D5E0D5] border-[#2A5C4B]';
 const btnGhost = btnBase + ' bg-transparent text-[#D5E0D5]';
 const selectStyle = 'px-2.5 py-1.5 rounded-md border border-[#2A5C4B] text-[13px] bg-white text-[#252625]';
 
-function FilterBar({ typeFilter, setTypeFilter, pillarTagFilter, setPillarTagFilter, modeFilter, setModeFilter, sessionTypes, pillarTags, modes }){
-  const anyFilter = typeFilter!=='all' || modeFilter!=='all' || pillarTagFilter!=='all';
+function FilterBar({ typeFilter, setTypeFilter, pillarTagFilter, setPillarTagFilter, modeFilter, setModeFilter, sessionTypes, pillarTags, modes }) {
+  const anyFilter = typeFilter !== 'all' || modeFilter !== 'all' || pillarTagFilter !== 'all';
   return (
-    <div style={{display:'flex', alignItems:'center', gap:16, marginBottom:16, flexWrap:'wrap'}}>
-      <div style={{display:'flex', alignItems:'center', gap:8}}>
-        <span style={{fontSize:12.5, color:'#D5E0D5'}}>Type</span>
-        <select value={typeFilter} onChange={e=>setTypeFilter(e.target.value)} className={selectStyle}>
-          <option value="all">All types</option>{(sessionTypes||DEFAULT_SESSION_TYPES).map(p => <option key={p.id||p.name} value={p.name}>{p.name}</option>)}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12.5, color: '#D5E0D5' }}>Type</span>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className={selectStyle}>
+          <option value="all">All types</option>{(sessionTypes || DEFAULT_SESSION_TYPES).map(p => <option key={p.id || p.name} value={p.name}>{p.name}</option>)}
         </select>
       </div>
-      <div style={{display:'flex', alignItems:'center', gap:8}}>
-        <span style={{fontSize:12.5, color:'#D5E0D5'}}>Pillars</span>
-        <select value={pillarTagFilter} onChange={e=>setPillarTagFilter(e.target.value)} className={selectStyle}>
-          <option value="all">All pillars</option>{(pillarTags||DEFAULT_PILLAR_TAGS).map(p => <option key={p.id||p.name} value={p.id||p.name}>{p.name}</option>)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12.5, color: '#D5E0D5' }}>Pillars</span>
+        <select value={pillarTagFilter} onChange={e => setPillarTagFilter(e.target.value)} className={selectStyle}>
+          <option value="all">All pillars</option>{(pillarTags || DEFAULT_PILLAR_TAGS).map(p => <option key={p.id || p.name} value={p.id || p.name}>{p.name}</option>)}
         </select>
       </div>
-      <div style={{display:'flex', alignItems:'center', gap:8}}>
-        <span style={{fontSize:12.5, color:'#D5E0D5'}}>Mode</span>
-        <select value={modeFilter} onChange={e=>setModeFilter(e.target.value)} className={selectStyle}>
-          <option value="all">All modes</option>{(modes||DEFAULT_MODES).map(m => <option key={m.id||m.name} value={m.name}>{m.name}</option>)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12.5, color: '#D5E0D5' }}>Mode</span>
+        <select value={modeFilter} onChange={e => setModeFilter(e.target.value)} className={selectStyle}>
+          <option value="all">All modes</option>{(modes || DEFAULT_MODES).map(m => <option key={m.id || m.name} value={m.name}>{m.name}</option>)}
         </select>
       </div>
       {anyFilter && (
-        <button onClick={()=>{setTypeFilter('all'); setModeFilter('all'); setPillarTagFilter('all');}} className={btnGhost+' px-2 py-1 text-xs'}>Clear filters</button>
+        <button onClick={() => { setTypeFilter('all'); setModeFilter('all'); setPillarTagFilter('all'); }} className={btnGhost + ' px-2 py-1 text-xs'}>Clear filters</button>
       )}
     </div>
   );
 }
 
-function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, weeks = WEEKS, startDate, academySettings, onSettingsChange, fellowWeeks, onFellowWeeksChange, onSelect, onDrop, onPlace, auth, roster, rooms, sessionTypes, pillarTags, staff }){
+function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, weeks = WEEKS, startDate, academySettings, onSettingsChange, fellowWeeks, onFellowWeeksChange, onSelect, onDrop, onPlace, auth, roster, rooms, sessionTypes, pillarTags, staff }) {
   // Anchor: Sunday of the week BEFORE the academy start date's week (so week 00 is the full week before).
   // Fallback to first session date, then hardcoded default.
   const anchorIso = (() => {
-    if (startDate) { const s = new Date(startDate+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
-    const withDate = sessions.filter(s => s.date).sort((a,b)=>a.date.localeCompare(b.date));
-    if (withDate.length) { const s = new Date(withDate[0].date+'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
+    if (startDate) { const s = new Date(startDate + 'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
+    const withDate = sessions.filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date));
+    if (withDate.length) { const s = new Date(withDate[0].date + 'T00:00:00'); s.setDate(s.getDate() - s.getDay() - 7); return toIsoDate(s); }
     return '2026-10-18';
   })();
-  const anchorDate = new Date(anchorIso+'T00:00:00');
-  anchorDate.setDate(anchorDate.getDate() + (activeWeek||0)*7);
-  const days = Array.from({length:7}, (_,index) => {
+  const anchorDate = new Date(anchorIso + 'T00:00:00');
+  anchorDate.setDate(anchorDate.getDate() + (activeWeek || 0) * 7);
+  const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(anchorDate);
-    date.setDate(anchorDate.getDate()+index);
+    date.setDate(anchorDate.getDate() + index);
     const iso = toIsoDate(date);
-    return [iso, date.toLocaleDateString(undefined,{weekday:'long'})];
+    return [iso, date.toLocaleDateString(undefined, { weekday: 'long' })];
   });
   const weekLabel = (w) => {
-    const s = new Date(anchorIso+'T00:00:00'); s.setDate(s.getDate() + w*7);
-    const e = new Date(s); e.setDate(s.getDate()+6);
-    const fmt = d => d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
-    return fmt(s)+' - '+fmt(e);
+    const s = new Date(anchorIso + 'T00:00:00'); s.setDate(s.getDate() + w * 7);
+    const e = new Date(s); e.setDate(s.getDate() + 6);
+    const fmt = d => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return fmt(s) + ' - ' + fmt(e);
   };
   const visibleDays = days.filter(([d]) => !hiddenDays[d]);
   const hours = [];
-  for (let m=GRID_START; m<GRID_END; m+=60) hours.push(m);
-  const totalHeight = (GRID_END-GRID_START)*PX_PER_MIN;
-  const weekSessions = sessions.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek||0));
+  for (let m = GRID_START; m < GRID_END; m += 60) hours.push(m);
+  const totalHeight = (GRID_END - GRID_START) * PX_PER_MIN;
+  const weekSessions = sessions.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek || 0));
 
   return (
     <div>
       {onSettingsChange && (
-        <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:12,fontSize:12.5,color:'#003223',background:'#fff',border:'1px solid #DDE2E6',borderRadius:8,padding:'10px 14px'}}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12, fontSize: 12.5, color: '#003223', background: '#fff', border: '1px solid #DDE2E6', borderRadius: 8, padding: '10px 14px' }}>
           <b>Academy dates</b>
-          <label style={{display:'flex',alignItems:'center',gap:5}}>Start <input type="date" className={selectStyle} value={academySettings?.startDate||''} onChange={e=>onSettingsChange({...academySettings, startDate:e.target.value})} /></label>
-          <label style={{display:'flex',alignItems:'center',gap:5}}>End <input type="date" className={selectStyle} value={academySettings?.endDate||''} onChange={e=>onSettingsChange({...academySettings, endDate:e.target.value})} /></label>
-          <span>{weeks && weeks.length ? (academySettings?.startDate ? weeks.length+' week'+(weeks.length===1?'':'s') : '') : 'Set both dates to generate the calendar'}</span>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>Start <input type="date" className={selectStyle} value={academySettings?.startDate || ''} onChange={e => onSettingsChange({ ...academySettings, startDate: e.target.value })} /></label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>End <input type="date" className={selectStyle} value={academySettings?.endDate || ''} onChange={e => onSettingsChange({ ...academySettings, endDate: e.target.value })} /></label>
+          <span>{weeks && weeks.length ? (academySettings?.startDate ? weeks.length + ' week' + (weeks.length === 1 ? '' : 's') : '') : 'Set both dates to generate the calendar'}</span>
         </div>
       )}
-      {onFellowWeeksChange && <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:12,fontSize:12.5,color:'#D5E0D5'}}><b>Fellow-visible weeks</b>{weeks.map(w=><label key={w} style={{display:'flex',alignItems:'center',gap:4, color: '#D5E0D5'}}><input type="checkbox" checked={fellowWeeks.includes(w)} onChange={()=>onFellowWeeksChange(fellowWeeks.includes(w)?fellowWeeks.filter(item=>item!==w):[...fellowWeeks,w])}/>W{String(w).padStart(2,'0')}</label>)}</div>}
-      <div style={{display:'flex', gap:6, marginBottom:14, flexWrap:'wrap'}}>
+      {onFellowWeeksChange && <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12, fontSize: 12.5, color: '#D5E0D5' }}><b>Fellow-visible weeks</b>{weeks.map(w => <label key={w} style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#D5E0D5' }}><input type="checkbox" checked={fellowWeeks.includes(w)} onChange={() => onFellowWeeksChange(fellowWeeks.includes(w) ? fellowWeeks.filter(item => item !== w) : [...fellowWeeks, w])} />W{String(w).padStart(2, '0')}</label>)}</div>}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
         {weeks.map(w => (
-          <button key={w} onClick={()=>setActiveWeek(w)} style={{
-            padding:'7px 14px', borderRadius:20, fontSize:13, fontWeight:600, cursor:'pointer',
-            border: activeWeek===w ? '1px solid #1F6F78' : '1px solid #C9CDD2',
-            background: activeWeek===w ? '#1F6F78' : '#fff', color: activeWeek===w ? '#fff' : '#003223'
-          }}>Week {String(w).padStart(2,'0')} · {weekLabel(w)}</button>
+          <button key={w} onClick={() => setActiveWeek(w)} style={{
+            padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            border: activeWeek === w ? '1px solid #1F6F78' : '1px solid #C9CDD2',
+            background: activeWeek === w ? '#1F6F78' : '#fff', color: activeWeek === w ? '#fff' : '#003223'
+          }}>Week {String(w).padStart(2, '0')} · {weekLabel(w)}</button>
         ))}
       </div>
-      {days.length>1 && (
-        <div style={{display:'flex', gap:14, marginBottom:12, flexWrap:'wrap'}}>
-          {days.map(([d,wd]) => (
-            <label key={d} style={{display:'flex', alignItems:'center', gap:6, fontSize:12.5, color: '#D5E0D5', cursor:'pointer'}}>
-              <input type="checkbox" checked={!hiddenDays[d]} onChange={()=>setHiddenDays(h=>({...h,[d]:!h[d]}))} />
+      {days.length > 1 && (
+        <div style={{ display: 'flex', gap: 14, marginBottom: 12, flexWrap: 'wrap' }}>
+          {days.map(([d, wd]) => (
+            <label key={d} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#D5E0D5', cursor: 'pointer' }}>
+              <input type="checkbox" checked={!hiddenDays[d]} onChange={() => setHiddenDays(h => ({ ...h, [d]: !h[d] }))} />
               {wd}, {dateLabel(d)}
             </label>
           ))}
         </div>
       )}
-      {weekSessions.length===0 ? (
-        <div style={{padding:'60px 0', textAlign:'center', color:'#003223', fontSize:14}}>No sessions match the current filters this week.</div>
+      {weekSessions.length === 0 ? (
+        <div style={{ padding: '60px 0', textAlign: 'center', color: '#003223', fontSize: 14 }}>No sessions match the current filters this week.</div>
       ) : (
-                                <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{display:'flex', width:'100%', minWidth:'fit-content'}}>
-                    <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
+        <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+          <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
             <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
-            <div className="relative" style={{height:totalHeight}}>
-              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{top:(m-GRID_START)*PX_PER_MIN-6}}>{String(Math.floor(m/60)).padStart(2,'0')}:00</div>))}
+            <div className="relative" style={{ height: totalHeight }}>
+              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: (m - GRID_START) * PX_PER_MIN - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
             </div>
           </div>
-          {visibleDays.map(([d,wd]) => {
-            const di = days.findIndex(x=>x[0]===d);
-            const prevDay = di>0 ? days[di-1][0] : null;
-            const daySessions = weekSessions.filter(s=>s.date===d).sort((a,b)=>toMin(a.start)-toMin(b.start));
-            const carryOver = prevDay ? weekSessions.filter(s=>s.date===prevDay && wrapsMidnight(s)) : [];
+          {visibleDays.map(([d, wd]) => {
+            const di = days.findIndex(x => x[0] === d);
+            const prevDay = di > 0 ? days[di - 1][0] : null;
+            const daySessions = weekSessions.filter(s => s.date === d).sort((a, b) => toMin(a.start) - toMin(b.start));
+            const carryOver = prevDay ? weekSessions.filter(s => s.date === prevDay && wrapsMidnight(s)) : [];
             return (
-                                            <div key={d} className="flex-1 min-w-[150px] border-r border-[#EEF0F2] box-border" style={{flexShrink:1, flexGrow:1, flexBasis:150}}>
+              <div key={d} className="flex-1 min-w-[150px] border-r border-[#EEF0F2] box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
                 <div className="h-[46px] box-border border-b border-[#EEF0F2] bg-[#F7F8F9] text-[12.5px] font-semibold text-center pt-[5px] text-[#003223]">
                   {wd}<div className="font-normal text-[#003223] text-[11px] leading-tight">{dateLabel(d)}</div>
                 </div>
-                <div className="relative" style={{height:totalHeight}} onClick={e=>{if(!onPlace || e.target!==e.currentTarget) return; const rect=e.currentTarget.getBoundingClientRect(); const minutes=Math.max(GRID_START, Math.min(GRID_END-15, GRID_START+Math.round((e.clientY-rect.top)/PX_PER_MIN/15)*15)); const start=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0'); onPlace(null,d,start);}} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault(); const id=Number(e.dataTransfer.getData('sessionId')); const session=sessions.find(item=>item.id===id); if(!session || !onDrop) return; const rect=e.currentTarget.getBoundingClientRect(); const minutes=Math.max(GRID_START, Math.min(GRID_END-15, GRID_START+Math.round((e.clientY-rect.top)/PX_PER_MIN/15)*15)); const start=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0'); onDrop(session,d,start);}}>
-                  {hours.map(m => (<div key={m} style={{position:'absolute', top:(m-GRID_START)*PX_PER_MIN, left:0, right:0, borderTop:'1px solid #F2F3F4'}} />))}
+                <div className="relative" style={{ height: totalHeight }} onClick={e => { if (!onPlace || e.target !== e.currentTarget) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15)); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onPlace(null, d, start); }} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const id = Number(e.dataTransfer.getData('sessionId')); const session = sessions.find(item => item.id === id); if (!session || !onDrop) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15)); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onDrop(session, d, start); }}>
+                  {hours.map(m => (<div key={m} style={{ position: 'absolute', top: (m - GRID_START) * PX_PER_MIN, left: 0, right: 0, borderTop: '1px solid #F2F3F4' }} />))}
                   {carryOver.map(s => {
-                    const height = Math.max(toMin(s.end)*PX_PER_MIN, 16);
+                    const height = Math.max(toMin(s.end) * PX_PER_MIN, 16);
                     const color = getTypeColor(s.type, sessionTypes);
                     return (
-                      <div key={s.id+'-cont'} draggable={!!onDrop} onDragStart={e=>e.dataTransfer.setData('sessionId',String(s.id))} onClick={()=>onSelect(s)} style={{
-                        position:'absolute', top:0, left:3, right:3, height, background: color+'26', borderLeft:'3px solid '+color,
-                                                borderRadius:4, padding:'3px 6px', cursor:'pointer', overflow:'hidden', fontSize:10.5, lineHeight:1.25, fontStyle:'italic', opacity:0.85, overflowWrap:'breakWord', wordBreak:'breakWord'
-                      }} title={s.name+' (continued from previous day)'}>
-                        <div style={{fontWeight:600, color:'#1B2733'}}>{s.name} <span style={{fontWeight:400, color:'#003223'}}>(cont.)</span></div>
-                        {height>28 && <div style={{color:'#003223'}}>until {s.end}</div>}
+                      <div key={s.id + '-cont'} draggable={!!onDrop} onDragStart={e => e.dataTransfer.setData('sessionId', String(s.id))} onClick={() => onSelect(s)} style={{
+                        position: 'absolute', top: 0, left: 3, right: 3, height, background: color + '26', borderLeft: '3px solid ' + color,
+                        borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, fontStyle: 'italic', opacity: 0.85, overflowWrap: 'breakWord', wordBreak: 'breakWord'
+                      }} title={s.name + ' (continued from previous day)'}>
+                        <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name} <span style={{ fontWeight: 400, color: '#003223' }}>(cont.)</span></div>
+                        {height > 28 && <div style={{ color: '#003223' }}>until {s.end}</div>}
                       </div>
                     );
                   })}
-                  {layoutOverlapping(daySessions).map(({s, col, cols}) => {
-                    const start = toMin(s.start)||0;
-                    const height = Math.max((wrapsMidnight(s) ? (24*60-start) : (((toMin(s.end)||start))-start))*PX_PER_MIN, 16);
+                  {layoutOverlapping(daySessions).map(({ s, col, cols }) => {
+                    const start = toMin(s.start) || 0;
+                    const height = Math.max((wrapsMidnight(s) ? (24 * 60 - start) : (((toMin(s.end) || start)) - start)) * PX_PER_MIN, 16);
                     const color = getTypeColor(s.type, sessionTypes);
                     return (
-                      <div key={s.id} draggable={!!onDrop} onDragStart={e=>e.dataTransfer.setData('sessionId',String(s.id))} onClick={()=>onSelect(s)} style={{
-                        position:'absolute', top:start*PX_PER_MIN, left:`calc(${col*100/cols}% + 2px)`, width:`calc(${100/cols}% - 4px)`, height, background: color+'26', borderLeft:'3px solid '+color,
-                                                borderRadius:4, padding:'3px 6px', cursor:'pointer', overflow:'hidden', fontSize:10.5, lineHeight:1.25, boxSizing:'border-box', overflowWrap:'breakWord', wordBreak:'breakWord'
+                      <div key={s.id} draggable={!!onDrop} onDragStart={e => e.dataTransfer.setData('sessionId', String(s.id))} onClick={() => onSelect(s)} style={{
+                        position: 'absolute', top: start * PX_PER_MIN, left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height, background: color + '26', borderLeft: '3px solid ' + color,
+                        borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', overflowWrap: 'breakWord', wordBreak: 'breakWord'
                       }} title={s.name}>
-                        <div style={{fontWeight:600, color:'#1B2733'}}>{s.name}</div>
-                        {height>28 && <div style={{color:'#003223'}}>{s.start}–{s.end}</div>}
-                        {height>42 && s.facilitators && s.facilitators.length>0 && (
-                          <div style={{color:'#003223', display:'flex', alignItems:'center', gap:3, marginTop:1}}><Users size={9}/> {fmtFacilitators(s.facilitators, rooms, staff)}</div>
+                        <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}</div>
+                        {height > 28 && <div style={{ color: '#003223' }}>{s.start}–{s.end}</div>}
+                        {height > 42 && s.facilitators && s.facilitators.length > 0 && (
+                          <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><Users size={9} /> {fmtFacilitators(s.facilitators, rooms, staff)}</div>
                         )}
-                        {height>56 && ((s.rooms||[]).length>0 || (s.roomIds||[]).length>0) && (
-                          <div style={{color:'#003223', display:'flex', alignItems:'center', gap:3, marginTop:1}}><DoorOpen size={9}/> {getVisibleRooms(s, auth, roster, rooms).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || 'Room not assigned'}</div>
+                        {height > 56 && ((s.rooms || []).length > 0 || (s.roomIds || []).length > 0) && (
+                          <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><DoorOpen size={9} /> {getVisibleRooms(s, auth, roster, rooms).map(r => r.name + ' · ' + (r.facilitator || 'Facilitator not set')).join(', ') || 'Room not assigned'}</div>
                         )}
-                        {height>56 && s.resources && s.resources.length>0 && (
-                          <div style={{color:'#003223', display:'flex', alignItems:'center', gap:3, marginTop:1}}><LinkIcon size={9}/> {s.resources.length} resource{s.resources.length>1?'s':''}</div>
+                        {height > 56 && s.resources && s.resources.length > 0 && (
+                          <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><LinkIcon size={9} /> {s.resources.length} resource{s.resources.length > 1 ? 's' : ''}</div>
                         )}
                       </div>
                     );
@@ -1201,43 +1478,43 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
           })}
         </div></div>
       )}
-      <div style={{marginTop:18, background:'#fff', border:'1px solid #DDE2E6', borderRadius:8, padding:16}}>
-        <div style={{fontSize:13, fontWeight:700, marginBottom:10, color:'#003223'}}>Session list</div>
-        <div className="wa14-table-scroll"><div style={{display:'flex', flexDirection:'column', gap:6, marginBottom:18, minWidth:480}}>{weekSessions.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')||toMin(a.start)-toMin(b.start)).map(s=><div key={s.id} onClick={()=>onSelect(s)} style={{display:'flex',justifyContent:'space-between',gap:10,padding:'8px 0',borderBottom:'1px solid #EEF0F2',fontSize:12.5,cursor:'pointer'}}><span style={{color:'#003223'}}>{s.name}</span><span style={{color:'#003223',whiteSpace:'nowrap'}}>{dateLabel(s.date)} · {s.start}–{s.end}</span></div>)}</div></div>
-        <div style={{fontSize:13, fontWeight:700, marginBottom:10, color:'#003223'}}>Unscheduled sessions</div>
-        <div style={{display:'flex', flexWrap:'wrap', gap:8}}>{sessions.filter(s=>!s.date).map(s=><div key={s.id} draggable={!!onDrop} onDragStart={e=>e.dataTransfer.setData('sessionId',String(s.id))} onClick={()=>onPlace ? onPlace(s, '', '') : onSelect(s)} style={{padding:'8px 10px', border:'1px solid #DDE2E6', borderLeft:'3px solid '+getTypeColor(s.type,sessionTypes), borderRadius:5, cursor:onDrop?'grab':'pointer', fontSize:12.5}}>{s.name || '(untitled)'}</div>)}</div>
-        {sessions.filter(s=>!s.date).length===0 && <div style={{fontSize:12.5,color:'#003223'}}>All sessions are scheduled.</div>}
+      <div style={{ marginTop: 18, background: '#fff', border: '1px solid #DDE2E6', borderRadius: 8, padding: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Session list</div>
+        <div className="wa14-table-scroll"><div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, minWidth: 480 }}>{weekSessions.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || toMin(a.start) - toMin(b.start)).map(s => <div key={s.id} onClick={() => onSelect(s)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #EEF0F2', fontSize: 12.5, cursor: 'pointer' }}><span style={{ color: '#003223' }}>{s.name}</span><span style={{ color: '#003223', whiteSpace: 'nowrap' }}>{dateLabel(s.date)} · {s.start}–{s.end}</span></div>)}</div></div>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Unscheduled sessions</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{sessions.filter(s => !s.date).map(s => <div key={s.id} draggable={!!onDrop} onDragStart={e => e.dataTransfer.setData('sessionId', String(s.id))} onClick={() => onPlace ? onPlace(s, '', '') : onSelect(s)} style={{ padding: '8px 10px', border: '1px solid #DDE2E6', borderLeft: '3px solid ' + getTypeColor(s.type, sessionTypes), borderRadius: 5, cursor: onDrop ? 'grab' : 'pointer', fontSize: 12.5 }}>{s.name || '(untitled)'}</div>)}</div>
+        {sessions.filter(s => !s.date).length === 0 && <div style={{ fontSize: 12.5, color: '#003223' }}>All sessions are scheduled.</div>}
       </div>
     </div>
   );
 }
 
-function PlacementPanel({ sessions, initial, onSave, onClose }){
-  const [sessionId,setSessionId]=useState(initial.session?.id || '');
-  const [date,setDate]=useState(initial.date || '');
-  const [start,setStart]=useState(initial.start || '09:00');
-  const [end,setEnd]=useState(initial.session?.start && initial.session?.end ? initial.session.end : '10:00');
-  const selected = sessions.find(item=>String(item.id)===String(sessionId));
-  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:110}} onClick={onClose}><div onClick={e=>e.stopPropagation()} style={{width:380,maxWidth:'92vw',background:'#003223',height:'100%',overflowY:'auto',padding:22}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><div style={{fontWeight:700}}>Place session on calendar</div><button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer'}}><X size={18}/></button></div><Field label="Session"><select className={inputStyle} value={sessionId} onChange={e=>setSessionId(e.target.value)}><option value="">Choose a session</option>{sessions.map(item=><option key={item.id} value={item.id}>{item.name || '(untitled)'}</option>)}</select></Field><Field label="Date"><input type="date" className={inputStyle} value={date} onChange={e=>setDate(e.target.value)}/></Field><div style={{display:'flex',gap:10}}><Field label="Start time" style={{flex:1}}><input type="time" className={inputStyle} value={start} onChange={e=>setStart(e.target.value)}/></Field><Field label="End time" style={{flex:1}}><input type="time" className={inputStyle} value={end} onChange={e=>setEnd(e.target.value)}/></Field></div><button disabled={!selected || !date || !start || !end} onClick={()=>onSave(selected,date,start,end)} className={btnPrimary+' w-full justify-center mt-[12px]'} style={{opacity:selected&&date&&start&&end?1:0.5}}>Add to calendar</button></div></div>;
+function PlacementPanel({ sessions, initial, onSave, onClose }) {
+  const [sessionId, setSessionId] = useState(initial.session?.id || '');
+  const [date, setDate] = useState(initial.date || '');
+  const [start, setStart] = useState(initial.start || '09:00');
+  const [end, setEnd] = useState(initial.session?.start && initial.session?.end ? initial.session.end : '10:00');
+  const selected = sessions.find(item => String(item.id) === String(sessionId));
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 110 }} onClick={onClose}><div onClick={e => e.stopPropagation()} style={{ width: 380, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><div style={{ fontWeight: 700 }}>Place session on calendar</div><button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button></div><Field label="Session"><select className={inputStyle} value={sessionId} onChange={e => setSessionId(e.target.value)}><option value="">Choose a session</option>{sessions.map(item => <option key={item.id} value={item.id}>{item.name || '(untitled)'}</option>)}</select></Field><Field label="Date"><input type="date" className={inputStyle} value={date} onChange={e => setDate(e.target.value)} /></Field><div style={{ display: 'flex', gap: 10 }}><Field label="Start time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={start} onChange={e => setStart(e.target.value)} /></Field><Field label="End time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={end} onChange={e => setEnd(e.target.value)} /></Field></div><button disabled={!selected || !date || !start || !end} onClick={() => onSave(selected, date, start, end)} className={btnPrimary + ' w-full justify-center mt-[12px]'} style={{ opacity: selected && date && start && end ? 1 : 0.5 }}>Add to calendar</button></div></div>;
 }
 
-function getTypeColor(name, types){
-  return (types||[]).find(p=>p.name===name)?.color || TYPE_COLOR[name] || '#2A5C4B';
+function getTypeColor(name, types) {
+  return (types || []).find(p => p.name === name)?.color || TYPE_COLOR[name] || '#2A5C4B';
 }
 
-function getModeColor(name, modes){
-  return (modes||[]).find(m=>m.name===name)?.color || DEFAULT_MODE_COLORS[name] || '#9DB09D';
+function getModeColor(name, modes) {
+  return (modes || []).find(m => m.name === name)?.color || DEFAULT_MODE_COLORS[name] || '#9DB09D';
 }
 
-function sessionPillarNames(session, pillarTags){
-  return (session.pillarIds||[]).map(id => (pillarTags||[]).find(p=>String(p.id)===String(id))).filter(Boolean).map(p=>p.name);
+function sessionPillarNames(session, pillarTags) {
+  return (session.pillarIds || []).map(id => (pillarTags || []).find(p => String(p.id) === String(id))).filter(Boolean).map(p => p.name);
 }
 
 // Assign each overlapping session a column + total column count so simultaneous
 // sessions render side-by-side in the day column instead of stacking on top of each other.
-function layoutOverlapping(daySessions){
-  const items = daySessions.map(s => ({ s, start: toMin(s.start)||0, end: toMin(s.end)||(toMin(s.start)||0) }));
-  items.sort((a,b) => a.start-b.start || a.end-b.end);
+function layoutOverlapping(daySessions) {
+  const items = daySessions.map(s => ({ s, start: toMin(s.start) || 0, end: toMin(s.end) || (toMin(s.start) || 0) }));
+  items.sort((a, b) => a.start - b.start || a.end - b.end);
   const result = [];
   let cluster = [];
   let clusterEnd = -Infinity;
@@ -1264,249 +1541,249 @@ function layoutOverlapping(daySessions){
   return result;
 }
 
-function getVisibleRooms(session, auth, roster, rooms){
-  const assigned = (session.rooms||[]).concat((session.roomIds||[]).map(id=>(rooms||[]).find(room=>room.id===id)).filter(Boolean));
-  if(auth.role!=='fellow') return assigned;
-  return assigned.filter(room=>(room.fellowIds||[]).includes(roster.find(fellow=>fellow.email===auth.email)?.id));
+function getVisibleRooms(session, auth, roster, rooms) {
+  const assigned = (session.rooms || []).concat((session.roomIds || []).map(id => (rooms || []).find(room => room.id === id)).filter(Boolean));
+  if (auth.role !== 'fellow') return assigned;
+  return assigned.filter(room => (room.fellowIds || []).includes(roster.find(fellow => fellow.email === auth.email)?.id));
 }
 
-function isSessionVisibleToFellow(session, auth, roster, rooms){
-  const fellow = (roster||[]).find(item=>item.id===auth.fellowId || item.email===auth.email);
-  const hasTargeting = (session.roomIds||[]).length>0 || (session.rooms||[]).length>0 || Boolean(session.afaGroup);
+function isSessionVisibleToFellow(session, auth, roster, rooms) {
+  const fellow = (roster || []).find(item => item.id === auth.fellowId || item.email === auth.email);
+  const hasTargeting = (session.roomIds || []).length > 0 || (session.rooms || []).length > 0 || Boolean(session.afaGroup);
   if (!hasTargeting) return true; // sessions with no room/AFA targeting are visible to everyone
-  const roomMatch = (session.roomIds||[]).some(id => (rooms||[]).find(room=>room.id===id)?.fellowIds?.includes(fellow?.id));
-  const groupMatch = Boolean(auth.afaGroup && session.afaGroup && auth.afaGroup===session.afaGroup);
+  const roomMatch = (session.roomIds || []).some(id => (rooms || []).find(room => room.id === id)?.fellowIds?.includes(fellow?.id));
+  const groupMatch = Boolean(auth.afaGroup && session.afaGroup && auth.afaGroup === session.afaGroup);
   return roomMatch || groupMatch;
 }
 
-function sessionDateTime(session, field){
+function sessionDateTime(session, field) {
   if (!session.date || !session[field]) return null;
   return new Date(`${session.date}T${session[field]}:00+06:00`);
 }
 
-function FellowOverview({ sessions, auth, rooms, attendance, codes, onAttendanceCode }){
+function FellowOverview({ sessions, auth, rooms, attendance, codes, onAttendanceCode }) {
   const now = new Date();
-  const upcoming = sessions.filter(session=>sessionDateTime(session,'end') > now).sort((a,b)=>sessionDateTime(a,'start')-sessionDateTime(b,'start'));
-  const current = upcoming.find(session=>sessionDateTime(session,'start') <= now && sessionDateTime(session,'end') > now);
-  const next = current ? upcoming.find(session=>sessionDateTime(session,'start') > now) : upcoming[0];
+  const upcoming = sessions.filter(session => sessionDateTime(session, 'end') > now).sort((a, b) => sessionDateTime(a, 'start') - sessionDateTime(b, 'start'));
+  const current = upcoming.find(session => sessionDateTime(session, 'start') <= now && sessionDateTime(session, 'end') > now);
+  const next = current ? upcoming.find(session => sessionDateTime(session, 'start') > now) : upcoming[0];
   const [codeInputs, setCodeInputs] = useState({});
   const checkIn = session => {
-    const existing=attendance.find(entry=>entry.sessionId===session.id&&entry.fellowId===auth.fellowId);
-    if(existing) return;
-    const code=(codeInputs[session.id]||'').trim();
-    if(!code){ window.alert('Enter one of the attendance codes shared for this session.'); return; }
+    const existing = attendance.find(entry => entry.sessionId === session.id && entry.fellowId === auth.fellowId);
+    if (existing) return;
+    const code = (codeInputs[session.id] || '').trim();
+    if (!code) { window.alert('Enter one of the attendance codes shared for this session.'); return; }
     const ok = onAttendanceCode ? onAttendanceCode(session, code) : false;
-    if (ok) setCodeInputs(prev=>({...prev, [session.id]:''}));
+    if (ok) setCodeInputs(prev => ({ ...prev, [session.id]: '' }));
   };
   const codeStats = (session) => {
-    const list = (codes||[]).filter(c=>String(c.sessionId)===String(session.id));
+    const list = (codes || []).filter(c => String(c.sessionId) === String(session.id));
     if (!list.length) return session.attendanceCode ? 'Code required' : 'No codes generated yet';
-    const used = list.filter(c=>c.used).length;
+    const used = list.filter(c => c.used).length;
     return used + ' of ' + list.length + ' codes used';
   };
-  const card = (label, session) => <div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16,flex:1,minWidth:220}}><div style={{fontSize:11.5,color:'#9DB09D',fontWeight:600,marginBottom:6}}>{label}</div>{session ? <><div style={{fontWeight:700,fontSize:15}}>{session.name}</div><div style={{fontSize:12.5,color:'#D5E0D5',marginTop:5}}>{dateLabel(session.date)} · {session.start}"{session.end}</div><div style={{fontSize:12.5,color:'#D5E0D5',marginTop:5}}>{getVisibleRooms(session,auth,[{id:auth.fellowId,email:auth.email}],rooms).map(room=>room.name+' · '+(room.physicalLocation||room.meetingUrl||'Location not set')).join(', ') || 'Location not assigned'}</div><div style={{fontSize:12,color:'#9DB09D',marginTop:6}}>{codeStats(session)}</div>{attendance.some(entry=>entry.sessionId===session.id&&entry.fellowId===auth.fellowId) ? <div style={{marginTop:8,fontSize:12.5,color:'#D65641',fontWeight:700}}>Attendance recorded</div> : <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}><input value={codeInputs[session.id]||''} onChange={e=>setCodeInputs(prev=>({...prev,[session.id]:e.target.value}))} placeholder="Enter attendance code" className={inputStyle} style={{maxWidth:180}} /><button onClick={()=>checkIn(session)} className={btnSecondary}>Give attendance</button></div>}</> : <div style={{fontSize:13,color:'#9DB09D'}}>No session</div>}</div>;
-  return <div style={{marginBottom:18}}><div style={{fontSize:13,color:'#D5E0D5',marginBottom:10}}>AFA group: <b>{auth.afaGroup || 'Not assigned'}</b></div><div style={{display:'flex',gap:12,flexWrap:'wrap'}}>{card('Current session',current)}{card('Upcoming session',next)}</div></div>;
+  const card = (label, session) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, flex: 1, minWidth: 220 }}><div style={{ fontSize: 11.5, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>{label}</div>{session ? <><div style={{ fontWeight: 700, fontSize: 15 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{dateLabel(session.date)} · {session.start}"{session.end}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(room => room.name + ' · ' + (room.physicalLocation || room.meetingUrl || 'Location not set')).join(', ') || 'Location not assigned'}</div><div style={{ fontSize: 12, color: '#9DB09D', marginTop: 6 }}>{codeStats(session)}</div>{attendance.some(entry => entry.sessionId === session.id && entry.fellowId === auth.fellowId) ? <div style={{ marginTop: 8, fontSize: 12.5, color: '#D65641', fontWeight: 700 }}>Attendance recorded</div> : <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}><input value={codeInputs[session.id] || ''} onChange={e => setCodeInputs(prev => ({ ...prev, [session.id]: e.target.value }))} placeholder="Enter attendance code" className={inputStyle} style={{ maxWidth: 180 }} /><button onClick={() => checkIn(session)} className={btnSecondary}>Give attendance</button></div>}</> : <div style={{ fontSize: 13, color: '#9DB09D' }}>No session</div>}</div>;
+  return <div style={{ marginBottom: 18 }}><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 10 }}>AFA group: <b>{auth.afaGroup || 'Not assigned'}</b></div><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>{card('Current session', current)}{card('Upcoming session', next)}</div></div>;
 }
 
-function LegacyFellowAssessments({ assessments, questions, attempts, auth, sessions, onAttemptsChange }){
-  const [activeAttempt,setActiveAttempt]=useState(null);
-  const fellowAssessments = assessments.filter(assessment=>{
-    if(assessment.status!=='published') return false;
-    const session = sessions.find(item=>String(item.id)===String(assessment.sessionId));
+function LegacyFellowAssessments({ assessments, questions, attempts, auth, sessions, onAttemptsChange }) {
+  const [activeAttempt, setActiveAttempt] = useState(null);
+  const fellowAssessments = assessments.filter(assessment => {
+    if (assessment.status !== 'published') return false;
+    const session = sessions.find(item => String(item.id) === String(assessment.sessionId));
     if (!session) return false;
     const now = new Date();
-    return (!assessment.startsAt || new Date(assessment.startsAt) <= now) && (!assessment.endsAt || new Date(assessment.endsAt) >= now) && (assessment.assignmentGroups||[]).some(group=>group.fellowIds?.includes(auth.fellowId));
+    return (!assessment.startsAt || new Date(assessment.startsAt) <= now) && (!assessment.endsAt || new Date(assessment.endsAt) >= now) && (assessment.assignmentGroups || []).some(group => group.fellowIds?.includes(auth.fellowId));
   });
   const start = assessment => {
-    const existing = attempts.find(attempt=>attempt.assessmentId===assessment.id && attempt.fellowId===auth.fellowId && attempt.status==='in_progress');
-    if(existing){ setActiveAttempt(existing); return; }
-    const availableQuestions = assessment.questions?.length ? assessment.questions : (assessment.questionIds||[]).map(id=>questions.find(question=>String(question.id)===String(id))).filter(Boolean);
-    const order = effectiveQuestions({...assessment,questions:availableQuestions}, auth.fellowId, []).map(question=>question.id).length ? effectiveQuestions({...assessment,questions:availableQuestions}, auth.fellowId, []).map(question=>question.id) : availableQuestions.map(question=>question.id);
+    const existing = attempts.find(attempt => attempt.assessmentId === assessment.id && attempt.fellowId === auth.fellowId && attempt.status === 'in_progress');
+    if (existing) { setActiveAttempt(existing); return; }
+    const availableQuestions = assessment.questions?.length ? assessment.questions : (assessment.questionIds || []).map(id => questions.find(question => String(question.id) === String(id))).filter(Boolean);
+    const order = effectiveQuestions({ ...assessment, questions: availableQuestions }, auth.fellowId, []).map(question => question.id).length ? effectiveQuestions({ ...assessment, questions: availableQuestions }, auth.fellowId, []).map(question => question.id) : availableQuestions.map(question => question.id);
     if (!order.length) { window.alert('This assessment has no questions assigned to you.'); return; }
-    const next = {id:'attempt'+Date.now(),assessmentId:assessment.id,fellowId:auth.fellowId,sessionId:assessment.sessionId,questionOrder:order,currentIndex:0,answers:{},startedAt:new Date().toISOString(),status:'in_progress'};
-    onAttemptsChange([...attempts,next]); setActiveAttempt(next);
+    const next = { id: 'attempt' + Date.now(), assessmentId: assessment.id, fellowId: auth.fellowId, sessionId: assessment.sessionId, questionOrder: order, currentIndex: 0, answers: {}, startedAt: new Date().toISOString(), status: 'in_progress' };
+    onAttemptsChange([...attempts, next]); setActiveAttempt(next);
   };
-  const saveAnswer = (questionId,value) => { const next={...activeAttempt,answers:{...activeAttempt.answers,[questionId]:value}}; setActiveAttempt(next); onAttemptsChange(attempts.map(attempt=>attempt.id===next.id?next:attempt)); };
-  if(activeAttempt){ const assessment=assessments.find(item=>item.id===activeAttempt.assessmentId); const question=(assessment?.questions||questions).find(item=>item.id===activeAttempt.questionOrder[activeAttempt.currentIndex]); return <div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16,marginBottom:18,maxWidth:620}}><div style={{fontSize:12,color:'#9DB09D',marginBottom:6}}>{assessment?.title} · Question {activeAttempt.currentIndex+1} of {activeAttempt.questionOrder.length}</div><div style={{fontSize:15,fontWeight:700,marginBottom:12}}>{question?.text || 'Question unavailable'}</div>{question?.imageUrl && <img src={question.imageUrl} alt="Question" style={{maxWidth:'100%',maxHeight:220,objectFit:'contain',marginBottom:12}} />}{question.type==='paragraph' ? <textarea rows={6} className={inputStyle+' resize-y'} placeholder="Write your answer here…" value={activeAttempt.answers[question.id]||''} onChange={event=>saveAnswer(question.id,event.target.value)} /> : question?.options?.map(option=><label key={option.id} style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,fontSize:13}}><input type={question.type==='multiple'||question.type==='check'?'checkbox':'radio'} name={question.id} checked={Array.isArray(activeAttempt.answers[question.id]) ? activeAttempt.answers[question.id].includes(option.id) : activeAttempt.answers[question.id]===option.id} onChange={event=>saveAnswer(question.id,question.type==='multiple'||question.type==='check' ? [...(activeAttempt.answers[question.id]||[]).filter(item=>item!==option.id), ...(event.target.checked?[option.id]:[])] : option.id)} />{option.text}</label>)}<button onClick={()=>{if(activeAttempt.currentIndex+1<activeAttempt.questionOrder.length){const next={...activeAttempt,currentIndex:activeAttempt.currentIndex+1};setActiveAttempt(next);onAttemptsChange(attempts.map(attempt=>attempt.id===next.id?next:attempt));}else{const paragraphReviews={};(assessment?.questions||questions).filter(q=>q.type==='paragraph'&&activeAttempt.questionOrder.includes(q.id)).forEach(q=>{if(!activeAttempt.reviews||!activeAttempt.reviews[q.id])paragraphReviews[q.id]={status:'pending_review',score:null,feedback:'',aiSuggestion:null};});const next={...activeAttempt,reviews:{...(activeAttempt.reviews||{}),...paragraphReviews},status:'submitted',submittedAt:new Date().toISOString()};onAttemptsChange(attempts.map(attempt=>attempt.id===next.id?next:attempt));setActiveAttempt(null);}}} className={btnPrimary+' mt-[10px]'}>{activeAttempt.currentIndex+1<activeAttempt.questionOrder.length?'Next question':'Submit assessment'}</button></div>; }
-  return <div style={{marginBottom:18}}><div style={{fontSize:13,fontWeight:700,marginBottom:10}}>Active assessments</div>{fellowAssessments.length ? fellowAssessments.map(assessment=><div key={assessment.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,maxWidth:620,marginBottom:8,display:'flex',justifyContent:'space-between',gap:12}}><div><b>{assessment.title}</b><div style={{fontSize:12,color:'#D5E0D5',marginTop:4}}>{sessions.find(item=>String(item.id)===String(assessment.sessionId))?.name} · {assessment.questionIds?.length||0} questions</div></div><button onClick={()=>start(assessment)} className={btnPrimary}>Start</button></div>) : <div style={{fontSize:12.5,color:'#9DB09D'}}>No active assessments.</div>}</div>;
+  const saveAnswer = (questionId, value) => { const next = { ...activeAttempt, answers: { ...activeAttempt.answers, [questionId]: value } }; setActiveAttempt(next); onAttemptsChange(attempts.map(attempt => attempt.id === next.id ? next : attempt)); };
+  if (activeAttempt) { const assessment = assessments.find(item => item.id === activeAttempt.assessmentId); const question = (assessment?.questions || questions).find(item => item.id === activeAttempt.questionOrder[activeAttempt.currentIndex]); return <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 18, maxWidth: 620 }}><div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 6 }}>{assessment?.title} · Question {activeAttempt.currentIndex + 1} of {activeAttempt.questionOrder.length}</div><div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>{question?.text || 'Question unavailable'}</div>{question?.imageUrl && <img src={question.imageUrl} alt="Question" style={{ maxWidth: '100%', maxHeight: 220, objectFit: 'contain', marginBottom: 12 }} />}{question.type === 'paragraph' ? <textarea rows={6} className={inputStyle + ' resize-y'} placeholder="Write your answer here…" value={activeAttempt.answers[question.id] || ''} onChange={event => saveAnswer(question.id, event.target.value)} /> : question?.options?.map(option => <label key={option.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 13 }}><input type={question.type === 'multiple' || question.type === 'check' ? 'checkbox' : 'radio'} name={question.id} checked={Array.isArray(activeAttempt.answers[question.id]) ? activeAttempt.answers[question.id].includes(option.id) : activeAttempt.answers[question.id] === option.id} onChange={event => saveAnswer(question.id, question.type === 'multiple' || question.type === 'check' ? [...(activeAttempt.answers[question.id] || []).filter(item => item !== option.id), ...(event.target.checked ? [option.id] : [])] : option.id)} />{option.text}</label>)}<button onClick={() => { if (activeAttempt.currentIndex + 1 < activeAttempt.questionOrder.length) { const next = { ...activeAttempt, currentIndex: activeAttempt.currentIndex + 1 }; setActiveAttempt(next); onAttemptsChange(attempts.map(attempt => attempt.id === next.id ? next : attempt)); } else { const paragraphReviews = {}; (assessment?.questions || questions).filter(q => q.type === 'paragraph' && activeAttempt.questionOrder.includes(q.id)).forEach(q => { if (!activeAttempt.reviews || !activeAttempt.reviews[q.id]) paragraphReviews[q.id] = { status: 'pending_review', score: null, feedback: '', aiSuggestion: null }; }); const next = { ...activeAttempt, reviews: { ...(activeAttempt.reviews || {}), ...paragraphReviews }, status: 'submitted', submittedAt: new Date().toISOString() }; onAttemptsChange(attempts.map(attempt => attempt.id === next.id ? next : attempt)); setActiveAttempt(null); } }} className={btnPrimary + ' mt-[10px]'}>{activeAttempt.currentIndex + 1 < activeAttempt.questionOrder.length ? 'Next question' : 'Submit assessment'}</button></div>; }
+  return <div style={{ marginBottom: 18 }}><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Active assessments</div>{fellowAssessments.length ? fellowAssessments.map(assessment => <div key={assessment.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, maxWidth: 620, marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><b>{assessment.title}</b><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{sessions.find(item => String(item.id) === String(assessment.sessionId))?.name} · {assessment.questionIds?.length || 0} questions</div></div><button onClick={() => start(assessment)} className={btnPrimary}>Start</button></div>) : <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No active assessments.</div>}</div>;
 }
 
-function FellowAssessments({ assessments, questions, attempts, auth, sessions, roster, onAttemptsChange, onIncident, deviceRequests, onDeviceRequest, showToast }){
-  const [view,setView]=useState('list');
-  const [activeAttempt,setActiveAttempt]=useState(null);
-  const [instructionFor,setInstructionFor]=useState(null);
-  const available = assessments.filter(assessment => assessment.status==='published' && (!assessment.startsAt || new Date(assessment.startsAt)<=new Date()) && (!assessment.endsAt || new Date(assessment.endsAt)>=new Date()) && (assessment.assignmentGroups||[]).some(group=>(group.fellowIds||[]).includes(auth.fellowId)));
+function FellowAssessments({ assessments, questions, attempts, auth, sessions, roster, onAttemptsChange, onIncident, deviceRequests, onDeviceRequest, showToast }) {
+  const [view, setView] = useState('list');
+  const [activeAttempt, setActiveAttempt] = useState(null);
+  const [instructionFor, setInstructionFor] = useState(null);
+  const available = assessments.filter(assessment => assessment.status === 'published' && (!assessment.startsAt || new Date(assessment.startsAt) <= new Date()) && (!assessment.endsAt || new Date(assessment.endsAt) >= new Date()) && (assessment.assignmentGroups || []).some(group => (group.fellowIds || []).includes(auth.fellowId)));
   const questionFor = (attempt, index) => {
-    const assessment=assessments.find(item=>String(item.id)===String(attempt.assessmentId));
-    return (assessment?.questions||questions).find(item=>String(item.id)===String(attempt.questionOrder[index]));
+    const assessment = assessments.find(item => String(item.id) === String(attempt.assessmentId));
+    return (assessment?.questions || questions).find(item => String(item.id) === String(attempt.questionOrder[index]));
   };
   const start = assessment => {
-    const existing=attempts.find(item=>item.assessmentId===assessment.id&&item.fellowId===auth.fellowId&&item.status==='in_progress');
-    if(existing && existing.deviceLocked && existing.deviceId && existing.deviceId!==getDeviceFingerprint() && existing.deviceApproved!==true){
-      const pending = (deviceRequests||[]).find(r=>String(r.attemptId)===String(existing.id) && r.status==='pending');
-      if(!pending && onDeviceRequest) onDeviceRequest({ id:'dev'+Date.now(), attemptId:existing.id, assessmentId:assessment.id, fellowId:auth.fellowId, oldDeviceId:existing.deviceId, newDeviceId:getDeviceFingerprint(), status:'pending', requestedAt:new Date().toISOString() });
-      onIncident && onIncident({ type:'device_change_requested', assessmentId:assessment.id, fellowId:auth.fellowId, attemptId:existing.id, deviceId:getDeviceFingerprint() });
+    const existing = attempts.find(item => item.assessmentId === assessment.id && item.fellowId === auth.fellowId && item.status === 'in_progress');
+    if (existing && existing.deviceLocked && existing.deviceId && existing.deviceId !== getDeviceFingerprint() && existing.deviceApproved !== true) {
+      const pending = (deviceRequests || []).find(r => String(r.attemptId) === String(existing.id) && r.status === 'pending');
+      if (!pending && onDeviceRequest) onDeviceRequest({ id: 'dev' + Date.now(), attemptId: existing.id, assessmentId: assessment.id, fellowId: auth.fellowId, oldDeviceId: existing.deviceId, newDeviceId: getDeviceFingerprint(), status: 'pending', requestedAt: new Date().toISOString() });
+      onIncident && onIncident({ type: 'device_change_requested', assessmentId: assessment.id, fellowId: auth.fellowId, attemptId: existing.id, deviceId: getDeviceFingerprint() });
       showToast && showToast('This assessment is locked to your previous device. An admin has been notified.');
       return;
     }
-    if(existing){setActiveAttempt(existing);setView('take');return;}
-    const assigned=effectiveQuestions(assessment,auth.fellowId,[]);
-    if(!assigned.length){window.alert('This assessment has no questions assigned to you.');return;}
-    const fingerprint=getDeviceFingerprint();
-    const next={id:'attempt'+Date.now(),assessmentId:assessment.id,fellowId:auth.fellowId,sessionId:assessment.sessionId,questionOrder:assigned.map(question=>question.id),currentIndex:0,answers:{},startedAt:new Date().toISOString(),status:'in_progress',deviceId:fingerprint,deviceLocked:true,deviceApproved:true,reloadCount:0};
-    writeAttemptDraft(next.id, { answers:next.answers, currentIndex:0, questionStartAt:new Date().toISOString() });
-    onAttemptsChange([...attempts,next]);setActiveAttempt(next);setView('take');setInstructionFor(null);
-    onIncident && onIncident({ type:'attempt_started', assessmentId:assessment.id, fellowId:auth.fellowId, attemptId:next.id, deviceId:fingerprint, details:'Assessment started from laptop/maximized window required' });
+    if (existing) { setActiveAttempt(existing); setView('take'); return; }
+    const assigned = effectiveQuestions(assessment, auth.fellowId, []);
+    if (!assigned.length) { window.alert('This assessment has no questions assigned to you.'); return; }
+    const fingerprint = getDeviceFingerprint();
+    const next = { id: 'attempt' + Date.now(), assessmentId: assessment.id, fellowId: auth.fellowId, sessionId: assessment.sessionId, questionOrder: assigned.map(question => question.id), currentIndex: 0, answers: {}, startedAt: new Date().toISOString(), status: 'in_progress', deviceId: fingerprint, deviceLocked: true, deviceApproved: true, reloadCount: 0 };
+    writeAttemptDraft(next.id, { answers: next.answers, currentIndex: 0, questionStartAt: new Date().toISOString() });
+    onAttemptsChange([...attempts, next]); setActiveAttempt(next); setView('take'); setInstructionFor(null);
+    onIncident && onIncident({ type: 'attempt_started', assessmentId: assessment.id, fellowId: auth.fellowId, attemptId: next.id, deviceId: fingerprint, details: 'Assessment started from laptop/maximized window required' });
   };
   const update = patch => {
-    const next={...activeAttempt,...patch};
+    const next = { ...activeAttempt, ...patch };
     setActiveAttempt(next);
-    onAttemptsChange(attempts.map(item=>item.id===next.id?next:item));
-    writeAttemptDraft(next.id, { answers:next.answers||{}, currentIndex:next.currentIndex||0, questionStartAt:patch.currentIndex!==undefined ? new Date().toISOString() : (readAttemptDraft(next.id)?.questionStartAt || new Date().toISOString()) });
+    onAttemptsChange(attempts.map(item => item.id === next.id ? next : item));
+    writeAttemptDraft(next.id, { answers: next.answers || {}, currentIndex: next.currentIndex || 0, questionStartAt: patch.currentIndex !== undefined ? new Date().toISOString() : (readAttemptDraft(next.id)?.questionStartAt || new Date().toISOString()) });
   };
   const submit = (auto) => {
-    const assessment=assessments.find(item=>String(item.id)===String(activeAttempt.assessmentId));
-    const reviews={...(activeAttempt.reviews||{})};
-    (assessment?.questions||questions).filter(question=>question.type==='paragraph'&&activeAttempt.questionOrder.includes(question.id)).forEach(question=>{reviews[question.id]=reviews[question.id]||{status:'pending_review',score:null,feedback:'',aiSuggestion:null};});
-    const next={...activeAttempt,reviews,status:'submitted',submittedAt:new Date().toISOString(),autoSubmitted:!!auto};
-    onAttemptsChange(attempts.map(item=>item.id===next.id?next:item));
+    const assessment = assessments.find(item => String(item.id) === String(activeAttempt.assessmentId));
+    const reviews = { ...(activeAttempt.reviews || {}) };
+    (assessment?.questions || questions).filter(question => question.type === 'paragraph' && activeAttempt.questionOrder.includes(question.id)).forEach(question => { reviews[question.id] = reviews[question.id] || { status: 'pending_review', score: null, feedback: '', aiSuggestion: null }; });
+    const next = { ...activeAttempt, reviews, status: 'submitted', submittedAt: new Date().toISOString(), autoSubmitted: !!auto };
+    onAttemptsChange(attempts.map(item => item.id === next.id ? next : item));
     clearAttemptDraft(next.id);
-    setActiveAttempt(null);setView(auto ? 'grades' : 'list');
+    setActiveAttempt(null); setView(auto ? 'grades' : 'list');
   };
-  const myHistory = attempts.filter(item=>String(item.fellowId)===String(auth.fellowId)).sort((a,b)=>String(b.submittedAt||b.startedAt||'').localeCompare(String(a.submittedAt||a.startedAt||'')));
-  if(view==='grades' || (!activeAttempt && view==='grades')){
-    return <FellowGradesPanel attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={()=>setView('list')} />;
+  const myHistory = attempts.filter(item => String(item.fellowId) === String(auth.fellowId)).sort((a, b) => String(b.submittedAt || b.startedAt || '').localeCompare(String(a.submittedAt || a.startedAt || '')));
+  if (view === 'grades' || (!activeAttempt && view === 'grades')) {
+    return <FellowGradesPanel attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={() => setView('list')} />;
   }
-  if(instructionFor){
-    const assessment = assessments.find(item=>String(item.id)===String(instructionFor));
-    const mine = attempts.find(item=>String(item.assessmentId)===String(instructionFor)&&String(item.fellowId)===String(auth.fellowId)&&item.status==='in_progress');
-    return <AssessmentInstruction assessment={assessment} sessionName={sessions.find(item=>String(item.id)===String(assessment?.sessionId))?.name} onStart={()=>start(assessment)} onBack={()=>setInstructionFor(null)} resumed={Boolean(mine)} />;
+  if (instructionFor) {
+    const assessment = assessments.find(item => String(item.id) === String(instructionFor));
+    const mine = attempts.find(item => String(item.assessmentId) === String(instructionFor) && String(item.fellowId) === String(auth.fellowId) && item.status === 'in_progress');
+    return <AssessmentInstruction assessment={assessment} sessionName={sessions.find(item => String(item.id) === String(assessment?.sessionId))?.name} onStart={() => start(assessment)} onBack={() => setInstructionFor(null)} resumed={Boolean(mine)} />;
   }
-  if(activeAttempt){
-    const assessment = assessments.find(item=>String(item.id)===String(activeAttempt.assessmentId));
-    return <ProctoredTaker attempt={activeAttempt} assessment={assessment} auth={auth} onUpdate={update} onSubmit={()=>submit(false)} onAutoSubmit={()=>submit(true)} onIncident={onIncident} />;
+  if (activeAttempt) {
+    const assessment = assessments.find(item => String(item.id) === String(activeAttempt.assessmentId));
+    return <ProctoredTaker attempt={activeAttempt} assessment={assessment} auth={auth} onUpdate={update} onSubmit={() => submit(false)} onAutoSubmit={() => submit(true)} onIncident={onIncident} />;
   }
-  return <div style={{marginBottom:18}}>
-    <div style={{display:'flex',gap:8,marginBottom:10,flexWrap:'wrap'}}>
-      <button onClick={()=>setView('list')} className={view==='list' ? btnPrimary : btnSecondary}>Active assessments</button>
-      <button onClick={()=>setView('grades')} className={view==='grades' ? btnPrimary : btnSecondary}>My grades</button>
+  return <div style={{ marginBottom: 18 }}>
+    <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <button onClick={() => setView('list')} className={view === 'list' ? btnPrimary : btnSecondary}>Active assessments</button>
+      <button onClick={() => setView('grades')} className={view === 'grades' ? btnPrimary : btnSecondary}>My grades</button>
     </div>
-    <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>Active assessments</div>
-    {available.map(assessment=>{
-      const inProgress = attempts.find(item=>String(item.assessmentId)===String(assessment.id)&&String(item.fellowId)===String(auth.fellowId)&&item.status==='in_progress');
-      const submitted = attempts.find(item=>String(item.assessmentId)===String(assessment.id)&&String(item.fellowId)===String(auth.fellowId)&&item.status==='submitted');
+    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Active assessments</div>
+    {available.map(assessment => {
+      const inProgress = attempts.find(item => String(item.assessmentId) === String(assessment.id) && String(item.fellowId) === String(auth.fellowId) && item.status === 'in_progress');
+      const submitted = attempts.find(item => String(item.assessmentId) === String(assessment.id) && String(item.fellowId) === String(auth.fellowId) && item.status === 'submitted');
       const released = isGradeReleased(assessment);
-      const score = submitted && released ? (()=>{ const s=computeAttemptScore(submitted,assessment); return s.total ? Math.round(s.earned/s.total*100) : 0; })() : null;
-      return <div key={assessment.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,maxWidth:680,marginBottom:8,display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><div><b>{assessment.title}</b><div style={{fontSize:12,color:'#D5E0D5',marginTop:4}}>{sessions.find(item=>String(item.id)===String(assessment.sessionId))?.name}{assessment.durationMinutes ? ' · ' + assessment.durationMinutes + ' min' : ''}{inProgress ? ' · In progress' : ''}{submitted ? (released ? ' · Graded: ' + score + '%' : ' · Submitted, awaiting grade release') : ''}</div></div><div style={{display:'flex',gap:8}}>{submitted && released ? <button onClick={()=>setView('grades')} className={btnSecondary}>View grade</button> : <button onClick={()=>setInstructionFor(assessment.id)} className={btnPrimary}>{inProgress ? 'Resume' : 'Instructions'}</button>}</div></div>;
+      const score = submitted && released ? (() => { const s = computeAttemptScore(submitted, assessment); return s.total ? Math.round(s.earned / s.total * 100) : 0; })() : null;
+      return <div key={assessment.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, maxWidth: 680, marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><div><b>{assessment.title}</b><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{sessions.find(item => String(item.id) === String(assessment.sessionId))?.name}{assessment.durationMinutes ? ' · ' + assessment.durationMinutes + ' min' : ''}{inProgress ? ' · In progress' : ''}{submitted ? (released ? ' · Graded: ' + score + '%' : ' · Submitted, awaiting grade release') : ''}</div></div><div style={{ display: 'flex', gap: 8 }}>{submitted && released ? <button onClick={() => setView('grades')} className={btnSecondary}>View grade</button> : <button onClick={() => setInstructionFor(assessment.id)} className={btnPrimary}>{inProgress ? 'Resume' : 'Instructions'}</button>}</div></div>;
     })}
-    {!available.length&&<div style={{fontSize:12.5,color:'#9DB09D'}}>No active assessments.</div>}
-    <div style={{fontSize:13,fontWeight:700,margin:'14px 0 8px'}}>My recent attempts</div>
-    {!myHistory.length && <div style={{fontSize:12.5,color:'#9DB09D'}}>No attempts yet.</div>}
-    {myHistory.slice(0,5).map(item=>{ const a=assessments.find(x=>String(x.id)===String(item.assessmentId)); const st=attemptGradeStatus(item,a); return <div key={item.id} style={{fontSize:12.5,background:'#003223',border:'1px solid #1F4A3C',borderRadius:8,padding:'8px 12px',marginBottom:6,maxWidth:680}}>{a?.title||item.assessmentId} · {st.replace('_',' ')} · {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : 'In progress'}</div>; })}
+    {!available.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No active assessments.</div>}
+    <div style={{ fontSize: 13, fontWeight: 700, margin: '14px 0 8px' }}>My recent attempts</div>
+    {!myHistory.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No attempts yet.</div>}
+    {myHistory.slice(0, 5).map(item => { const a = assessments.find(x => String(x.id) === String(item.assessmentId)); const st = attemptGradeStatus(item, a); return <div key={item.id} style={{ fontSize: 12.5, background: '#003223', border: '1px solid #1F4A3C', borderRadius: 8, padding: '8px 12px', marginBottom: 6, maxWidth: 680 }}>{a?.title || item.assessmentId} · {st.replace('_', ' ')} · {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : 'In progress'}</div>; })}
   </div>;
 }
 
-function AssessmentInstruction({ assessment, sessionName, onStart, onBack, resumed }){
+function AssessmentInstruction({ assessment, sessionName, onStart, onBack, resumed }) {
   if (!assessment) return null;
   return (
-    <div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:20,marginBottom:18,maxWidth:680}}>
-      <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>{assessment.title}</div>
-      <div style={{fontSize:12.5,color:'#D5E0D5',marginBottom:12}}>{sessionName || ''}{assessment.durationMinutes ? ' · ' + assessment.durationMinutes + ' minutes, no pause' : ''}{assessment.questions ? ' · ' + assessment.questions.length + ' questions' : ''}</div>
-      <div style={{fontSize:12.5,background:'#00402E',border:'1px solid #1F4A3C',borderRadius:8,padding:12,marginBottom:12,lineHeight:1.6}}>Please join from a laptop with this window maximized. Copy, paste, and right-click are disabled during the assessment. Do not refresh unless your network or device fails; if you reload, you will resume from the same question and only that question timer resets. Switching devices locks this attempt until staff approve a device change. Screenshots, tab switches, window blur, and resizing are recorded for review.</div>
-      {assessment.description && <div style={{fontSize:13,marginBottom:12}}>{assessment.description}</div>}
-      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}><button onClick={onBack} className={btnSecondary}>Back</button><button onClick={onStart} className={btnPrimary}>{resumed ? 'Resume assessment' : 'Start assessment'}</button></div>
+    <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 20, marginBottom: 18, maxWidth: 680 }}>
+      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{assessment.title}</div>
+      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 12 }}>{sessionName || ''}{assessment.durationMinutes ? ' · ' + assessment.durationMinutes + ' minutes, no pause' : ''}{assessment.questions ? ' · ' + assessment.questions.length + ' questions' : ''}</div>
+      <div style={{ fontSize: 12.5, background: '#00402E', border: '1px solid #1F4A3C', borderRadius: 8, padding: 12, marginBottom: 12, lineHeight: 1.6 }}>Please join from a laptop with this window maximized. Copy, paste, and right-click are disabled during the assessment. Do not refresh unless your network or device fails; if you reload, you will resume from the same question and only that question timer resets. Switching devices locks this attempt until staff approve a device change. Screenshots, tab switches, window blur, and resizing are recorded for review.</div>
+      {assessment.description && <div style={{ fontSize: 13, marginBottom: 12 }}>{assessment.description}</div>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button onClick={onBack} className={btnSecondary}>Back</button><button onClick={onStart} className={btnPrimary}>{resumed ? 'Resume assessment' : 'Start assessment'}</button></div>
     </div>
   );
 }
 
-function ProctoredTaker({ attempt, assessment, auth, onUpdate, onSubmit, onAutoSubmit, onIncident }){
+function ProctoredTaker({ attempt, assessment, auth, onUpdate, onSubmit, onAutoSubmit, onIncident }) {
   const order = attempt.questionOrder || [];
-  const index = Math.min(attempt.currentIndex||0, Math.max(order.length-1,0));
-  const question = (assessment?.questions||[]).find(q=>String(q.id)===String(order[index]));
-  const options = (question?.options||[]).map((option,idx)=>typeof option==='string'?{id:`option-${question.id}-${idx}`,text:option}:option);
+  const index = Math.min(attempt.currentIndex || 0, Math.max(order.length - 1, 0));
+  const question = (assessment?.questions || []).find(q => String(q.id) === String(order[index]));
+  const options = (question?.options || []).map((option, idx) => typeof option === 'string' ? { id: `option-${question.id}-${idx}`, text: option } : option);
   const answer = attempt.answers?.[question?.id];
   const timeLimit = Number(question?.timeLimit || 0);
   const draft = readAttemptDraft(attempt.id);
   const questionStart = draft?.questionStartAt || attempt.startedAt;
   const [nowTick, setNowTick] = useState(Date.now());
-  useEffect(()=>{ const t=setInterval(()=>setNowTick(Date.now()),1000); return ()=>clearInterval(t); }, []);
-  const secondsLeft = timeLimit ? Math.max(0, timeLimit*60 - Math.floor((nowTick - new Date(questionStart).getTime())/1000)) : null;
-  useEffect(()=>{ if(secondsLeft===0){ onIncident && onIncident({ type:'question_timeout', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id }); if(index+1<order.length) onUpdate({currentIndex:index+1}); else onSubmit(); } }, [secondsLeft]);
-  useEffect(()=>{
-    const block=e=>e.preventDefault();
-    const context=e=>{ e.preventDefault(); onIncident && onIncident({ type:'context_menu', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id }); };
-    const key=e=>{ const bad=(e.ctrlKey||e.metaKey)&&['c','v','x','a','p','s','u'].includes(String(e.key||'').toLowerCase()); if(bad){ e.preventDefault(); onIncident && onIncident({ type:'blocked_shortcut', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id, details:String(e.key) }); } if(e.key==='PrintScreen') onIncident && onIncident({ type:'screenshot_suspected', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id }); };
-    const vis=()=>{ if(document.hidden) onIncident && onIncident({ type:'tab_hidden', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id }); };
-    const blur=()=>onIncident && onIncident({ type:'window_blur', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id });
-    const resize=()=>onIncident && onIncident({ type:'window_resize', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id, details:window.innerWidth+'x'+window.innerHeight });
-    const offline=()=>onIncident && onIncident({ type:'offline', assessmentId:assessment?.id, fellowId:auth.fellowId, attemptId:attempt.id });
-    document.addEventListener('copy',block);document.addEventListener('cut',block);document.addEventListener('paste',block);document.addEventListener('contextmenu',context);document.addEventListener('keydown',key);document.addEventListener('visibilitychange',vis);window.addEventListener('blur',blur);window.addEventListener('resize',resize);window.addEventListener('offline',offline);
-    return ()=>{ document.removeEventListener('copy',block);document.removeEventListener('cut',block);document.removeEventListener('paste',block);document.removeEventListener('contextmenu',context);document.removeEventListener('keydown',key);document.removeEventListener('visibilitychange',vis);window.removeEventListener('blur',blur);window.removeEventListener('resize',resize);window.removeEventListener('offline',offline); };
+  useEffect(() => { const t = setInterval(() => setNowTick(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const secondsLeft = timeLimit ? Math.max(0, timeLimit * 60 - Math.floor((nowTick - new Date(questionStart).getTime()) / 1000)) : null;
+  useEffect(() => { if (secondsLeft === 0) { onIncident && onIncident({ type: 'question_timeout', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id }); if (index + 1 < order.length) onUpdate({ currentIndex: index + 1 }); else onSubmit(); } }, [secondsLeft]);
+  useEffect(() => {
+    const block = e => e.preventDefault();
+    const context = e => { e.preventDefault(); onIncident && onIncident({ type: 'context_menu', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id }); };
+    const key = e => { const bad = (e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a', 'p', 's', 'u'].includes(String(e.key || '').toLowerCase()); if (bad) { e.preventDefault(); onIncident && onIncident({ type: 'blocked_shortcut', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id, details: String(e.key) }); } if (e.key === 'PrintScreen') onIncident && onIncident({ type: 'screenshot_suspected', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id }); };
+    const vis = () => { if (document.hidden) onIncident && onIncident({ type: 'tab_hidden', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id }); };
+    const blur = () => onIncident && onIncident({ type: 'window_blur', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id });
+    const resize = () => onIncident && onIncident({ type: 'window_resize', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id, details: window.innerWidth + 'x' + window.innerHeight });
+    const offline = () => onIncident && onIncident({ type: 'offline', assessmentId: assessment?.id, fellowId: auth.fellowId, attemptId: attempt.id });
+    document.addEventListener('copy', block); document.addEventListener('cut', block); document.addEventListener('paste', block); document.addEventListener('contextmenu', context); document.addEventListener('keydown', key); document.addEventListener('visibilitychange', vis); window.addEventListener('blur', blur); window.addEventListener('resize', resize); window.addEventListener('offline', offline);
+    return () => { document.removeEventListener('copy', block); document.removeEventListener('cut', block); document.removeEventListener('paste', block); document.removeEventListener('contextmenu', context); document.removeEventListener('keydown', key); document.removeEventListener('visibilitychange', vis); window.removeEventListener('blur', blur); window.removeEventListener('resize', resize); window.removeEventListener('offline', offline); };
   }, [attempt.id]);
-  const choose = (value) => onUpdate({ answers:{...(attempt.answers||{}), [question.id]:value } });
+  const choose = (value) => onUpdate({ answers: { ...(attempt.answers || {}), [question.id]: value } });
   return (
-    <div className="proctored" style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16,marginBottom:18,maxWidth:680}}>
-      <div style={{fontSize:12,color:'#9DB09D',marginBottom:8}}>Question {index+1} of {order.length}{secondsLeft!==null ? ' · '+Math.floor(secondsLeft/60)+':'+String(secondsLeft%60).padStart(2,'0')+' left' : ''} · No pause · Copy/paste disabled</div>
-      <div style={{fontSize:15,fontWeight:700,marginBottom:12}}>{question?.text||'Question unavailable'}</div>
-      {question?.type==='paragraph'
-        ? <textarea rows={6} className={inputStyle+' resize-y'} value={answer||''} placeholder="Write your answer here…" onChange={event=>choose(event.target.value)} onCopy={e=>e.preventDefault()} onCut={e=>e.preventDefault()} onPaste={e=>e.preventDefault()} onContextMenu={e=>e.preventDefault()} />
-        : options.map(option=><label key={option.id} style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,fontSize:13}}><input type={question?.type==='single'?'radio':'checkbox'} name={question?.id} checked={Array.isArray(answer)?answer.includes(option.id):answer===option.id} onChange={event=>{const value=question.type==='single'?option.id:[...(answer||[]).filter(id=>id!==option.id),...(event.target.checked?[option.id]:[])];choose(value);}}/>{option.text}</label>)}
-      <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
-        {index>0 && <button onClick={()=>onUpdate({currentIndex:index-1})} className={btnSecondary}>Previous</button>}
-        <button onClick={()=>index+1<order.length?onUpdate({currentIndex:index+1}):onSubmit()} className={btnPrimary}>{index+1<order.length?'Next question':'Submit assessment'}</button>
+    <div className="proctored" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 18, maxWidth: 680 }}>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Question {index + 1} of {order.length}{secondsLeft !== null ? ' · ' + Math.floor(secondsLeft / 60) + ':' + String(secondsLeft % 60).padStart(2, '0') + ' left' : ''} · No pause · Copy/paste disabled</div>
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>{question?.text || 'Question unavailable'}</div>
+      {question?.type === 'paragraph'
+        ? <textarea rows={6} className={inputStyle + ' resize-y'} value={answer || ''} placeholder="Write your answer here…" onChange={event => choose(event.target.value)} onCopy={e => e.preventDefault()} onCut={e => e.preventDefault()} onPaste={e => e.preventDefault()} onContextMenu={e => e.preventDefault()} />
+        : options.map(option => <label key={option.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 13 }}><input type={question?.type === 'single' ? 'radio' : 'checkbox'} name={question?.id} checked={Array.isArray(answer) ? answer.includes(option.id) : answer === option.id} onChange={event => { const value = question.type === 'single' ? option.id : [...(answer || []).filter(id => id !== option.id), ...(event.target.checked ? [option.id] : [])]; choose(value); }} />{option.text}</label>)}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        {index > 0 && <button onClick={() => onUpdate({ currentIndex: index - 1 })} className={btnSecondary}>Previous</button>}
+        <button onClick={() => index + 1 < order.length ? onUpdate({ currentIndex: index + 1 }) : onSubmit()} className={btnPrimary}>{index + 1 < order.length ? 'Next question' : 'Submit assessment'}</button>
       </div>
     </div>
   );
 }
 
-function FellowGradesPanel({ attempts, assessments, auth, roster, onBack }){
+function FellowGradesPanel({ attempts, assessments, auth, roster, onBack }) {
   return <FellowGradesPanelInner attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={onBack} />;
 }
 
-function FellowGradesPanelInner({ attempts, assessments, auth, roster, onBack }){
-  const mine = (attempts||[]).filter(item=>String(item.fellowId)===String(auth.fellowId) && item.status==='submitted');
+function FellowGradesPanelInner({ attempts, assessments, auth, roster, onBack }) {
+  const mine = (attempts || []).filter(item => String(item.fellowId) === String(auth.fellowId) && item.status === 'submitted');
   let totalEarned = 0; let totalPossible = 0;
-  const rows = mine.map(item=>{
-    const assessment = assessments.find(a=>String(a.id)===String(item.assessmentId));
+  const rows = mine.map(item => {
+    const assessment = assessments.find(a => String(a.id) === String(item.assessmentId));
     if (!assessment) return null;
     const released = isGradeReleased(assessment);
     const score = computeAttemptScore(item, assessment);
     const status = attemptGradeStatus(item, assessment);
-    if (released && status==='graded') { totalEarned += score.earned; totalPossible += score.total; }
-    const pct = score.total ? Math.round(score.earned/score.total*100) : null;
-    const detail = (item.questionOrder||[]).map(qid=>{
-      const q = (assessment.questions||[]).find(x=>String(x.id)===String(qid));
+    if (released && status === 'graded') { totalEarned += score.earned; totalPossible += score.total; }
+    const pct = score.total ? Math.round(score.earned / score.total * 100) : null;
+    const detail = (item.questionOrder || []).map(qid => {
+      const q = (assessment.questions || []).find(x => String(x.id) === String(qid));
       if (!q) return null;
       let earned = 0;
-      if (q.type==='paragraph') earned = Number(item.reviews?.[qid]?.score || 0);
+      if (q.type === 'paragraph') earned = Number(item.reviews?.[qid]?.score || 0);
       else {
         const ans = item.answers?.[qid];
         const correct = Array.isArray(q.correct) ? q.correct : [];
         let ok = false;
         if (typeof ans === 'string') ok = correct.includes(ans);
-        else if (Array.isArray(ans) && correct.length) ok = correct.length===ans.length && correct.every(c => ans.includes(c));
-        else if (Array.isArray(correct) && correct.length===0 && ans!=null) ok = true;
-        earned = ok ? Number(q.points||0) : 0;
+        else if (Array.isArray(ans) && correct.length) ok = correct.length === ans.length && correct.every(c => ans.includes(c));
+        else if (Array.isArray(correct) && correct.length === 0 && ans != null) ok = true;
+        earned = ok ? Number(q.points || 0) : 0;
       }
-      return { id:qid, text:q.text, type:q.type, points:Number(q.points||0), earned, feedback:item.reviews?.[qid]?.feedback||'' };
+      return { id: qid, text: q.text, type: q.type, points: Number(q.points || 0), earned, feedback: item.reviews?.[qid]?.feedback || '' };
     }).filter(Boolean);
-    return { attempt:item, assessment, released, status, score, pct, detail };
+    return { attempt: item, assessment, released, status, score, pct, detail };
   }).filter(Boolean);
   return (
-    <div style={{marginBottom:18}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:8}}>
-        <div style={{fontSize:14,fontWeight:800}}>My grades {totalPossible ? `· ${totalEarned}/${totalPossible} total` : ''}</div>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>My grades {totalPossible ? `· ${totalEarned}/${totalPossible} total` : ''}</div>
         <button onClick={onBack} className={btnSecondary}>Back to assessments</button>
       </div>
-      {!rows.length && <div style={{fontSize:12.5,color:'#9DB09D'}}>No submitted assessments yet.</div>}
-      {rows.map(row=>(
-        <div key={row.attempt.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,marginBottom:10,maxWidth:760}}>
-          <div style={{fontWeight:800}}>{row.assessment.title}</div>
-          <div style={{fontSize:12.5,color:'#D5E0D5',marginTop:4}}>{row.released ? (row.status==='graded' ? `Score: ${row.score.earned}/${row.score.total} (${row.pct}%)` : 'Submitted, waiting for staff review') : 'Submitted, grades not released yet'}</div>
-          {row.released && row.detail.map(d=>(
-            <div key={d.id} style={{marginTop:10,borderTop:'1px solid #1F4A3C',paddingTop:8}}>
-              <div style={{fontSize:12.5,fontWeight:700}}>{d.text} <span style={{color:'#9DB09D'}}>({d.earned}/{d.points})</span></div>
-              {d.feedback && <div style={{fontSize:12.5,color:'#D65641',marginTop:4}}>Feedback: {d.feedback}</div>}
+      {!rows.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No submitted assessments yet.</div>}
+      {rows.map(row => (
+        <div key={row.attempt.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 10, maxWidth: 760 }}>
+          <div style={{ fontWeight: 800 }}>{row.assessment.title}</div>
+          <div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 4 }}>{row.released ? (row.status === 'graded' ? `Score: ${row.score.earned}/${row.score.total} (${row.pct}%)` : 'Submitted, waiting for staff review') : 'Submitted, grades not released yet'}</div>
+          {row.released && row.detail.map(d => (
+            <div key={d.id} style={{ marginTop: 10, borderTop: '1px solid #1F4A3C', paddingTop: 8 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700 }}>{d.text} <span style={{ color: '#9DB09D' }}>({d.earned}/{d.points})</span></div>
+              {d.feedback && <div style={{ fontSize: 12.5, color: '#D65641', marginTop: 4 }}>Feedback: {d.feedback}</div>}
             </div>
           ))}
         </div>
@@ -1515,125 +1792,125 @@ function FellowGradesPanelInner({ attempts, assessments, auth, roster, onBack })
   );
 }
 
-function AttendanceCodePanel({ sessions, codes, attendance, roster, onGenerate, onDeleteSessionCodes, onExport }){
+function AttendanceCodePanel({ sessions, codes, attendance, roster, onGenerate, onDeleteSessionCodes, onExport }) {
   const [sessionId, setSessionId] = useState(sessions[0]?.id || '');
   const [count, setCount] = useState(25);
   const [length, setLength] = useState(6);
-  const session = sessions.find(s=>String(s.id)===String(sessionId)) || sessions[0];
-  const list = (codes||[]).filter(c=>session && String(c.sessionId)===String(session.id));
+  const session = sessions.find(s => String(s.id) === String(sessionId)) || sessions[0];
+  const list = (codes || []).filter(c => session && String(c.sessionId) === String(session.id));
   const make = () => {
     if (!session) return;
-    const fresh = generateAttendanceCodes(count, length).map(code=>({ id:'code-'+Date.now()+'-'+code, sessionId:session.id, sessionName:session.name, date:session.date||'', code, used:false, usedBy:'', usedByName:'', usedAt:'', createdAt:new Date().toISOString() }));
+    const fresh = generateAttendanceCodes(count, length).map(code => ({ id: 'code-' + Date.now() + '-' + code, sessionId: session.id, sessionName: session.name, date: session.date || '', code, used: false, usedBy: '', usedByName: '', usedAt: '', createdAt: new Date().toISOString() }));
     onGenerate(session.id, fresh);
   };
   return (
-    <div style={{marginBottom:18}}>
-      <div style={{fontSize:15,fontWeight:800,marginBottom:4}}>Unique attendance codes</div>
-      <div style={{fontSize:12.5,color:'#D5E0D5',marginBottom:12}}>Select a session, choose how many codes to generate, then export them. Fellows only enter a code; they never see the full list.</div>
-      <div className="wa14-grid-cards" style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,marginBottom:12}}>
-        <label style={{fontSize:12.5}}>Session<br/><select value={sessionId} onChange={e=>setSessionId(e.target.value)} className={selectStyle} style={{maxWidth:'100%'}}>{sessions.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(s=><option key={s.id} value={s.id}>{s.date} · {s.name}</option>)}</select></label>
-        <label style={{fontSize:12.5}}>Number of codes<br/><input type="number" min={1} max={500} value={count} onChange={e=>setCount(Number(e.target.value)||1)} className={inputStyle} /></label>
-        <label style={{fontSize:12.5}}>Code length<br/><input type="number" min={4} max={10} value={length} onChange={e=>setLength(Number(e.target.value)||6)} className={inputStyle} /></label>
-        <div style={{display:'flex',gap:8,alignItems:'end',flexWrap:'wrap'}}><button onClick={make} className={btnPrimary}><KeyIcon size={14}/> Generate codes</button><button onClick={()=>session && onExport(session.id)} className={btnSecondary}><Download size={14}/> Export this session</button><button onClick={()=>onExport()} className={btnGhost}>Export all</button>{list.length>0 && <button onClick={()=>session && window.confirm('Delete all codes for this session?') && onDeleteSessionCodes(session.id)} style={{...linkBtn,color:'#D0A023'}}>Delete codes</button>}</div>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Unique attendance codes</div>
+      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 12 }}>Select a session, choose how many codes to generate, then export them. Fellows only enter a code; they never see the full list.</div>
+      <div className="wa14-grid-cards" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 12 }}>
+        <label style={{ fontSize: 12.5 }}>Session<br /><select value={sessionId} onChange={e => setSessionId(e.target.value)} className={selectStyle} style={{ maxWidth: '100%' }}>{sessions.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(s => <option key={s.id} value={s.id}>{s.date} · {s.name}</option>)}</select></label>
+        <label style={{ fontSize: 12.5 }}>Number of codes<br /><input type="number" min={1} max={500} value={count} onChange={e => setCount(Number(e.target.value) || 1)} className={inputStyle} /></label>
+        <label style={{ fontSize: 12.5 }}>Code length<br /><input type="number" min={4} max={10} value={length} onChange={e => setLength(Number(e.target.value) || 6)} className={inputStyle} /></label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap' }}><button onClick={make} className={btnPrimary}><KeyIcon size={14} /> Generate codes</button><button onClick={() => session && onExport(session.id)} className={btnSecondary}><Download size={14} /> Export this session</button><button onClick={() => onExport()} className={btnGhost}>Export all</button>{list.length > 0 && <button onClick={() => session && window.confirm('Delete all codes for this session?') && onDeleteSessionCodes(session.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete codes</button>}</div>
       </div>
-      <div className="wa14-table-scroll"><table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5,background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,overflow:'hidden'}}>
-        <thead><tr style={{background:'#00402E',textAlign:'left'}}>{['Code','Used','Fellow','Used At'].map(h=><th key={h} style={{padding:'9px 12px',color:'#D5E0D5',borderBottom:'1px solid #2A5C4B'}}>{h}</th>)}</tr></thead>
-        <tbody>{list.map(c=><tr key={c.id} style={{borderBottom:'1px solid #1F4A3C'}}><td style={{padding:'8px 12px',fontFamily:'monospace',fontWeight:700}}>{c.code}</td><td style={{padding:'8px 12px'}}>{c.used ? 'Yes' : 'No'}</td><td style={{padding:'8px 12px'}}>{c.usedByName || friendlyFellowName({fellowId:c.usedBy}, roster)}</td><td style={{padding:'8px 12px'}}>{c.usedAt ? new Date(c.usedAt).toLocaleString() : '--'}</td></tr>)}{!list.length && <tr><td colSpan={4} style={{padding:14,color:'#9DB09D'}}>No codes generated for this session yet.</td></tr>}</tbody>
+      <div className="wa14-table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+        <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Code', 'Used', 'Fellow', 'Used At'].map(h => <th key={h} style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+        <tbody>{list.map(c => <tr key={c.id} style={{ borderBottom: '1px solid #1F4A3C' }}><td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 700 }}>{c.code}</td><td style={{ padding: '8px 12px' }}>{c.used ? 'Yes' : 'No'}</td><td style={{ padding: '8px 12px' }}>{c.usedByName || friendlyFellowName({ fellowId: c.usedBy }, roster)}</td><td style={{ padding: '8px 12px' }}>{c.usedAt ? new Date(c.usedAt).toLocaleString() : '--'}</td></tr>)}{!list.length && <tr><td colSpan={4} style={{ padding: 14, color: '#9DB09D' }}>No codes generated for this session yet.</td></tr>}</tbody>
       </table></div>
     </div>
   );
 }
 
-function IncidentLogPanel({ incidents, attempts, assessments, roster, sessions }){
+function IncidentLogPanel({ incidents, attempts, assessments, roster, sessions }) {
   const [filter, setFilter] = useState('');
-  const rows = (incidents||[]).slice().sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).filter(item=>{
+  const rows = (incidents || []).slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).filter(item => {
     if (!filter.trim()) return true;
     const q = filter.toLowerCase();
-    return [item.type, item.details, item.deviceId, friendlyFellowName({fellowId:item.fellowId}, roster), assessments.find(a=>String(a.id)===String(item.assessmentId))?.title].filter(Boolean).join(' ').toLowerCase().includes(q);
+    return [item.type, item.details, item.deviceId, friendlyFellowName({ fellowId: item.fellowId }, roster), assessments.find(a => String(a.id) === String(item.assessmentId))?.title].filter(Boolean).join(' ').toLowerCase().includes(q);
   });
   return (
-    <div style={{marginBottom:18}}>
-      <div style={{fontSize:15,fontWeight:800,marginBottom:4}}>Assessment incident log</div>
-      <div style={{fontSize:12.5,color:'#D5E0D5',marginBottom:10}}>Reloads, device changes, screenshots, resizes, tab switches, offline events, and blocked shortcuts.</div>
-      <input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Filter by fellow, assessment, device, type" className={inputStyle} style={{maxWidth:380,marginBottom:10}} />
-      <div className="wa14-table-scroll"><table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5,background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,overflow:'hidden'}}>
-        <thead><tr style={{background:'#00402E',textAlign:'left'}}>{['Time','Fellow','Assessment','Type','Device','Details'].map(h=><th key={h} style={{padding:'9px 12px',color:'#D5E0D5',borderBottom:'1px solid #2A5C4B'}}>{h}</th>)}</tr></thead>
-        <tbody>{rows.map(item=><tr key={item.id} style={{borderBottom:'1px solid #1F4A3C'}}><td style={{padding:'8px 12px',whiteSpace:'nowrap'}}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : '--'}</td><td style={{padding:'8px 12px'}}>{friendlyFellowName({fellowId:item.fellowId}, roster)}</td><td style={{padding:'8px 12px'}}>{assessments.find(a=>String(a.id)===String(item.assessmentId))?.title || item.assessmentId}</td><td style={{padding:'8px 12px',fontFamily:'monospace'}}>{item.deviceId||'--'}</td><td style={{padding:'8px 12px'}}>{item.type}</td><td style={{padding:'8px 12px'}}>{item.details||'--'}</td></tr>)}{!rows.length && <tr><td colSpan={6} style={{padding:14,color:'#9DB09D'}}>No incidents recorded yet.</td></tr>}</tbody>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Assessment incident log</div>
+      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 10 }}>Reloads, device changes, screenshots, resizes, tab switches, offline events, and blocked shortcuts.</div>
+      <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter by fellow, assessment, device, type" className={inputStyle} style={{ maxWidth: 380, marginBottom: 10 }} />
+      <div className="wa14-table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+        <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Time', 'Fellow', 'Assessment', 'Type', 'Device', 'Details'].map(h => <th key={h} style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+        <tbody>{rows.map(item => <tr key={item.id} style={{ borderBottom: '1px solid #1F4A3C' }}><td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : '--'}</td><td style={{ padding: '8px 12px' }}>{friendlyFellowName({ fellowId: item.fellowId }, roster)}</td><td style={{ padding: '8px 12px' }}>{assessments.find(a => String(a.id) === String(item.assessmentId))?.title || item.assessmentId}</td><td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{item.deviceId || '--'}</td><td style={{ padding: '8px 12px' }}>{item.type}</td><td style={{ padding: '8px 12px' }}>{item.details || '--'}</td></tr>)}{!rows.length && <tr><td colSpan={6} style={{ padding: 14, color: '#9DB09D' }}>No incidents recorded yet.</td></tr>}</tbody>
       </table></div>
     </div>
   );
 }
 
-function DeviceRequestPanel({ requests, attempts, assessments, roster, onResolve }){
-  const pending = (requests||[]).filter(r=>r.status==='pending');
-  const done = (requests||[]).filter(r=>r.status!=='pending').slice().sort((a,b)=>String(b.requestedAt||'').localeCompare(String(a.requestedAt||'')));
+function DeviceRequestPanel({ requests, attempts, assessments, roster, onResolve }) {
+  const pending = (requests || []).filter(r => r.status === 'pending');
+  const done = (requests || []).filter(r => r.status !== 'pending').slice().sort((a, b) => String(b.requestedAt || '').localeCompare(String(a.requestedAt || '')));
   const row = (r) => (
-    <tr key={r.id} style={{borderBottom:'1px solid #1F4A3C'}}>
-      <td style={{padding:'8px 12px',whiteSpace:'nowrap'}}>{r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '--'}</td>
-      <td style={{padding:'8px 12px'}}>{friendlyFellowName({fellowId:r.fellowId}, roster)}</td>
-      <td style={{padding:'8px 12px'}}>{assessments.find(a=>String(a.id)===String(r.assessmentId))?.title || r.assessmentId}</td>
-      <td style={{padding:'8px 12px',fontFamily:'monospace'}}>{r.oldDeviceId} → {r.newDeviceId}</td>
-      <td style={{padding:'8px 12px'}}>{r.status}</td>
-      <td style={{padding:'8px 12px',whiteSpace:'nowrap'}}>{r.status==='pending' ? <><button onClick={()=>onResolve(r.id,true)} className={btnPrimary}>Allow resume</button> <button onClick={()=>onResolve(r.id,false)} className={btnGhost}>Deny</button></> : (r.resolvedAt ? new Date(r.resolvedAt).toLocaleString() : '--')}</td>
+    <tr key={r.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '--'}</td>
+      <td style={{ padding: '8px 12px' }}>{friendlyFellowName({ fellowId: r.fellowId }, roster)}</td>
+      <td style={{ padding: '8px 12px' }}>{assessments.find(a => String(a.id) === String(r.assessmentId))?.title || r.assessmentId}</td>
+      <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{r.oldDeviceId} → {r.newDeviceId}</td>
+      <td style={{ padding: '8px 12px' }}>{r.status}</td>
+      <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{r.status === 'pending' ? <><button onClick={() => onResolve(r.id, true)} className={btnPrimary}>Allow resume</button> <button onClick={() => onResolve(r.id, false)} className={btnGhost}>Deny</button></> : (r.resolvedAt ? new Date(r.resolvedAt).toLocaleString() : '--')}</td>
     </tr>
   );
   return (
-    <div style={{marginBottom:18}}>
-      <div style={{fontSize:15,fontWeight:800,marginBottom:4}}>Device change requests</div>
-      <div style={{fontSize:12.5,color:'#D5E0D5',marginBottom:10}}>Approve a request to let a fellow resume an in-progress locked assessment from a new device. Answers are preserved; the current-question timer resets.</div>
-      <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>Pending ({pending.length})</div>
-      <div className="wa14-table-scroll"><table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5,background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,overflow:'hidden'}}>
-        <thead><tr style={{background:'#00402E',textAlign:'left'}}>{['Requested','Fellow','Assessment','Devices','Status','Action'].map(h=><th key={h} style={{padding:'9px 12px',color:'#D5E0D5',borderBottom:'1px solid #2A5C4B'}}>{h}</th>)}</tr></thead>
-        <tbody>{pending.map(row)}{!pending.length && <tr><td colSpan={6} style={{padding:14,color:'#9DB09D'}}>No pending requests.</td></tr>}</tbody>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Device change requests</div>
+      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 10 }}>Approve a request to let a fellow resume an in-progress locked assessment from a new device. Answers are preserved; the current-question timer resets.</div>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Pending ({pending.length})</div>
+      <div className="wa14-table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+        <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Requested', 'Fellow', 'Assessment', 'Devices', 'Status', 'Action'].map(h => <th key={h} style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+        <tbody>{pending.map(row)}{!pending.length && <tr><td colSpan={6} style={{ padding: 14, color: '#9DB09D' }}>No pending requests.</td></tr>}</tbody>
       </table></div>
-      <div style={{fontSize:13,fontWeight:700,margin:'14px 0 8px'}}>Resolved</div>
-      <div className="wa14-table-scroll"><table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5,background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,overflow:'hidden'}}>
-        <thead><tr style={{background:'#00402E',textAlign:'left'}}>{['Requested','Fellow','Assessment','Devices','Status','Resolved'].map(h=><th key={h} style={{padding:'9px 12px',color:'#D5E0D5',borderBottom:'1px solid #2A5C4B'}}>{h}</th>)}</tr></thead>
-        <tbody>{done.map(row)}{!done.length && <tr><td colSpan={6} style={{padding:14,color:'#9DB09D'}}>No resolved requests.</td></tr>}</tbody>
+      <div style={{ fontSize: 13, fontWeight: 700, margin: '14px 0 8px' }}>Resolved</div>
+      <div className="wa14-table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+        <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Requested', 'Fellow', 'Assessment', 'Devices', 'Status', 'Resolved'].map(h => <th key={h} style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+        <tbody>{done.map(row)}{!done.length && <tr><td colSpan={6} style={{ padding: 14, color: '#9DB09D' }}>No resolved requests.</td></tr>}</tbody>
       </table></div>
     </div>
   );
 }
 
-function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, onDuplicate, rooms, weeks, sessionTypes, pillarTags, staff }){
+function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, onDuplicate, rooms, weeks, sessionTypes, pillarTags, staff }) {
   const rows = useMemo(() => {
     let r = sessions.slice();
     const query = search.trim().toLowerCase();
-    if (query) r = r.filter(s => [s.name, s.date, s.type, s.mode, ...sessionPillarNames(s, pillarTags), ...fmtFacilitators(s.facilitators, rooms, staff).split(', '), ...(s.resources||[]).flatMap(resource => [resource.label, resource.url]), ...(s.roomIds||[]).map(id => rooms.find(room=>room.id===id)?.name)].filter(Boolean).join(' ').toLowerCase().includes(query));
-    if (weekFilter!=='all') r = r.filter(s => weekFilter==='unscheduled' ? s.week==null : s.week===Number(weekFilter));
-    r.sort((a,b) => (a.date||'zzzz').localeCompare(b.date||'zzzz') || (toMin(a.start)||9999)-(toMin(b.start)||9999));
+    if (query) r = r.filter(s => [s.name, s.date, s.type, s.mode, ...sessionPillarNames(s, pillarTags), ...fmtFacilitators(s.facilitators, rooms, staff).split(', '), ...(s.resources || []).flatMap(resource => [resource.label, resource.url]), ...(s.roomIds || []).map(id => rooms.find(room => room.id === id)?.name)].filter(Boolean).join(' ').toLowerCase().includes(query));
+    if (weekFilter !== 'all') r = r.filter(s => weekFilter === 'unscheduled' ? s.week == null : s.week === Number(weekFilter));
+    r.sort((a, b) => (a.date || 'zzzz').localeCompare(b.date || 'zzzz') || (toMin(a.start) || 9999) - (toMin(b.start) || 9999));
     return r;
   }, [sessions, search, weekFilter, rooms]);
 
   return (
     <div>
-      <div style={{marginBottom:14, display:'flex', alignItems:'center', gap:10}}>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search sessions, facilitators, rooms, resources" className={inputStyle+' w-[300px]! max-w-full'} aria-label="Search sessions" />
-        <span style={{fontSize:13, color:'#D5E0D5'}}>Week</span>
-        <select value={weekFilter} onChange={e=>setWeekFilter(e.target.value)} className={selectStyle}>
-          <option value="all">All weeks</option>{(weeks||WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}<option value="unscheduled">Unscheduled</option>
+      <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sessions, facilitators, rooms, resources" className={inputStyle + ' w-[300px]! max-w-full'} aria-label="Search sessions" />
+        <span style={{ fontSize: 13, color: '#D5E0D5' }}>Week</span>
+        <select value={weekFilter} onChange={e => setWeekFilter(e.target.value)} className={selectStyle}>
+          <option value="all">All weeks</option>{(weeks || WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}<option value="unscheduled">Unscheduled</option>
         </select>
-        <span style={{fontSize:12.5, color:'#9DB09D'}}>{rows.length} sessions</span>
+        <span style={{ fontSize: 12.5, color: '#9DB09D' }}>{rows.length} sessions</span>
       </div>
-      <div className="wa14-table-scroll" style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8}}>
-        <table style={{minWidth:1200, borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#00402E', textAlign:'left'}}>{['Date','Time','Session','Type','Mode','Pillars','Facilitators','Outcomes',''].map(h => (<th key={h} style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>{h}</th>))}</tr></thead>
+      <div className="wa14-table-scroll" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>
+        <table style={{ minWidth: 1200, borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Date', 'Time', 'Session', 'Type', 'Mode', 'Pillars', 'Facilitators', 'Outcomes', ''].map(h => (<th key={h} style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>))}</tr></thead>
           <tbody>
             {rows.map(s => (
-              <tr key={s.id} style={{borderBottom:'1px solid #1F4A3C'}}>
-                <td style={{padding:'8px 12px', color:'#D5E0D5', whiteSpace:'nowrap'}}>{s.date ? dateLabel(s.date) : '--'}</td>
-                <td style={{padding:'8px 12px', color:'#D5E0D5', whiteSpace:'nowrap'}}>{s.start ? s.start+' - '+s.end : '--'}</td>
-                <td style={{padding:'8px 12px', fontWeight:500, cursor:'pointer', maxWidth:220}} onClick={()=>onEdit(s)}>{s.name || '(untitled)'}</td>
-                <td style={{padding:'8px 12px'}}><span style={{fontSize:11, padding:'2px 8px', borderRadius:12, background:(getTypeColor(s.type, sessionTypes)||'#ccc')+'26', color:'#D5E0D5'}}>{s.type}</span></td>
-                <td style={{padding:'8px 12px'}}><span style={{fontSize:11, padding:'2px 8px', borderRadius:12, background:(getModeColor(s.mode, null)||'#ccc')+'26', color:getModeColor(s.mode, null), fontWeight:600}}>{s.mode}</span></td>
-                <td style={{padding:'8px 12px', color:'#D5E0D5'}}>{sessionPillarNames(s, pillarTags).join(', ') || '--'}</td>
-                <td style={{padding:'8px 12px', color:'#D5E0D5'}}>{fmtFacilitators(s.facilitators, rooms, staff) || '--'}</td>
-                
-                <td style={{padding:'8px 12px', color:'#D5E0D5', maxWidth:260}}>{s.outcomes && s.outcomes.length ? s.outcomes.join('; ') : '--'}</td>
-                <td style={{padding:'8px 12px', textAlign:'right', whiteSpace:'nowrap'}}>
-                  <button onClick={()=>onEdit(s)} style={linkBtn}>Edit</button>
-                  <button onClick={()=>onDuplicate(s)} style={{...linkBtn, marginLeft:10}}>Duplicate</button>
-                  <button onClick={()=>{ if(window.confirm('Delete this session?')) onDelete(s.id); }} style={{...linkBtn, color:'#D0A023', marginLeft:10}}>Delete</button>
+              <tr key={s.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.date ? dateLabel(s.date) : '--'}</td>
+                <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.start ? s.start + ' - ' + s.end : '--'}</td>
+                <td style={{ padding: '8px 12px', fontWeight: 500, cursor: 'pointer', maxWidth: 220 }} onClick={() => onEdit(s)}>{s.name || '(untitled)'}</td>
+                <td style={{ padding: '8px 12px' }}><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: (getTypeColor(s.type, sessionTypes) || '#ccc') + '26', color: '#D5E0D5' }}>{s.type}</span></td>
+                <td style={{ padding: '8px 12px' }}><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: (getModeColor(s.mode, null) || '#ccc') + '26', color: getModeColor(s.mode, null), fontWeight: 600 }}>{s.mode}</span></td>
+                <td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{sessionPillarNames(s, pillarTags).join(', ') || '--'}</td>
+                <td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{fmtFacilitators(s.facilitators, rooms, staff) || '--'}</td>
+
+                <td style={{ padding: '8px 12px', color: '#D5E0D5', maxWidth: 260 }}>{s.outcomes && s.outcomes.length ? s.outcomes.join('; ') : '--'}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <button onClick={() => onEdit(s)} style={linkBtn}>Edit</button>
+                  <button onClick={() => onDuplicate(s)} style={{ ...linkBtn, marginLeft: 10 }}>Duplicate</button>
+                  <button onClick={() => { if (window.confirm('Delete this session?')) onDelete(s.id); }} style={{ ...linkBtn, color: '#D0A023', marginLeft: 10 }}>Delete</button>
                 </td>
               </tr>
             ))}
@@ -1644,195 +1921,195 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
   );
 }
 
-function AssignmentPanel({ session, rooms, onSave, onClose }){
-  const [selected, setSelected] = useState(session.roomIds||[]);
-  const toggle = id => setSelected(ids=>ids.includes(id) ? ids.filter(item=>item!==id) : [...ids,id]);
-  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:100}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{width:360,maxWidth:'92vw',background:'#003223',height:'100%',overflowY:'auto',padding:22}}>
-      <div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><div style={{fontWeight:700}}>Assign session</div><button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer'}}><X size={18}/></button></div>
-      <div style={{fontSize:15,fontWeight:600,marginBottom:6}}>{session.name}</div><div style={{fontSize:12.5,color:'#9DB09D',marginBottom:18}}>Calendar placement is changed by dragging the session. Choose rooms here or from Sessions.</div>
-      {rooms.map(room=><label key={room.id} style={{display:'flex',gap:8,alignItems:'center',padding:'10px 0',borderBottom:'1px solid #1F4A3C',fontSize:13}}><input type="checkbox" checked={selected.includes(room.id)} onChange={()=>toggle(room.id)}/><span><b>{room.name}</b><br/><span style={{fontSize:11.5,color:'#9DB09D'}}>{room.facilitator||'Facilitator not set'}</span></span></label>)}
-      {rooms.length===0 && <div style={{fontSize:12.5,color:'#9DB09D'}}>Create rooms in the Rooms tab first.</div>}
-      <button onClick={()=>onSave({...session,roomIds:selected})} className={btnPrimary+' w-full justify-center mt-5'}>Save assignments</button>
+function AssignmentPanel({ session, rooms, onSave, onClose }) {
+  const [selected, setSelected] = useState(session.roomIds || []);
+  const toggle = id => setSelected(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 100 }} onClick={onClose}>
+    <div onClick={e => e.stopPropagation()} style={{ width: 360, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><div style={{ fontWeight: 700 }}>Assign session</div><button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button></div>
+      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 18 }}>Calendar placement is changed by dragging the session. Choose rooms here or from Sessions.</div>
+      {rooms.map(room => <label key={room.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1F4A3C', fontSize: 13 }}><input type="checkbox" checked={selected.includes(room.id)} onChange={() => toggle(room.id)} /><span><b>{room.name}</b><br /><span style={{ fontSize: 11.5, color: '#9DB09D' }}>{room.facilitator || 'Facilitator not set'}</span></span></label>)}
+      {rooms.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>Create rooms in the Rooms tab first.</div>}
+      <button onClick={() => onSave({ ...session, roomIds: selected })} className={btnPrimary + ' w-full justify-center mt-5'}>Save assignments</button>
     </div>
   </div>;
 }
 
-function RoomsPanel({ rooms, roster, onChange, showToast }){
-  const [draft,setDraft]=useState(null);
-  const emptyRoom = () => ({id:'room'+Date.now(),name:'',facilitator:'',locationType:'physical',physicalLocation:'',onlinePlatform:'',meetingUrl:'',accessInstructions:'',fellowIds:[]});
-  const save = room => { if(!room.name.trim()) return; onChange(rooms.some(item=>item.id===room.id) ? rooms.map(item=>item.id===room.id?room:item) : [...rooms,room]); setDraft(null); showToast('Room saved'); };
-  const toggleFellow = id => setDraft(room=>({...room,fellowIds:(room.fellowIds||[]).includes(id) ? room.fellowIds.filter(item=>item!==id) : [...(room.fellowIds||[]),id]}));
-  return <div><div style={{fontSize:13,color:'#D5E0D5',marginBottom:16}}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={()=>setDraft(emptyRoom())} className={btnPrimary+' mb-[18px]'}><Plus size={14}/> Add room</button>{draft && <div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:18,maxWidth:560,marginBottom:18}}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})} placeholder="Room A"/></Field><Field label="Facilitator"><input className={inputStyle} value={draft.facilitator} onChange={e=>setDraft({...draft,facilitator:e.target.value})} placeholder="Facilitator name"/></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType||'physical'} onChange={e=>setDraft({...draft,locationType:e.target.value})}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType!=='online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation||''} onChange={e=>setDraft({...draft,physicalLocation:e.target.value})} placeholder="Building, floor, or room location"/></Field>}{draft.locationType!=='physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform||''} onChange={e=>setDraft({...draft,onlinePlatform:e.target.value})} placeholder="Zoom or Google Meet"/></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl||''} onChange={e=>setDraft({...draft,meetingUrl:e.target.value})} placeholder="https://..."/></Field><Field label="Access instructions"><textarea className={inputStyle+' resize-y'} rows={2} value={draft.accessInstructions||''} onChange={e=>setDraft({...draft,accessInstructions:e.target.value})}/></Field></> }<Field label="Fellows"><div style={{display:'flex',flexWrap:'wrap',gap:'5px 12px'}}>{roster.map(f=><label key={f.id} style={{fontSize:12}}><input type="checkbox" checked={(draft.fellowIds||[]).includes(f.id)} onChange={()=>toggleFellow(f.id)}/> {f.name}</label>)}</div></Field><div style={{display:'flex',gap:8}}><button onClick={()=>save(draft)} className={btnPrimary}>Save room</button><button onClick={()=>setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room=><div key={room.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,marginBottom:8,maxWidth:560}}><b>{room.name}</b><div style={{fontSize:12,color:'#D5E0D5'}}>{room.facilitator||'Facilitator not set'} · {room.locationType||'physical'} · {room.physicalLocation||room.meetingUrl||'Location not set'} · {(room.fellowIds||[]).length} Fellows</div><button onClick={()=>setDraft({...room})} style={{...linkBtn,marginTop:8}}>Edit</button><button onClick={()=>onChange(rooms.filter(r=>r.id!==room.id))} style={{...linkBtn,color:'#D0A023',marginTop:8,marginLeft:12}}>Delete</button></div>)}</div>;
+function RoomsPanel({ rooms, roster, onChange, showToast }) {
+  const [draft, setDraft] = useState(null);
+  const emptyRoom = () => ({ id: 'room' + Date.now(), name: '', facilitator: '', locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] });
+  const save = room => { if (!room.name.trim()) return; onChange(rooms.some(item => item.id === room.id) ? rooms.map(item => item.id === room.id ? room : item) : [...rooms, room]); setDraft(null); showToast('Room saved'); };
+  const toggleFellow = id => setDraft(room => ({ ...room, fellowIds: (room.fellowIds || []).includes(id) ? room.fellowIds.filter(item => item !== id) : [...(room.fellowIds || []), id] }));
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={() => setDraft(emptyRoom())} className={btnPrimary + ' mb-[18px]'}><Plus size={14} /> Add room</button>{draft && <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 18 }}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Room A" /></Field><Field label="Facilitator"><input className={inputStyle} value={draft.facilitator} onChange={e => setDraft({ ...draft, facilitator: e.target.value })} placeholder="Facilitator name" /></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType || 'physical'} onChange={e => setDraft({ ...draft, locationType: e.target.value })}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType !== 'online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation || ''} onChange={e => setDraft({ ...draft, physicalLocation: e.target.value })} placeholder="Building, floor, or room location" /></Field>}{draft.locationType !== 'physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform || ''} onChange={e => setDraft({ ...draft, onlinePlatform: e.target.value })} placeholder="Zoom or Google Meet" /></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl || ''} onChange={e => setDraft({ ...draft, meetingUrl: e.target.value })} placeholder="https://..." /></Field><Field label="Access instructions"><textarea className={inputStyle + ' resize-y'} rows={2} value={draft.accessInstructions || ''} onChange={e => setDraft({ ...draft, accessInstructions: e.target.value })} /></Field></>}<Field label="Fellows"><div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>{roster.map(f => <label key={f.id} style={{ fontSize: 12 }}><input type="checkbox" checked={(draft.fellowIds || []).includes(f.id)} onChange={() => toggleFellow(f.id)} /> {f.name}</label>)}</div></Field><div style={{ display: 'flex', gap: 8 }}><button onClick={() => save(draft)} className={btnPrimary}>Save room</button><button onClick={() => setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room => <div key={room.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 8, maxWidth: 560 }}><b>{room.name}</b><div style={{ fontSize: 12, color: '#D5E0D5' }}>{room.facilitator || 'Facilitator not set'} · {room.locationType || 'physical'} · {room.physicalLocation || room.meetingUrl || 'Location not set'} · {(room.fellowIds || []).length} Fellows</div><button onClick={() => setDraft({ ...room })} style={{ ...linkBtn, marginTop: 8 }}>Edit</button><button onClick={() => onChange(rooms.filter(r => r.id !== room.id))} style={{ ...linkBtn, color: '#D0A023', marginTop: 8, marginLeft: 12 }}>Delete</button></div>)}</div>;
 }
 
-function SessionTypesPanel({ sessionTypes, onChange, showToast }){
+function SessionTypesPanel({ sessionTypes, onChange, showToast }) {
   const list = sessionTypes || [];
-  const [name,setName]=useState(''); const [color,setColor]=useState('#D65641');
-  const save = e => { e.preventDefault(); if(!name.trim()) return; onChange([...list,{id:'type'+Date.now(),name:name.trim(),color}]); setName('');showToast('Session type added'); };
-  const update = (id,key,value) => onChange(list.map(p=>p.id===id?{...p,[key]:value}:p));
-  return <div><div style={{fontSize:13,color:'#D5E0D5',marginBottom:16}}>Edit session type names and colors or add new types. The type is the color-coded category shown on the calendar.</div><form onSubmit={save} style={{display:'flex',gap:8,alignItems:'end',marginBottom:18,maxWidth:560}}><input className={inputStyle} value={name} onChange={e=>setName(e.target.value)} placeholder="New session type name"/><input type="color" value={color} onChange={e=>setColor(e.target.value)} style={{width:42,height:35}}/><button type="submit" className={btnPrimary}><Plus size={14}/> Add</button></form><div style={{display:'flex',flexDirection:'column',gap:8,maxWidth:560}}>{list.map(p=><div key={p.id} style={{display:'flex',gap:8,alignItems:'center',background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:10}}><input className={inputStyle} value={p.name} onChange={e=>update(p.id,'name',e.target.value)}/><input type="color" value={p.color} onChange={e=>update(p.id,'color',e.target.value)} style={{width:42,height:35}}/><button onClick={()=>onChange(list.filter(item=>item.id!==p.id))} style={{...linkBtn,color:'#D0A023'}}>Delete</button></div>)}</div></div>;
+  const [name, setName] = useState(''); const [color, setColor] = useState('#D65641');
+  const save = e => { e.preventDefault(); if (!name.trim()) return; onChange([...list, { id: 'type' + Date.now(), name: name.trim(), color }]); setName(''); showToast('Session type added'); };
+  const update = (id, key, value) => onChange(list.map(p => p.id === id ? { ...p, [key]: value } : p));
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Edit session type names and colors or add new types. The type is the color-coded category shown on the calendar.</div><form onSubmit={save} style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 18, maxWidth: 560 }}><input className={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="New session type name" /><input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ width: 42, height: 35 }} /><button type="submit" className={btnPrimary}><Plus size={14} /> Add</button></form><div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 560 }}>{list.map(p => <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 10 }}><input className={inputStyle} value={p.name} onChange={e => update(p.id, 'name', e.target.value)} /><input type="color" value={p.color} onChange={e => update(p.id, 'color', e.target.value)} style={{ width: 42, height: 35 }} /><button onClick={() => onChange(list.filter(item => item.id !== p.id))} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div>)}</div></div>;
 }
 
-function PillarsPanel({ pillarTags, onChange, showToast }){
+function PillarsPanel({ pillarTags, onChange, showToast }) {
   const list = pillarTags || [];
-  const [name,setName]=useState('');
-  const save = e => { e.preventDefault(); if(!name.trim()) return; onChange([...list,{id:'ptag'+Date.now(),name:name.trim()}]); setName('');showToast('Pillar added'); };
-  const update = (id,value) => onChange(list.map(p=>p.id===id?{...p,name:value}:p));
-  return <div><div style={{fontSize:13,color:'#D5E0D5',marginBottom:16}}>Pillars are simple, non-color-coded tags that can be added to sessions. Add or remove pillars here.</div><form onSubmit={e=>{e.preventDefault(); if(!name.trim()) return; onChange([...list,{id:'ptag'+Date.now(),name:name.trim()}]); setName(''); showToast('Pillar added');}} style={{display:'flex',gap:8,alignItems:'end',marginBottom:18,maxWidth:560}}><input className={inputStyle} value={name} onChange={e=>setName(e.target.value)} placeholder="New pillar name"/><button type="submit" className={btnPrimary}><Plus size={14}/> Add</button></form><div style={{display:'flex',flexDirection:'column',gap:8,maxWidth:560}}>{list.length===0 && <div style={{fontSize:12.5,color:'#9DB09D'}}>No pillars yet.</div>}{list.map(p=><div key={p.id} style={{display:'flex',gap:8,alignItems:'center',background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:10}}><span style={{fontSize:12,padding:'3px 10px',borderRadius:12,background:'#1F4A3C',color:'#D5E0D5',fontWeight:600}}>{p.name}</span><input className={inputStyle} value={p.name} onChange={e=>update(p.id,e.target.value)}/><button onClick={()=>onChange(list.filter(item=>item.id!==p.id))} style={{...linkBtn,color:'#D0A023'}}>Delete</button></div>)}</div></div>;
+  const [name, setName] = useState('');
+  const save = e => { e.preventDefault(); if (!name.trim()) return; onChange([...list, { id: 'ptag' + Date.now(), name: name.trim() }]); setName(''); showToast('Pillar added'); };
+  const update = (id, value) => onChange(list.map(p => p.id === id ? { ...p, name: value } : p));
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Pillars are simple, non-color-coded tags that can be added to sessions. Add or remove pillars here.</div><form onSubmit={e => { e.preventDefault(); if (!name.trim()) return; onChange([...list, { id: 'ptag' + Date.now(), name: name.trim() }]); setName(''); showToast('Pillar added'); }} style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 18, maxWidth: 560 }}><input className={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="New pillar name" /><button type="submit" className={btnPrimary}><Plus size={14} /> Add</button></form><div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 560 }}>{list.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No pillars yet.</div>}{list.map(p => <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 10 }}><span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, background: '#1F4A3C', color: '#D5E0D5', fontWeight: 600 }}>{p.name}</span><input className={inputStyle} value={p.name} onChange={e => update(p.id, e.target.value)} /><button onClick={() => onChange(list.filter(item => item.id !== p.id))} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div>)}</div></div>;
 }
 
-function WorkModesPanel({ modes, onChange, showToast }){
+function WorkModesPanel({ modes, onChange, showToast }) {
   const list = modes || [];
-  const [name,setName]=useState(''); const [color,setColor]=useState('#D65641');
-  const save = e => { e.preventDefault(); if(!name.trim()) return; onChange([...list,{id:'mode'+Date.now(),name:name.trim(),color}]); setName('');showToast('Work mode added'); };
-  const update = (id,key,value) => onChange(list.map(p=>p.id===id?{...p,[key]:value}:p));
-  return <div><div style={{fontSize:13,color:'#D5E0D5',marginBottom:16}}>Add, edit, or remove work modes (e.g. Sync, Async, Coaching, Clinic, Break). Work modes are used for time tracking.</div><form onSubmit={save} style={{display:'flex',gap:8,alignItems:'end',marginBottom:18,maxWidth:560}}><input className={inputStyle} value={name} onChange={e=>setName(e.target.value)} placeholder="New work mode name"/><input type="color" value={color} onChange={e=>setColor(e.target.value)} style={{width:42,height:35}}/><button type="submit" className={btnPrimary}><Plus size={14}/> Add</button></form><div style={{display:'flex',flexDirection:'column',gap:8,maxWidth:560}}>{list.map(p=><div key={p.id} style={{display:'flex',gap:8,alignItems:'center',background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:10}}><input className={inputStyle} value={p.name} onChange={e=>update(p.id,'name',e.target.value)}/><input type="color" value={p.color} onChange={e=>update(p.id,'color',e.target.value)} style={{width:42,height:35}}/><button onClick={()=>onChange(list.filter(item=>item.id!==p.id))} style={{...linkBtn,color:'#D0A023'}}>Delete</button></div>)}</div></div>;
+  const [name, setName] = useState(''); const [color, setColor] = useState('#D65641');
+  const save = e => { e.preventDefault(); if (!name.trim()) return; onChange([...list, { id: 'mode' + Date.now(), name: name.trim(), color }]); setName(''); showToast('Work mode added'); };
+  const update = (id, key, value) => onChange(list.map(p => p.id === id ? { ...p, [key]: value } : p));
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Add, edit, or remove work modes (e.g. Sync, Async, Coaching, Clinic, Break). Work modes are used for time tracking.</div><form onSubmit={save} style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 18, maxWidth: 560 }}><input className={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="New work mode name" /><input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ width: 42, height: 35 }} /><button type="submit" className={btnPrimary}><Plus size={14} /> Add</button></form><div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 560 }}>{list.map(p => <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 10 }}><input className={inputStyle} value={p.name} onChange={e => update(p.id, 'name', e.target.value)} /><input type="color" value={p.color} onChange={e => update(p.id, 'color', e.target.value)} style={{ width: 42, height: 35 }} /><button onClick={() => onChange(list.filter(item => item.id !== p.id))} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div>)}</div></div>;
 }
 
-const linkBtn = {background:'none', border:'none', color:'#D65641', fontSize:12.5, fontWeight:600, cursor:'pointer', padding:0};
+const linkBtn = { background: 'none', border: 'none', color: '#D65641', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0 };
 
-function TimeSummary({ sessions, weeks, modes }){
+function TimeSummary({ sessions, weeks, modes }) {
   const weekList = weeks || WEEKS;
   const modeList = modes || DEFAULT_MODES;
-  const modeNames = modeList.map(m=>m.name);
-  const scheduled = sessions.filter(s => s.calendared && s.start && s.end && s.week!=null);
-  const byMode = {}; modeNames.forEach(m => byMode[m] = {total:0, byWeek:{}});
+  const modeNames = modeList.map(m => m.name);
+  const scheduled = sessions.filter(s => s.calendared && s.start && s.end && s.week != null);
+  const byMode = {}; modeNames.forEach(m => byMode[m] = { total: 0, byWeek: {} });
   scheduled.forEach(s => {
     const dur = durationMin(s);
     const m = modeNames.includes(s.mode) ? s.mode : modeNames[0] || 'Sync';
-    if (!byMode[m]) byMode[m] = {total:0, byWeek:{}};
-    byMode[m].total += dur; byMode[m].byWeek[s.week] = (byMode[m].byWeek[s.week]||0) + dur;
+    if (!byMode[m]) byMode[m] = { total: 0, byWeek: {} };
+    byMode[m].total += dur; byMode[m].byWeek[s.week] = (byMode[m].byWeek[s.week] || 0) + dur;
   });
-  const grandTotal = modeNames.reduce((sum,m)=>sum+(byMode[m]?byMode[m].total:0),0);
+  const grandTotal = modeNames.reduce((sum, m) => sum + (byMode[m] ? byMode[m].total : 0), 0);
   const unscheduled = sessions.filter(s => !s.calendared || !s.date);
 
   return (
     <div>
-      <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(160px,1fr))', gap:12, marginBottom:24}}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: 12, marginBottom: 24 }}>
         {modeNames.map(m => (
-          <div key={m} style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, padding:'16px 18px'}}>
-            <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:8}}><div style={{width:8, height:8, borderRadius:'50%', background:getModeColor(m, modes)}} /><span style={{fontSize:12.5, color:'#D5E0D5', fontWeight:600}}>{m}</span></div>
-            <div style={{fontSize:24, fontWeight:700}}>{fmtDur(byMode[m].total)}</div>
+          <div key={m} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: getModeColor(m, modes) }} /><span style={{ fontSize: 12.5, color: '#D5E0D5', fontWeight: 600 }}>{m}</span></div>
+            <div style={{ fontSize: 24, fontWeight: 700 }}>{fmtDur(byMode[m].total)}</div>
           </div>
         ))}
-        <div style={{background:'#005B3F', borderRadius:8, padding:'16px 18px', color:'#fff'}}>
-          <div style={{display:'flex', alignItems:'center', gap:6, marginBottom:8}}><Clock size={13}/><span style={{fontSize:12.5, fontWeight:600}}>Total scheduled</span></div>
-          <div style={{fontSize:24, fontWeight:700}}>{fmtDur(grandTotal)}</div>
+        <div style={{ background: '#005B3F', borderRadius: 8, padding: '16px 18px', color: '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><Clock size={13} /><span style={{ fontSize: 12.5, fontWeight: 600 }}>Total scheduled</span></div>
+          <div style={{ fontSize: 24, fontWeight: 700 }}>{fmtDur(grandTotal)}</div>
         </div>
       </div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, overflow:'hidden', marginBottom:24}}>
-        <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#00402E'}}><th style={{padding:'9px 12px', textAlign:'left', color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Mode</th>{weekList.map(w => <th key={w} style={{padding:'9px 10px', color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>W{String(w).padStart(2,'0')}</th>)}<th style={{padding:'9px 12px', color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Total</th></tr></thead>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E' }}><th style={{ padding: '9px 12px', textAlign: 'left', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Mode</th>{weekList.map(w => <th key={w} style={{ padding: '9px 10px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>W{String(w).padStart(2, '0')}</th>)}<th style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Total</th></tr></thead>
           <tbody>
             {modeNames.map(m => (
-              <tr key={m} style={{borderBottom:'1px solid #1F4A3C'}}>
-                <td style={{padding:'8px 12px', fontWeight:600, color:getModeColor(m, modes)}}>{m}</td>
-                {weekList.map(w => <td key={w} style={{padding:'8px 10px', textAlign:'center', color:'#D5E0D5'}}>{fmtDur(byMode[m].byWeek[w]||0)}</td>)}
-                <td style={{padding:'8px 12px', textAlign:'center', fontWeight:600}}>{fmtDur(byMode[m].total)}</td>
+              <tr key={m} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                <td style={{ padding: '8px 12px', fontWeight: 600, color: getModeColor(m, modes) }}>{m}</td>
+                {weekList.map(w => <td key={w} style={{ padding: '8px 10px', textAlign: 'center', color: '#D5E0D5' }}>{fmtDur(byMode[m].byWeek[w] || 0)}</td>)}
+                <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600 }}>{fmtDur(byMode[m].total)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {unscheduled.length>0 && (
+      {unscheduled.length > 0 && (
         <div>
-          <div style={{fontSize:13, fontWeight:600, marginBottom:8, color:'#D5E0D5'}}>Not yet scheduled ({unscheduled.length})</div>
-          <div style={{display:'flex', flexWrap:'wrap', gap:8}}>{unscheduled.map(s => (<div key={s.id} style={{fontSize:12, padding:'6px 10px', background:'#003223', border:'1px dashed #2A5C4B', borderRadius:6, color:'#D5E0D5'}}>{s.name}</div>))}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#D5E0D5' }}>Not yet scheduled ({unscheduled.length})</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{unscheduled.map(s => (<div key={s.id} style={{ fontSize: 12, padding: '6px 10px', background: '#003223', border: '1px dashed #2A5C4B', borderRadius: 6, color: '#D5E0D5' }}>{s.name}</div>))}</div>
         </div>
       )}
     </div>
   );
 }
 
-function Metric({ label, value }){
-  return <div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16}}><div style={{fontSize:12,color:'#D5E0D5'}}>{label}</div><div style={{fontSize:26,fontWeight:700,marginTop:5}}>{value}</div></div>;
+function Metric({ label, value }) {
+  return <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>{label}</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{value}</div></div>;
 }
 
-function ExpandedAnalyticsPanel({ sessions, attendance, attempts, assessments, roster, afaGroups, onSeedDemo, onDeleteDemo }){
-  const [view,setView]=useState('attendance');
-  const [track,setTrack]=useState('all'); const [city,setCity]=useState('all'); const [afa,setAfa]=useState('all');
-  const fellows=roster.filter(fellow=>(track==='all'||fellow.track===track)&&(city==='all'||fellow.placementCity===city)&&(afa==='all'||fellow.afaGroup===afa));
-  const ids=new Set(fellows.map(fellow=>fellow.id));
-  const filteredAttendance=attendance.filter(entry=>ids.has(entry.fellowId));
-  const filteredAttempts=attempts.filter(attempt=>ids.has(attempt.fellowId));
-  const attendanceBySession=sessions.map(session=>({label:session.name,value:filteredAttendance.filter(entry=>entry.sessionId===session.id).length})).filter(row=>row.value||sessions.length<8);
-  const max=Math.max(1,...attendanceBySession.map(row=>row.value));
-  const scoreValues=filteredAttempts.map(attempt=>{
-    const assessment=assessments.find(item=>String(item.id)===String(attempt.assessmentId));
-    return Number(attempt.percentage ?? attempt.score ?? computeAttemptPercentage(attempt,assessment));
-  }).filter(value=>Number.isFinite(value));
-  const average=scoreValues.length ? Math.round(scoreValues.reduce((sum,value)=>sum+value,0)/scoreValues.length) : 0;
-  const submission=roster.length ? Math.round(filteredAttempts.filter(attempt=>attempt.status==='submitted').length/Math.max(1,fellows.length)*100) : 0;
-  return <div><div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}><button onClick={()=>setView('attendance')} className={view==='attendance'?btnPrimary:btnSecondary}>Attendance</button><button onClick={()=>setView('assessment')} className={view==='assessment'?btnPrimary:btnSecondary}>Assessments</button><button onClick={onSeedDemo} className={btnGhost}>Create demo data</button><button onClick={onDeleteDemo} className={btnGhost+' text-[#D0A023]'}>Delete demo data</button></div><div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:18}}><select className={selectStyle} value={track} onChange={event=>setTrack(event.target.value)}><option value="all">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><select className={selectStyle} value={city} onChange={event=>setCity(event.target.value)}><option value="all">All placement cities</option>{[...new Set(roster.map(fellow=>fellow.placementCity).filter(Boolean))].map(value=><option key={value} value={value}>{value}</option>)}</select><select className={selectStyle} value={afa} onChange={event=>setAfa(event.target.value)}><option value="all">All AFA groups</option>{[...new Set([...(afaGroups||[]), ...roster.map(fellow=>fellow.afaGroup)].filter(Boolean))].map(value=><option key={value} value={value}>{value}</option>)}</select><span style={{fontSize:12.5,color:'#D5E0D5',alignSelf:'center'}}>{fellows.length} Fellows matched</span></div>{view==='attendance'?<><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12,maxWidth:780}}><Metric label="Attendance records" value={filteredAttendance.length}/><Metric label="On-time" value={filteredAttendance.filter(entry=>entry.status==='on_time').length}/><Metric label="Attendance %" value={`${fellows.length?Math.round(filteredAttendance.length/Math.max(1,fellows.length)*100):0}%`}/></div><div style={{marginTop:24,fontWeight:700}}>Attendance by session</div><div style={{display:'flex',alignItems:'end',gap:8,height:180,maxWidth:780,marginTop:12,padding:'12px 8px',background:'#003223',border:'1px solid #2A5C4B',borderRadius:8}}>{attendanceBySession.map(row=><div key={row.label} title={`${row.label}: ${row.value}`} style={{flex:1,minWidth:18,height:`${Math.max(8,row.value/max*100)}%`,background:'#D65641',borderRadius:'4px 4px 0 0'}} />)}</div></>:<><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12,maxWidth:780}}><Metric label="Submission %" value={`${submission}%`}/><Metric label="Average score %" value={`${average}%`}/><Metric label="Submitted attempts" value={filteredAttempts.filter(attempt=>attempt.status==='submitted').length}/></div><div style={{marginTop:24,fontWeight:700}}>Assessment score trend</div><div style={{display:'flex',alignItems:'end',gap:8,height:180,maxWidth:780,marginTop:12,padding:'12px 8px',background:'#003223',border:'1px solid #2A5C4B',borderRadius:8}}>{assessments.map(assessment=>{const values=filteredAttempts.filter(attempt=>attempt.assessmentId===assessment.id).map(attempt=>computeAttemptPercentage(attempt,assessment));const value=values.length?values.reduce((sum,item)=>sum+item,0)/values.length:0;return <div key={assessment.id} title={`${assessment.title}: ${Math.round(value)}%`} style={{flex:1,minWidth:18,height:`${Math.max(8,value)}%`,background:'#D97355',borderRadius:'4px 4px 0 0'}}/>})}</div><SessionAssessmentBreakdown fellows={fellows} sessions={sessions} assessments={assessments} attempts={filteredAttempts} roster={roster} /></>}</div>;
+function ExpandedAnalyticsPanel({ sessions, attendance, attempts, assessments, roster, afaGroups, onSeedDemo, onDeleteDemo }) {
+  const [view, setView] = useState('attendance');
+  const [track, setTrack] = useState('all'); const [city, setCity] = useState('all'); const [afa, setAfa] = useState('all');
+  const fellows = roster.filter(fellow => (track === 'all' || fellow.track === track) && (city === 'all' || fellow.placementCity === city) && (afa === 'all' || fellow.afaGroup === afa));
+  const ids = new Set(fellows.map(fellow => fellow.id));
+  const filteredAttendance = attendance.filter(entry => ids.has(entry.fellowId));
+  const filteredAttempts = attempts.filter(attempt => ids.has(attempt.fellowId));
+  const attendanceBySession = sessions.map(session => ({ label: session.name, value: filteredAttendance.filter(entry => entry.sessionId === session.id).length })).filter(row => row.value || sessions.length < 8);
+  const max = Math.max(1, ...attendanceBySession.map(row => row.value));
+  const scoreValues = filteredAttempts.map(attempt => {
+    const assessment = assessments.find(item => String(item.id) === String(attempt.assessmentId));
+    return Number(attempt.percentage ?? attempt.score ?? computeAttemptPercentage(attempt, assessment));
+  }).filter(value => Number.isFinite(value));
+  const average = scoreValues.length ? Math.round(scoreValues.reduce((sum, value) => sum + value, 0) / scoreValues.length) : 0;
+  const submission = roster.length ? Math.round(filteredAttempts.filter(attempt => attempt.status === 'submitted').length / Math.max(1, fellows.length) * 100) : 0;
+  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={() => setView('attendance')} className={view === 'attendance' ? btnPrimary : btnSecondary}>Attendance</button><button onClick={() => setView('assessment')} className={view === 'assessment' ? btnPrimary : btnSecondary}>Assessments</button><button onClick={onSeedDemo} className={btnGhost}>Create demo data</button><button onClick={onDeleteDemo} className={btnGhost + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}><select className={selectStyle} value={track} onChange={event => setTrack(event.target.value)}><option value="all">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><select className={selectStyle} value={city} onChange={event => setCity(event.target.value)}><option value="all">All placement cities</option>{[...new Set(roster.map(fellow => fellow.placementCity).filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><select className={selectStyle} value={afa} onChange={event => setAfa(event.target.value)}><option value="all">All AFA groups</option>{[...new Set([...(afaGroups || []), ...roster.map(fellow => fellow.afaGroup)].filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><span style={{ fontSize: 12.5, color: '#D5E0D5', alignSelf: 'center' }}>{fellows.length} Fellows matched</span></div>{view === 'attendance' ? <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Attendance records" value={filteredAttendance.length} /><Metric label="On-time" value={filteredAttendance.filter(entry => entry.status === 'on_time').length} /><Metric label="Attendance %" value={`${fellows.length ? Math.round(filteredAttendance.length / Math.max(1, fellows.length) * 100) : 0}%`} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Attendance by session</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{attendanceBySession.map(row => <div key={row.label} title={`${row.label}: ${row.value}`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, row.value / max * 100)}%`, background: '#D65641', borderRadius: '4px 4px 0 0' }} />)}</div></> : <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Submission %" value={`${submission}%`} /><Metric label="Average score %" value={`${average}%`} /><Metric label="Submitted attempts" value={filteredAttempts.filter(attempt => attempt.status === 'submitted').length} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Assessment score trend</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{assessments.map(assessment => { const values = filteredAttempts.filter(attempt => attempt.assessmentId === assessment.id).map(attempt => computeAttemptPercentage(attempt, assessment)); const value = values.length ? values.reduce((sum, item) => sum + item, 0) / values.length : 0; return <div key={assessment.id} title={`${assessment.title}: ${Math.round(value)}%`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, value)}%`, background: '#D97355', borderRadius: '4px 4px 0 0' }} /> })}</div><SessionAssessmentBreakdown fellows={fellows} sessions={sessions} assessments={assessments} attempts={filteredAttempts} roster={roster} /></>}</div>;
 }
 
-function SessionAssessmentBreakdown({ sessions, assessments, attempts, roster, fellows }){
-  const findReview = (attempt, qid) => { const rev = attempt.reviews||{}; return rev[qid] ?? rev[String(qid)] ?? (Object.values(rev).find(rv => rv && rv.questionId!=null && String(rv.questionId)===String(qid)) || null); };
+function SessionAssessmentBreakdown({ sessions, assessments, attempts, roster, fellows }) {
+  const findReview = (attempt, qid) => { const rev = attempt.reviews || {}; return rev[qid] ?? rev[String(qid)] ?? (Object.values(rev).find(rv => rv && rv.questionId != null && String(rv.questionId) === String(qid)) || null); };
   const statusOfAttempt = (attempt, assessment) => {
     if (!attempt) return 'Not submitted';
-    const paras = (assessment?.questions||[]).filter(q => q.type==='paragraph' && (attempt.questionOrder||[]).some(qid => String(qid)===String(q.id)));
-    if (paras.some(q => { const rv = findReview(attempt, q.id); return !rv || (rv.status!=='reviewed' && rv.score==null); })) return 'Pending review';
-    if (paras.some(q => { const rv = findReview(attempt, q.id); return rv && rv.status==='ai_suggested'; })) return 'AI suggested';
+    const paras = (assessment?.questions || []).filter(q => q.type === 'paragraph' && (attempt.questionOrder || []).some(qid => String(qid) === String(q.id)));
+    if (paras.some(q => { const rv = findReview(attempt, q.id); return !rv || (rv.status !== 'reviewed' && rv.score == null); })) return 'Pending review';
+    if (paras.some(q => { const rv = findReview(attempt, q.id); return rv && rv.status === 'ai_suggested'; })) return 'AI suggested';
     return 'Reviewed';
   };
-  const statusColor = s => s==='Reviewed' ? '#2D7A4F' : s==='Not submitted' ? '#9DB09D' : s==='AI suggested' ? '#9A6A16' : '#D0A023';
+  const statusColor = s => s === 'Reviewed' ? '#2D7A4F' : s === 'Not submitted' ? '#9DB09D' : s === 'AI suggested' ? '#9A6A16' : '#D0A023';
   const questionCell = (attempt, question) => {
     if (!attempt) return '--';
-    const points = Number(question.points)||1;
-    if (question.type==='paragraph'){
+    const points = Number(question.points) || 1;
+    if (question.type === 'paragraph') {
       const rv = findReview(attempt, question.id);
-      return rv && rv.score!=null ? `${Number(rv.score)}/${points}` : '--';
+      return rv && rv.score != null ? `${Number(rv.score)}/${points}` : '--';
     }
     const answer = attempt.answers ? attempt.answers[question.id] : undefined;
     const correct = Array.isArray(question.correct) ? question.correct : [];
     let ok = false;
     if (typeof answer === 'string') ok = correct.includes(answer);
-    else if (Array.isArray(answer) && correct.length) ok = correct.length===answer.length && correct.every(c => answer.includes(c));
-    else if (Array.isArray(correct) && correct.length===0 && answer!=null) ok = true;
+    else if (Array.isArray(answer) && correct.length) ok = correct.length === answer.length && correct.every(c => answer.includes(c));
+    else if (Array.isArray(correct) && correct.length === 0 && answer != null) ok = true;
     return ok ? `${points}/${points}` : `0/${points}`;
   };
-  return <div style={{marginTop:24}}>
+  return <div style={{ marginTop: 24 }}>
     {sessions.map(session => {
-      const sessionAssessments = (assessments||[]).filter(a => String(a.sessionId)===String(session.id));
+      const sessionAssessments = (assessments || []).filter(a => String(a.sessionId) === String(session.id));
       if (!sessionAssessments.length) return null;
       return (
-        <div key={session.id} style={{marginBottom:26}}>
-          <div style={{fontSize:14.5,fontWeight:700,marginBottom:10}}>{session.name||'Session'} <span style={{fontWeight:400,color:'#9DB09D',fontSize:12}}>{session.date ? '· '+dateLabel(session.date) : '· unscheduled'}</span></div>
+        <div key={session.id} style={{ marginBottom: 26 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700, marginBottom: 10 }}>{session.name || 'Session'} <span style={{ fontWeight: 400, color: '#9DB09D', fontSize: 12 }}>{session.date ? '· ' + dateLabel(session.date) : '· unscheduled'}</span></div>
           {sessionAssessments.map(assessment => {
-            const assigned = new Set((assessment.assignmentGroups||[]).flatMap(g => g.fellowIds||[]).map(String));
+            const assigned = new Set((assessment.assignmentGroups || []).flatMap(g => g.fellowIds || []).map(String));
             const assignedFellows = fellows.filter(f => assigned.has(String(f.id)));
             const list = assignedFellows.length ? assignedFellows : fellows;
-            const paraCount = (assessment.questions||[]).filter(q => q.type==='paragraph').length;
+            const paraCount = (assessment.questions || []).filter(q => q.type === 'paragraph').length;
             return (
-              <div key={assessment.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,marginBottom:14,maxWidth:960,overflowX:'auto'}}>
-                <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{assessment.title||'Untitled assessment'}</div>
-                <div style={{fontSize:12,color:'#9DB09D',marginBottom:10}}>{list.length} fellow{list.length===1?'':'s'} · {(assessment.questions||[]).length} question{(assessment.questions||[]).length===1?'':'s'} · {paraCount} paragraph{paraCount===1?'':'s'}</div>
-                <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+              <div key={assessment.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 14, maxWidth: 960, overflowX: 'auto' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{assessment.title || 'Untitled assessment'}</div>
+                <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 10 }}>{list.length} fellow{list.length === 1 ? '' : 's'} · {(assessment.questions || []).length} question{(assessment.questions || []).length === 1 ? '' : 's'} · {paraCount} paragraph{paraCount === 1 ? '' : 's'}</div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead>
-                    <tr style={{background:'#00402E',textAlign:'left'}}>
-                      <th style={{padding:8}}>Fellow</th>
-                      <th style={{padding:8}}>Status</th>
-                      <th style={{padding:8}}>Total</th>
-                      {(assessment.questions||[]).map(q => <th key={q.id} style={{padding:8}} title={q.text}>{((q.text||'Question').slice(0,18))}{(q.text||'').length>18?'…':''} <span style={{fontWeight:400,color:'#9DB09D'}}>({Number(q.points)||1}p)</span></th>)}
+                    <tr style={{ background: '#00402E', textAlign: 'left' }}>
+                      <th style={{ padding: 8 }}>Fellow</th>
+                      <th style={{ padding: 8 }}>Status</th>
+                      <th style={{ padding: 8 }}>Total</th>
+                      {(assessment.questions || []).map(q => <th key={q.id} style={{ padding: 8 }} title={q.text}>{((q.text || 'Question').slice(0, 18))}{(q.text || '').length > 18 ? '…' : ''} <span style={{ fontWeight: 400, color: '#9DB09D' }}>({Number(q.points) || 1}p)</span></th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {list.map(f => {
-                      const attempt = (attempts||[]).filter(a => String(a.assessmentId)===String(assessment.id) && String(a.fellowId)===String(f.id)).sort((x,y) => String(y.submittedAt||'').localeCompare(String(x.submittedAt||'')))[0];
-                      const score = attempt ? computeAttemptScore(attempt, assessment) : { earned:0, total:0 };
-                      const pct = attempt && score.total ? Math.round(score.earned/score.total*100) : null;
+                      const attempt = (attempts || []).filter(a => String(a.assessmentId) === String(assessment.id) && String(a.fellowId) === String(f.id)).sort((x, y) => String(y.submittedAt || '').localeCompare(String(x.submittedAt || '')))[0];
+                      const score = attempt ? computeAttemptScore(attempt, assessment) : { earned: 0, total: 0 };
+                      const pct = attempt && score.total ? Math.round(score.earned / score.total * 100) : null;
                       const st = statusOfAttempt(attempt, assessment);
                       return (
-                        <tr key={f.id} style={{borderTop:'1px solid #1F4A3C'}}>
-                          <td style={{padding:8,fontWeight:600}}>{f.name}</td>
-                          <td style={{padding:8,color:statusColor(st),fontWeight:600}}>{st}</td>
-                          <td style={{padding:8,fontWeight:700}}>{pct==null ? '--' : `${pct}% (${score.earned}/${score.total})`}</td>
-                          {(assessment.questions||[]).map(q => <td key={q.id} style={{padding:8,color:'#D5E0D5'}}>{questionCell(attempt, q)}</td>)}
+                        <tr key={f.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                          <td style={{ padding: 8, fontWeight: 600 }}>{f.name}</td>
+                          <td style={{ padding: 8, color: statusColor(st), fontWeight: 600 }}>{st}</td>
+                          <td style={{ padding: 8, fontWeight: 700 }}>{pct == null ? '--' : `${pct}% (${score.earned}/${score.total})`}</td>
+                          {(assessment.questions || []).map(q => <td key={q.id} style={{ padding: 8, color: '#D5E0D5' }}>{questionCell(attempt, q)}</td>)}
                         </tr>
                       );
                     })}
-                    {list.length===0 && <tr><td colSpan={3+((assessment.questions||[]).length)} style={{padding:10,color:'#9DB09D'}}>No fellows match the current filters.</td></tr>}
+                    {list.length === 0 && <tr><td colSpan={3 + ((assessment.questions || []).length)} style={{ padding: 10, color: '#9DB09D' }}>No fellows match the current filters.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -1849,122 +2126,122 @@ function SessionAssessmentBreakdown({ sessions, assessments, attempts, roster, f
 // that calls Gemini, and paste its URL below. The Gemini API key stays inside Apps
 // Script -- it must NEVER be placed in this React codebase.
 const AI_SUGGEST_ENDPOINT = '';
-async function suggestParagraphScore(question, answer){
+async function suggestParagraphScore(question, answer) {
   try {
-    if (!AI_SUGGEST_ENDPOINT) return { ok:false, error:'AI endpoint not configured. Deploy the Apps Script proxy and add its URL to AI_SUGGEST_ENDPOINT.' };
+    if (!AI_SUGGEST_ENDPOINT) return { ok: false, error: 'AI endpoint not configured. Deploy the Apps Script proxy and add its URL to AI_SUGGEST_ENDPOINT.' };
     const response = await fetch(AI_SUGGEST_ENDPOINT, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ question:question.text, rubric:question.rubric||'', answer:answer||'', maxPoints:Number(question.points)||1 }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question.text, rubric: question.rubric || '', answer: answer || '', maxPoints: Number(question.points) || 1 }),
     });
-    if (!response.ok) return { ok:false, error:'AI endpoint returned '+response.status+'. Check the Apps Script deployment.' };
+    if (!response.ok) return { ok: false, error: 'AI endpoint returned ' + response.status + '. Check the Apps Script deployment.' };
     const data = await response.json();
-    return { ok:true, suggestion:{ suggestedScore:Number(data.suggestedScore)||0, confidence:Number(data.confidence)||0, feedback:data.feedback||'', status:data.status||'ai_suggested' } };
+    return { ok: true, suggestion: { suggestedScore: Number(data.suggestedScore) || 0, confidence: Number(data.confidence) || 0, feedback: data.feedback || '', status: data.status || 'ai_suggested' } };
   } catch (error) {
-    return { ok:false, error:'AI suggestion unavailable ('+error.message+').' };
+    return { ok: false, error: 'AI suggestion unavailable (' + error.message + ').' };
   }
 }
 
-function computeAttemptScore(attempt, assessment){
+function computeAttemptScore(attempt, assessment) {
   const reviews = attempt.reviews || {};
-  const findReview = qid => reviews[qid] ?? reviews[String(qid)] ?? (Object.values(reviews).find(rv => rv && rv.questionId!=null && String(rv.questionId)===String(qid)) || null);
+  const findReview = qid => reviews[qid] ?? reviews[String(qid)] ?? (Object.values(reviews).find(rv => rv && rv.questionId != null && String(rv.questionId) === String(qid)) || null);
   let earned = 0, total = 0;
-  (attempt.questionOrder||[]).forEach(qid => {
-    const q = (assessment?.questions||[]).find(item => String(item.id)===String(qid));
+  (attempt.questionOrder || []).forEach(qid => {
+    const q = (assessment?.questions || []).find(item => String(item.id) === String(qid));
     if (!q) return;
     const points = Number(q.points) || 1;
     total += points;
     const answer = attempt.answers ? attempt.answers[qid] : undefined;
     const review = findReview(qid);
-    if (q.type==='paragraph') {
-      if (review && review.score != null) earned += Math.max(0, Math.min(Number(review.score)||0, points));
+    if (q.type === 'paragraph') {
+      if (review && review.score != null) earned += Math.max(0, Math.min(Number(review.score) || 0, points));
     } else {
       const correct = Array.isArray(q.correct) ? q.correct : [];
       let ok = false;
       if (typeof answer === 'string') ok = correct.includes(answer);
-      else if (Array.isArray(answer) && correct.length) ok = correct.length===answer.length && correct.every(c => answer.includes(c));
-      else if (Array.isArray(correct) && correct.length===0 && answer!=null) ok = true;
+      else if (Array.isArray(answer) && correct.length) ok = correct.length === answer.length && correct.every(c => answer.includes(c));
+      else if (Array.isArray(correct) && correct.length === 0 && answer != null) ok = true;
       if (ok) earned += points;
     }
   });
   return { earned, total };
 }
-function computeAttemptPercentage(attempt, assessment){
+function computeAttemptPercentage(attempt, assessment) {
   const { earned, total } = computeAttemptScore(attempt, assessment);
-  return total ? Math.round(earned/total*100) : 0;
+  return total ? Math.round(earned / total * 100) : 0;
 }
 
-function ParagraphReviewPanel({ attempts, assessments, roster, sessions, auth, onAttemptsChange, showToast, showUngradedOnly }){
+function ParagraphReviewPanel({ attempts, assessments, roster, sessions, auth, onAttemptsChange, showToast, showUngradedOnly }) {
   const [assessmentFilter, setAssessmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState(showUngradedOnly ? 'pending' : 'pending');
   const [drafts, setDrafts] = useState({});
-  const draftKey = (aId, qId) => String(aId)+'__'+String(qId);
-  const getReview = (attempt, qid) => { const rev = attempt.reviews||{}; return rev[qid] ?? rev[String(qid)] ?? (Object.values(rev).find(rv => rv && rv.questionId!=null && String(rv.questionId)===String(qid)) || null); };
+  const draftKey = (aId, qId) => String(aId) + '__' + String(qId);
+  const getReview = (attempt, qid) => { const rev = attempt.reviews || {}; return rev[qid] ?? rev[String(qid)] ?? (Object.values(rev).find(rv => rv && rv.questionId != null && String(rv.questionId) === String(qid)) || null); };
   const reportDraft = (r) => drafts[draftKey(r.attempt.id, r.question.id)];
   const setDraft = (r, patch) => {
     const key = draftKey(r.attempt.id, r.question.id);
-    setDrafts(d => ({ ...d, [key]: { ...(reportDraft(r)||{score:'',feedback:''}), ...patch } }));
+    setDrafts(d => ({ ...d, [key]: { ...(reportDraft(r) || { score: '', feedback: '' }), ...patch } }));
   };
 
   const rows = attempts
-    .filter(a => a.status==='submitted')
+    .filter(a => a.status === 'submitted')
     .flatMap(attempt => {
-      const assessment = assessments.find(x => String(x.id)===String(attempt.assessmentId));
-      const fellow = roster.find(x => String(x.id)===String(attempt.fellowId));
-      return (attempt.questionOrder||[]).map(qid => {
-        const question = (assessment?.questions||[]).find(x => String(x.id)===String(qid));
-        return { attempt, assessment, fellow, session:sessions.find(s=>String(s.id)===String(attempt.sessionId)), question, answer:(attempt.answers||{})[qid], review:getReview(attempt, qid) };
-      }).filter(r => r.question && r.question.type==='paragraph' && (r.answer||'').trim().length>0);
+      const assessment = assessments.find(x => String(x.id) === String(attempt.assessmentId));
+      const fellow = roster.find(x => String(x.id) === String(attempt.fellowId));
+      return (attempt.questionOrder || []).map(qid => {
+        const question = (assessment?.questions || []).find(x => String(x.id) === String(qid));
+        return { attempt, assessment, fellow, session: sessions.find(s => String(s.id) === String(attempt.sessionId)), question, answer: (attempt.answers || {})[qid], review: getReview(attempt, qid) };
+      }).filter(r => r.question && r.question.type === 'paragraph' && (r.answer || '').trim().length > 0);
     })
     .filter(r => {
-      if (assessmentFilter!=='all' && String(r.attempt.assessmentId)!==String(assessmentFilter)) return false;
+      if (assessmentFilter !== 'all' && String(r.attempt.assessmentId) !== String(assessmentFilter)) return false;
       const draft = reportDraft(r);
-      const reviewed = (draft && draft.saved) || (r.review?.status==='reviewed' && r.review?.answer===r.answer);
-      const suggested = !reviewed && ((draft && draft.aiSuggestion) || r.review?.status==='ai_suggested');
+      const reviewed = (draft && draft.saved) || (r.review?.status === 'reviewed' && r.review?.answer === r.answer);
+      const suggested = !reviewed && ((draft && draft.aiSuggestion) || r.review?.status === 'ai_suggested');
       const pending = !reviewed && !suggested;
-      if (statusFilter==='pending' && !pending) return false;
-      if (statusFilter==='suggested' && !suggested) return false;
-      if (statusFilter==='reviewed' && !reviewed) return false;
+      if (statusFilter === 'pending' && !pending) return false;
+      if (statusFilter === 'suggested' && !suggested) return false;
+      if (statusFilter === 'reviewed' && !reviewed) return false;
       return true;
     });
 
   const askAI = async (r) => {
-    setDraft(r, { fetching:true, aiError:null });
+    setDraft(r, { fetching: true, aiError: null });
     const res = await suggestParagraphScore(r.question, r.answer);
-    setDraft(r, { fetching:false });
-    if (!res.ok) { setDraft(r, { aiError:res.error }); return; }
+    setDraft(r, { fetching: false });
+    if (!res.ok) { setDraft(r, { aiError: res.error }); return; }
     const s = res.suggestion;
-    setDraft(r, { score:String(s.suggestedScore), feedback:s.feedback, aiSuggestion:s, aiError:null, saved:false });
-    const attempt = { ...r.attempt, reviews:{ ...(r.attempt.reviews||{}), [String(r.question.id)]:{ ...(r.review||{}), status:'ai_suggested', answer:r.answer, aiSuggestion:s, questionId:r.question.id } } };
-    onAttemptsChange(attempts.map(a => a.id===attempt.id ? attempt : a));
+    setDraft(r, { score: String(s.suggestedScore), feedback: s.feedback, aiSuggestion: s, aiError: null, saved: false });
+    const attempt = { ...r.attempt, reviews: { ...(r.attempt.reviews || {}), [String(r.question.id)]: { ...(r.review || {}), status: 'ai_suggested', answer: r.answer, aiSuggestion: s, questionId: r.question.id } } };
+    onAttemptsChange(attempts.map(a => a.id === attempt.id ? attempt : a));
   };
   const saveRow = (r) => {
-    const draft = reportDraft(r)||{};
-    const max = Number(r.question.points)||1;
+    const draft = reportDraft(r) || {};
+    const max = Number(r.question.points) || 1;
     const score = Number(draft.score);
-    if (draft.score==='' || isNaN(score) || score<0) { window.alert('Enter a score between 0 and '+max+'.'); return; }
-    const attempt = { ...r.attempt, reviews:{ ...(r.attempt.reviews||{}), [String(r.question.id)]:{ status:'reviewed', score:Math.min(score, max), feedback:(draft.feedback||'').trim(), reviewer:auth.email||auth.name||'Staff', reviewedAt:new Date().toISOString(), answer:r.answer, aiSuggestion:draft.aiSuggestion, questionId:r.question.id } } };
-    onAttemptsChange(attempts.map(a => a.id===attempt.id ? attempt : a));
-    setDraft(r, { saved:true });
+    if (draft.score === '' || isNaN(score) || score < 0) { window.alert('Enter a score between 0 and ' + max + '.'); return; }
+    const attempt = { ...r.attempt, reviews: { ...(r.attempt.reviews || {}), [String(r.question.id)]: { status: 'reviewed', score: Math.min(score, max), feedback: (draft.feedback || '').trim(), reviewer: auth.email || auth.name || 'Staff', reviewedAt: new Date().toISOString(), answer: r.answer, aiSuggestion: draft.aiSuggestion, questionId: r.question.id } } };
+    onAttemptsChange(attempts.map(a => a.id === attempt.id ? attempt : a));
+    setDraft(r, { saved: true });
     if (showToast) showToast('Review saved - score added to the fellow\'s total.');
   };
   const statusOf = r => {
     const draft = reportDraft(r);
-    if ((draft && draft.saved) || r.review?.status==='reviewed') return 'reviewed';
-    if ((draft && draft.aiSuggestion) || r.review?.status==='ai_suggested') return 'suggested';
+    if ((draft && draft.saved) || r.review?.status === 'reviewed') return 'reviewed';
+    if ((draft && draft.aiSuggestion) || r.review?.status === 'ai_suggested') return 'suggested';
     return 'pending';
   };
-  return <div><div style={{fontSize:13,color:'#D5E0D5',marginBottom:16}}>{showUngradedOnly ? 'Only responses still waiting for a staff grade are listed here. ' : ''}Review paragraph responses. AI suggestions are optional; only a staff member can publish a score.</div><div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}><select className={selectStyle} value={assessmentFilter} onChange={event=>setAssessmentFilter(event.target.value)}><option value="all">All assessments</option>{assessments.map(assessment=><option key={assessment.id} value={assessment.id}>{assessment.title||'Untitled assessment'}</option>)}</select><select className={selectStyle} value={statusFilter} onChange={event=>setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="pending">Pending review</option><option value="suggested">AI suggested</option><option value="reviewed">Reviewed</option></select><span style={{fontSize:12.5,color:'#D5E0D5',alignSelf:'center'}}>{rows.length} response{rows.length===1?'':'s'}</span></div>{rows.map(r=>{const draft=reportDraft(r)||{score:r.review?.score??'',feedback:r.review?.feedback??'',aiSuggestion:r.review?.aiSuggestion};const status=statusOf(r);const max=Number(r.question.points)||1;return <div key={draftKey(r.attempt.id,r.question.id)} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16,marginBottom:12,maxWidth:860}}><div style={{display:'flex',justifyContent:'space-between',gap:12,marginBottom:10}}><div><b>{r.fellow?.name||r.attempt.fellowId}</b><div style={{fontSize:12,color:'#D5E0D5',marginTop:3}}>{r.assessment?.title||'Assessment'} · {r.session?.name||'Session unavailable'} · {max} points</div></div><span style={{fontSize:11.5,fontWeight:700,color:status==='reviewed'?'#2D7A4F':status==='suggested'?'#9A6A16':'#D5E0D5'}}>{status==='reviewed'?'Reviewed':status==='suggested'?'AI suggested':'Pending review'}</span></div><div style={{fontWeight:600,marginBottom:6}}>{r.question.text}</div>{r.question.rubric&&<div style={{fontSize:12,color:'#D5E0D5',marginBottom:6}}>Rubric: {r.question.rubric}</div>}{r.question.expectedConcepts?.length>0&&<div style={{fontSize:12,color:'#D5E0D5',marginBottom:8}}>Expected concepts: {r.question.expectedConcepts.join(', ')}</div>}<div style={{whiteSpace:'pre-wrap',background:'#00402E',borderRadius:6,padding:10,fontSize:13,marginBottom:10}}>{r.answer}</div>{draft.aiSuggestion&&<div style={{fontSize:12.5,background:'#FFF8E8',border:'1px solid #F0D9A0',borderRadius:6,padding:9,marginBottom:10}}>AI suggestion: {draft.aiSuggestion.suggestedScore}/{max} · confidence {Math.round((draft.aiSuggestion.confidence||0)*100)}%<br/>{draft.aiSuggestion.feedback}</div>}<div style={{display:'flex',gap:10,alignItems:'end',flexWrap:'wrap'}}><Field label={`Score (max ${max})`} style={{width:130,marginBottom:0}}><input type="number" min="0" max={max} step="0.5" className={inputStyle} value={draft.score} onChange={event=>setDraft(r,{score:event.target.value,saved:false})}/></Field><Field label="Feedback" style={{flex:'1 1 260px',marginBottom:0}}><textarea rows={2} className={inputStyle+' resize-y'} value={draft.feedback} onChange={event=>setDraft(r,{feedback:event.target.value,saved:false})}/></Field><button disabled={draft.fetching} onClick={()=>askAI(r)} className={btnSecondary}>{draft.fetching?'Getting suggestion…':'Get AI suggestion'}</button><button onClick={()=>saveRow(r)} className={btnPrimary}>Approve & save</button></div>{draft.aiError&&<div style={{fontSize:12,color:'#D0A023',marginTop:8}}>{draft.aiError}</div>}</div>})}{rows.length===0&&<div style={{padding:'30px 0',color:'#9DB09D'}}>No paragraph responses match these filters.</div>}</div>;
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>{showUngradedOnly ? 'Only responses still waiting for a staff grade are listed here. ' : ''}Review paragraph responses. AI suggestions are optional; only a staff member can publish a score.</div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><select className={selectStyle} value={assessmentFilter} onChange={event => setAssessmentFilter(event.target.value)}><option value="all">All assessments</option>{assessments.map(assessment => <option key={assessment.id} value={assessment.id}>{assessment.title || 'Untitled assessment'}</option>)}</select><select className={selectStyle} value={statusFilter} onChange={event => setStatusFilter(event.target.value)}><option value="all">All statuses</option><option value="pending">Pending review</option><option value="suggested">AI suggested</option><option value="reviewed">Reviewed</option></select><span style={{ fontSize: 12.5, color: '#D5E0D5', alignSelf: 'center' }}>{rows.length} response{rows.length === 1 ? '' : 's'}</span></div>{rows.map(r => { const draft = reportDraft(r) || { score: r.review?.score ?? '', feedback: r.review?.feedback ?? '', aiSuggestion: r.review?.aiSuggestion }; const status = statusOf(r); const max = Number(r.question.points) || 1; return <div key={draftKey(r.attempt.id, r.question.id)} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 12, maxWidth: 860 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}><div><b>{r.fellow?.name || r.attempt.fellowId}</b><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 3 }}>{r.assessment?.title || 'Assessment'} · {r.session?.name || 'Session unavailable'} · {max} points</div></div><span style={{ fontSize: 11.5, fontWeight: 700, color: status === 'reviewed' ? '#2D7A4F' : status === 'suggested' ? '#9A6A16' : '#D5E0D5' }}>{status === 'reviewed' ? 'Reviewed' : status === 'suggested' ? 'AI suggested' : 'Pending review'}</span></div><div style={{ fontWeight: 600, marginBottom: 6 }}>{r.question.text}</div>{r.question.rubric && <div style={{ fontSize: 12, color: '#D5E0D5', marginBottom: 6 }}>Rubric: {r.question.rubric}</div>}{r.question.expectedConcepts?.length > 0 && <div style={{ fontSize: 12, color: '#D5E0D5', marginBottom: 8 }}>Expected concepts: {r.question.expectedConcepts.join(', ')}</div>}<div style={{ whiteSpace: 'pre-wrap', background: '#00402E', borderRadius: 6, padding: 10, fontSize: 13, marginBottom: 10 }}>{r.answer}</div>{draft.aiSuggestion && <div style={{ fontSize: 12.5, background: '#FFF8E8', border: '1px solid #F0D9A0', borderRadius: 6, padding: 9, marginBottom: 10 }}>AI suggestion: {draft.aiSuggestion.suggestedScore}/{max} · confidence {Math.round((draft.aiSuggestion.confidence || 0) * 100)}%<br />{draft.aiSuggestion.feedback}</div>}<div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}><Field label={`Score (max ${max})`} style={{ width: 130, marginBottom: 0 }}><input type="number" min="0" max={max} step="0.5" className={inputStyle} value={draft.score} onChange={event => setDraft(r, { score: event.target.value, saved: false })} /></Field><Field label="Feedback" style={{ flex: '1 1 260px', marginBottom: 0 }}><textarea rows={2} className={inputStyle + ' resize-y'} value={draft.feedback} onChange={event => setDraft(r, { feedback: event.target.value, saved: false })} /></Field><button disabled={draft.fetching} onClick={() => askAI(r)} className={btnSecondary}>{draft.fetching ? 'Getting suggestion…' : 'Get AI suggestion'}</button><button onClick={() => saveRow(r)} className={btnPrimary}>Approve & save</button></div>{draft.aiError && <div style={{ fontSize: 12, color: '#D0A023', marginTop: 8 }}>{draft.aiError}</div>}</div> })}{rows.length === 0 && <div style={{ padding: '30px 0', color: '#9DB09D' }}>No paragraph responses match these filters.</div>}</div>;
 }
 
-function AnalyticsPanel({ sessions, attendance, attempts, onSeedDemo, onDeleteDemo }){
-  const onTime=attendance.filter(entry=>entry.status==='on_time').length;
-  const late=attendance.filter(entry=>entry.status==='late').length;
-  const completed=attempts.filter(attempt=>attempt.status==='submitted').length;
-  return <div><div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary+' text-[#D0A023]'}>Delete demo data</button></div><div style={{fontSize:13,color:'#D5E0D5',marginBottom:16}}>Attendance and assessment overview for Staff.</div><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:12,maxWidth:780}}><div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16}}><div style={{fontSize:12,color:'#D5E0D5'}}>On-time attendance</div><div style={{fontSize:26,fontWeight:700,marginTop:5}}>{onTime}</div></div><div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16}}><div style={{fontSize:12,color:'#D5E0D5'}}>Late attendance</div><div style={{fontSize:26,fontWeight:700,marginTop:5}}>{late}</div></div><div style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:16}}><div style={{fontSize:12,color:'#D5E0D5'}}>Completed assessments</div><div style={{fontSize:26,fontWeight:700,marginTop:5}}>{completed}</div></div></div><div style={{marginTop:24,fontSize:13,fontWeight:700}}>Session attendance</div><div style={{marginTop:8,background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,overflow:'hidden',maxWidth:780}}><table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}><thead><tr style={{background:'#00402E',textAlign:'left'}}><th style={{padding:9}}>Session</th><th style={{padding:9}}>On time</th><th style={{padding:9}}>Late</th></tr></thead><tbody>{sessions.map(session=><tr key={session.id} style={{borderTop:'1px solid #1F4A3C'}}><td style={{padding:9}}>{session.name}</td><td style={{padding:9}}>{attendance.filter(entry=>entry.sessionId===session.id&&entry.status==='on_time').length}</td><td style={{padding:9}}>{attendance.filter(entry=>entry.sessionId===session.id&&entry.status==='late').length}</td></tr>)}</tbody></table></div></div>;
+function AnalyticsPanel({ sessions, attendance, attempts, onSeedDemo, onDeleteDemo }) {
+  const onTime = attendance.filter(entry => entry.status === 'on_time').length;
+  const late = attendance.filter(entry => entry.status === 'late').length;
+  const completed = attempts.filter(attempt => attempt.status === 'submitted').length;
+  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Attendance and assessment overview for Staff.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>On-time attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{onTime}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Late attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{late}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Completed assessments</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{completed}</div></div></div><div style={{ marginTop: 24, fontSize: 13, fontWeight: 700 }}>Session attendance</div><div style={{ marginTop: 8, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 780 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: 9 }}>Session</th><th style={{ padding: 9 }}>On time</th><th style={{ padding: 9 }}>Late</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}><td style={{ padding: 9 }}>{session.name}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length}</td></tr>)}</tbody></table></div></div>;
 }
 
-function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff }){
+function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit }) {
   const color = getTypeColor(session.type, sessionTypes);
   const pillarTagNames = sessionPillarNames(session, pillarTags);
   const [reqOpen, setReqOpen] = useState(false);
@@ -1973,48 +2250,49 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
 
   const submitRequest = () => {
     if (!msg.trim()) return;
-    onRequestUpdate({ sessionId:session.id, sessionName:session.name, requesterEmail:auth.email, requesterRole:auth.role, message:msg.trim() });
-    setSent(true); setMsg(''); setTimeout(()=>{setReqOpen(false); setSent(false);}, 1500);
+    onRequestUpdate({ sessionId: session.id, sessionName: session.name, requesterEmail: auth.email, requesterRole: auth.role, message: msg.trim() });
+    setSent(true); setMsg(''); setTimeout(() => { setReqOpen(false); setSent(false); }, 1500);
   };
 
   return (
-    <div style={{position:'fixed', inset:0, background:'rgba(27,39,51,0.4)', display:'flex', justifyContent:'flex-end', zIndex:100}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{width:360, maxWidth:'92vw', background:'#003223', height:'100%', overflowY:'auto', padding:22, boxShadow:'-8px 0 24px rgba(0,0,0,.12)'}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16}}>
-          <div style={{fontWeight:700, fontSize:16, lineHeight:1.3}}>{session.name}</div>
-          <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'#9DB09D', flexShrink:0}}><X size={18}/></button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 100 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 360, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22, boxShadow: '-8px 0 24px rgba(0,0,0,.12)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.3 }}>{session.name}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9DB09D', flexShrink: 0 }}><X size={18} /></button>
         </div>
-        <div style={{display:'flex', gap:8, marginBottom:16, flexWrap:'wrap'}}>
-          <span style={{fontSize:11.5, padding:'3px 10px', borderRadius:12, background:color+'26', color:'#D5E0D5', fontWeight:600}}>{session.type}</span>
-          <span style={{fontSize:11.5, padding:'3px 10px', borderRadius:12, background:(getModeColor(session.mode, modes)||'#ccc')+'26', color:getModeColor(session.mode, modes), fontWeight:600}}>{session.mode}</span>
-          {pillarTagNames.map(name => <span key={name} style={{fontSize:11.5, padding:'3px 10px', borderRadius:12, background:'#1F4A3C', color:'#D5E0D5', fontWeight:600}}>{name}</span>)}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 12, background: color + '26', color: '#D5E0D5', fontWeight: 600 }}>{session.type}</span>
+          <span style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 12, background: (getModeColor(session.mode, modes) || '#ccc') + '26', color: getModeColor(session.mode, modes), fontWeight: 600 }}>{session.mode}</span>
+          {pillarTagNames.map(name => <span key={name} style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 12, background: '#1F4A3C', color: '#D5E0D5', fontWeight: 600 }}>{name}</span>)}
         </div>
-        <DetailRow label="When">{session.date ? dateLabel(session.date)+' · '+session.weekday : 'Unscheduled'}</DetailRow>
-        <DetailRow label="Time">{session.start ? session.start+'–'+session.end : '--'}</DetailRow>
+        <DetailRow label="When">{session.date ? dateLabel(session.date) + ' · ' + session.weekday : 'Unscheduled'}</DetailRow>
+        <DetailRow label="Time">{session.start ? session.start + '–' + session.end : '--'}</DetailRow>
         <DetailRow label="Facilitators">{fmtFacilitators(session.facilitators, rooms, staff) || '--'}</DetailRow>
-        <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{id:auth.fellowId,email:auth.email}], rooms).map(r=>r.name+' · '+(r.facilitator||'Facilitator not set')).join(', ') || '--'}</DetailRow>
-        {auth.role !== 'fellow' && <button onClick={onAssign} className={btnSecondary+' w-full justify-center mt-1'}>Assign rooms</button>}
+        <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(r => r.name + ' · ' + (r.facilitator || 'Facilitator not set')).join(', ') || '--'}</DetailRow>
+        {auth.role !== 'fellow' && <button onClick={onAssign} className={btnSecondary + ' w-full justify-center mt-1'}>Assign rooms</button>}
+        {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#9DB09D]'}><Edit size={12} /> Edit session</button>}
 
-        {session.resources && session.resources.length>0 && (
-          <div style={{marginTop:18}}>
-            <div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:8}}>Resources</div>
-            <div style={{display:'flex', flexDirection:'column', gap:8}}>
+        {session.resources && session.resources.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 8 }}>Resources</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {session.resources.map(r => (
-                <a key={r.id} href={r.url} target="_blank" rel="noreferrer" style={{display:'flex', alignItems:'center', gap:8, padding:'8px 10px', border:'1px solid #2A5C4B', borderRadius:6, fontSize:12.5, color:'#D65641', textDecoration:'none'}}>
-                  <LinkIcon size={13}/> <span style={{fontWeight:600}}>{r.label}</span>
+                <a key={r.id} href={r.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid #2A5C4B', borderRadius: 6, fontSize: 12.5, color: '#D65641', textDecoration: 'none' }}>
+                  <LinkIcon size={13} /> <span style={{ fontWeight: 600 }}>{r.label}</span>
                 </a>
               ))}
             </div>
           </div>
         )}
 
-        {auth.role !== 'fellow' && session.outcomes && session.outcomes.length>0 && (
-          <div style={{marginTop:18}}>
-            <div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:8}}>Outcomes</div>
-            <div style={{display:'flex', flexDirection:'column', gap:6}}>
+        {auth.role !== 'fellow' && session.outcomes && session.outcomes.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 8 }}>Outcomes</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {session.outcomes.map((outcome, idx) => (
-                <div key={idx} style={{display:'flex', alignItems:'flex-start', gap:8, fontSize:12.5, color:'#D5E0D5', lineHeight:1.4}}>
-                  <span style={{flexShrink:0, color:'#D65641', fontWeight:600}}>{idx+1}.</span>
+                <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: '#D5E0D5', lineHeight: 1.4 }}>
+                  <span style={{ flexShrink: 0, color: '#D65641', fontWeight: 600 }}>{idx + 1}.</span>
                   <span>{outcome}</span>
                 </div>
               ))}
@@ -2023,30 +2301,30 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         )}
 
         {auth.role !== 'fellow' && session.notes && (
-          <div style={{marginTop:18}}>
-            <div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:6}}>Planner notes</div>
-            <div style={{fontSize:12.5, color:'#D5E0D5', whiteSpace:'pre-wrap', lineHeight:1.4}}>{session.notes}</div>
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 6 }}>Planner notes</div>
+            <div style={{ fontSize: 12.5, color: '#D5E0D5', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{session.notes}</div>
           </div>
         )}
         {auth.role === 'fellow' && session.fellowNotes && (
-          <div style={{marginTop:18}}>
-            <div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:6}}>Notes</div>
-            <div style={{fontSize:12.5, color:'#D5E0D5', whiteSpace:'pre-wrap', lineHeight:1.4}}>{session.fellowNotes}</div>
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 6 }}>Notes</div>
+            <div style={{ fontSize: 12.5, color: '#D5E0D5', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{session.fellowNotes}</div>
           </div>
         )}
 
-        <div style={{marginTop:22, paddingTop:18, borderTop:'1px solid #1F4A3C'}}>
+        <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid #1F4A3C' }}>
           {!reqOpen ? (
-            <button onClick={()=>setReqOpen(true)} className={btnSecondary+' w-full justify-center'}><MessageSquare size={14}/> Request an update</button>
+            <button onClick={() => setReqOpen(true)} className={btnSecondary + ' w-full justify-center'}><MessageSquare size={14} /> Request an update</button>
           ) : sent ? (
-            <div style={{fontSize:12.5, color:'#D65641', textAlign:'center', padding:'8px 0'}}>Request sent -- thanks!</div>
+            <div style={{ fontSize: 12.5, color: '#D65641', textAlign: 'center', padding: '8px 0' }}>Request sent -- thanks!</div>
           ) : (
             <div>
-              <div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:6}}>What needs updating?</div>
-              <textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={3} placeholder="e.g. The exit ticket link is broken, or the time has changed…" className={inputStyle+' resize-y'} />
-              <div style={{display:'flex', gap:8, marginTop:8}}>
-                <button onClick={submitRequest} className={btnPrimary+' flex-1 justify-center'}><Send size={13}/> Send request</button>
-                <button onClick={()=>{setReqOpen(false); setMsg('');}} className={btnGhost}>Cancel</button>
+              <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 6 }}>What needs updating?</div>
+              <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={3} placeholder="e.g. The exit ticket link is broken, or the time has changed…" className={inputStyle + ' resize-y'} />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button onClick={submitRequest} className={btnPrimary + ' flex-1 justify-center'}><Send size={13} /> Send request</button>
+                <button onClick={() => { setReqOpen(false); setMsg(''); }} className={btnGhost}>Cancel</button>
               </div>
             </div>
           )}
@@ -2056,77 +2334,77 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
   );
 }
 
-function DetailRow({ label, children }){
-  return (<div style={{marginBottom:12}}><div style={{fontSize:11.5, color:'#9DB09D', marginBottom:2}}>{label}</div><div style={{fontSize:13.5, color:'#D5E0D5'}}>{children}</div></div>);
+function DetailRow({ label, children }) {
+  return (<div style={{ marginBottom: 12 }}><div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 2 }}>{label}</div><div style={{ fontSize: 13.5, color: '#D5E0D5' }}>{children}</div></div>);
 }
 
-function RosterPanel({ roster, staff, cityCodes, onChange, onAccount, showToast }){
+function RosterPanel({ roster, staff, cityCodes, onChange, onAccount, showToast }) {
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [afaGroup, setAfaGroup] = useState(''); const [track, setTrack] = useState(''); const [grade, setGrade] = useState(''); const [placementCity, setPlacementCity] = useState(''); const [error, setError] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false); const [bulkText, setBulkText] = useState('');
-  const afaStaff = (staff||[]).filter(p=>(p.role==='afa' || p.role==='afa_lead') && p.name);
-  const legacyGroups = [...new Set((roster||[]).map(r=>(r.afaGroup||'').trim()).filter(Boolean))];
-  const groupOptions = [...new Set([...afaStaff.map(p=>p.group || p.name), ...legacyGroups].map(g=>(g||'').trim()).filter(Boolean))];
-  const groupLabel = g => { const p = afaStaff.find(x=>(x.group||x.name)===g); return p ? (p.group && p.group!==p.name ? p.name+' ('+p.group+')' : p.name) : g; };
+  const afaStaff = (staff || []).filter(p => (p.role === 'afa' || p.role === 'afa_lead') && p.name);
+  const legacyGroups = [...new Set((roster || []).map(r => (r.afaGroup || '').trim()).filter(Boolean))];
+  const groupOptions = [...new Set([...afaStaff.map(p => p.group || p.name), ...legacyGroups].map(g => (g || '').trim()).filter(Boolean))];
+  const groupLabel = g => { const p = afaStaff.find(x => (x.group || x.name) === g); return p ? (p.group && p.group !== p.name ? p.name + ' (' + p.group + ')' : p.name) : g; };
 
   const addOne = (e) => {
     e.preventDefault();
     const em = email.trim().toLowerCase();
     if (!name.trim()) { setError('Enter a name.'); return; }
     if (!FELLOW_EMAIL_RE.test(em)) { setError('Email must look like firstname.lastname@teachforbangladesh.org'); return; }
-    if (roster.some(r => r.email.toLowerCase()===em)) { setError('That email is already on the roster.'); return; }
-    const fellow = { id: 'f'+Date.now(), name: name.trim(), email: em, afaGroup:afaGroup.trim(), track:track.toLowerCase(), grade:grade.trim(), placementCity:placementCity.trim(), roomIds:[] };
+    if (roster.some(r => r.email.toLowerCase() === em)) { setError('That email is already on the roster.'); return; }
+    const fellow = { id: 'f' + Date.now(), name: name.trim(), email: em, afaGroup: afaGroup.trim(), track: track.toLowerCase(), grade: grade.trim(), placementCity: placementCity.trim(), roomIds: [] };
     onChange([...roster, fellow]); onAccount(fellow, 'fellow');
     setName(''); setEmail(''); setAfaGroup(''); setTrack(''); setGrade(''); setPlacementCity(''); setError(''); showToast('Fellow added');
   };
-  const removeOne = (id) => { onChange(roster.filter(r=>r.id!==id)); showToast('Fellow removed'); };
-  const editOne = (fellow) => { const name=window.prompt('Fellow name',fellow.name); if(!name?.trim()) return; const email=window.prompt('Fellow email',fellow.email); if(!email?.trim()) return; const afa=window.prompt('AFA group',fellow.afaGroup||'') ?? (fellow.afaGroup || ''); const next={...fellow,name:name.trim(),email:email.trim().toLowerCase(),afaGroup:afa.trim(),track:(window.prompt('Track: primary or secondary',fellow.track||'') || fellow.track || '').toLowerCase(),grade:window.prompt('Grade',fellow.grade||'') || fellow.grade || '',placementCity:window.prompt('Placement city',fellow.placementCity||'') || fellow.placementCity || '',roomIds:fellow.roomIds||[]}; onChange(roster.map(item=>item.id===fellow.id?next:item)); onAccount(next,'fellow'); showToast('Fellow updated'); };
+  const removeOne = (id) => { onChange(roster.filter(r => r.id !== id)); showToast('Fellow removed'); };
+  const editOne = (fellow) => { const name = window.prompt('Fellow name', fellow.name); if (!name?.trim()) return; const email = window.prompt('Fellow email', fellow.email); if (!email?.trim()) return; const afa = window.prompt('AFA group', fellow.afaGroup || '') ?? (fellow.afaGroup || ''); const next = { ...fellow, name: name.trim(), email: email.trim().toLowerCase(), afaGroup: afa.trim(), track: (window.prompt('Track: primary or secondary', fellow.track || '') || fellow.track || '').toLowerCase(), grade: window.prompt('Grade', fellow.grade || '') || fellow.grade || '', placementCity: window.prompt('Placement city', fellow.placementCity || '') || fellow.placementCity || '', roomIds: fellow.roomIds || [] }; onChange(roster.map(item => item.id === fellow.id ? next : item)); onAccount(next, 'fellow'); showToast('Fellow updated'); };
   const importBulk = () => {
-    const lines = bulkText.split('\n').map(l=>l.trim()).filter(Boolean);
+    const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
     let added = 0, skipped = 0; const next = [...roster];
     lines.forEach(line => {
-      const parts = line.split(',').map(p=>p.trim());
+      const parts = line.split(',').map(p => p.trim());
       if (parts.length < 2) { skipped++; return; }
       const [nm, em] = parts; const emLower = em.toLowerCase();
-      if (!FELLOW_EMAIL_RE.test(emLower) || next.some(r=>r.email.toLowerCase()===emLower)) { skipped++; return; }
-      const fellow = { id: 'f'+Date.now()+added, name: nm, email: emLower, track:(parts[2]||'').toLowerCase(), grade:parts[3]||'', placementCity:parts[4]||'', afaGroup:parts[5]||'', roomIds:(parts[6]||'').split('|').filter(Boolean) };
+      if (!FELLOW_EMAIL_RE.test(emLower) || next.some(r => r.email.toLowerCase() === emLower)) { skipped++; return; }
+      const fellow = { id: 'f' + Date.now() + added, name: nm, email: emLower, track: (parts[2] || '').toLowerCase(), grade: parts[3] || '', placementCity: parts[4] || '', afaGroup: parts[5] || '', roomIds: (parts[6] || '').split('|').filter(Boolean) };
       next.push(fellow); onAccount(fellow, 'fellow'); added++;
     });
     onChange(next); setBulkText(''); setBulkOpen(false);
-    showToast(added+' added'+(skipped?', '+skipped+' skipped':''));
+    showToast(added + ' added' + (skipped ? ', ' + skipped + ' skipped' : ''));
   };
-  const sorted = roster.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const sorted = roster.slice().sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div>
-      <div style={{marginBottom:6, fontSize:13, color:'#D5E0D5'}}>Only emails on this list can sign in as a Fellow.</div>
-      <div style={{fontSize:12.5, color:'#9DB09D', marginBottom:18}}>{roster.length} Fellow{roster.length!==1?'s':''} on the roster</div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, padding:18, marginBottom:20, maxWidth:520}}>
-        <form onSubmit={addOne} style={{display:'flex', gap:8, alignItems:'flex-end', flexWrap:'wrap'}}>
-          <div style={{flex:'1 1 160px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Name</div><input className={inputStyle} value={name} onChange={e=>setName(e.target.value)} placeholder="Fellow's full name" /></div>
-          <div style={{flex:'1 1 220px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Email</div><input className={inputStyle} value={email} onChange={e=>setEmail(e.target.value)} placeholder="firstname.lastname@teachforbangladesh.org" /></div>
-          <div style={{flex:'1 1 130px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Track</div><select className={inputStyle} value={track} onChange={e=>setTrack(e.target.value)}><option value="">Track</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select></div><div style={{flex:'1 1 90px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Grade</div><input className={inputStyle} value={grade} onChange={e=>setGrade(e.target.value)} placeholder="Grade" /></div><div style={{flex:'1 1 130px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Placement city</div><input className={inputStyle} value={placementCity} onChange={e=>setPlacementCity(e.target.value)} placeholder="City" /></div><div style={{flex:'1 1 150px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>AFA group</div><select className={inputStyle} value={afaGroup} onChange={e=>setAfaGroup(e.target.value)}><option value="">Assign an AFA…</option>{groupOptions.map(g=><option key={g} value={g}>{groupLabel(g)}</option>)}</select></div>
-          <button type="submit" className={btnPrimary+' h-[35px]'}><Plus size={14}/> Add</button>
+      <div style={{ marginBottom: 6, fontSize: 13, color: '#D5E0D5' }}>Only emails on this list can sign in as a Fellow.</div>
+      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 18 }}>{roster.length} Fellow{roster.length !== 1 ? 's' : ''} on the roster</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, marginBottom: 20, maxWidth: 520 }}>
+        <form onSubmit={addOne} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 160px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Name</div><input className={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="Fellow's full name" /></div>
+          <div style={{ flex: '1 1 220px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Email</div><input className={inputStyle} value={email} onChange={e => setEmail(e.target.value)} placeholder="firstname.lastname@teachforbangladesh.org" /></div>
+          <div style={{ flex: '1 1 130px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Track</div><select className={inputStyle} value={track} onChange={e => setTrack(e.target.value)}><option value="">Track</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select></div><div style={{ flex: '1 1 90px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Grade</div><input className={inputStyle} value={grade} onChange={e => setGrade(e.target.value)} placeholder="Grade" /></div><div style={{ flex: '1 1 130px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Placement city</div><input className={inputStyle} value={placementCity} onChange={e => setPlacementCity(e.target.value)} placeholder="City" /></div><div style={{ flex: '1 1 150px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>AFA group</div><select className={inputStyle} value={afaGroup} onChange={e => setAfaGroup(e.target.value)}><option value="">Assign an AFA…</option>{groupOptions.map(g => <option key={g} value={g}>{groupLabel(g)}</option>)}</select></div>
+          <button type="submit" className={btnPrimary + ' h-[35px]'}><Plus size={14} /> Add</button>
         </form>
-        {error && <div style={{color:'#D0A023', fontSize:12, marginTop:8}}>{error}</div>}
-        <button onClick={()=>setBulkOpen(o=>!o)} className={btnGhost+' px-0 py-1 mt-3.5 text-[12.5px]'}>{bulkOpen ? 'Hide bulk import' : 'Bulk import (paste a list)'}</button>
+        {error && <div style={{ color: '#D0A023', fontSize: 12, marginTop: 8 }}>{error}</div>}
+        <button onClick={() => setBulkOpen(o => !o)} className={btnGhost + ' px-0 py-1 mt-3.5 text-[12.5px]'}>{bulkOpen ? 'Hide bulk import' : 'Bulk import (paste a list)'}</button>
         {bulkOpen && (
-          <div style={{marginTop:10}}>
-            <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder="name,email,track,grade,placementCity,afaGroup,roomId|roomId" rows={5} className={inputStyle+' resize-y font-mono text-xs'} />
-            <button onClick={importBulk} className={btnSecondary+' mt-2'}>Import list</button>
+          <div style={{ marginTop: 10 }}>
+            <textarea value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder="name,email,track,grade,placementCity,afaGroup,roomId|roomId" rows={5} className={inputStyle + ' resize-y font-mono text-xs'} />
+            <button onClick={importBulk} className={btnSecondary + ' mt-2'}>Import list</button>
           </div>
         )}
       </div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, overflow:'hidden', maxWidth:520}}>
-        <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#00402E', textAlign:'left'}}><th style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Name</th><th style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Track / Grade</th><th style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>City / AFA</th><th style={{padding:'9px 12px', borderBottom:'1px solid #2A5C4B'}}></th></tr></thead>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 520 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Name</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Track / Grade</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>City / AFA</th><th style={{ padding: '9px 12px', borderBottom: '1px solid #2A5C4B' }}></th></tr></thead>
           <tbody>
             {sorted.map(r => (
-              <tr key={r.id} style={{borderBottom:'1px solid #1F4A3C'}}>
-                <td style={{padding:'8px 12px'}}>{r.name}<div style={{fontSize:11,color:'#9DB09D'}}>{r.email}</div></td><td style={{padding:'8px 12px', color:'#D5E0D5'}}>{r.track||'--'}{r.grade?' · '+r.grade:''}</td><td style={{padding:'8px 12px', color:'#D5E0D5'}}>{r.placementCity ? <>{(cityCodes||[]).find(c=>c.city.toLowerCase()===r.placementCity.toLowerCase()) && <span style={{...callSignChipStyle, marginRight:6}}>{(cityCodes||[]).find(c=>c.city.toLowerCase()===r.placementCity.toLowerCase()).code}</span>}{r.placementCity}</> : '--'}{r.afaGroup?' · '+r.afaGroup:''}</td>
-                <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>editOne(r)} style={linkBtn}>Edit</button><button onClick={()=>removeOne(r.id)} style={{background:'none', border:'none', color:'#D0A023', cursor:'pointer', display:'inline-flex', marginLeft:10}}><Trash2 size={14}/></button></td>
+              <tr key={r.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                <td style={{ padding: '8px 12px' }}>{r.name}<div style={{ fontSize: 11, color: '#9DB09D' }}>{r.email}</div></td><td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{r.track || '--'}{r.grade ? ' · ' + r.grade : ''}</td><td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{r.placementCity ? <>{(cityCodes || []).find(c => c.city.toLowerCase() === r.placementCity.toLowerCase()) && <span style={{ ...callSignChipStyle, marginRight: 6 }}>{(cityCodes || []).find(c => c.city.toLowerCase() === r.placementCity.toLowerCase()).code}</span>}{r.placementCity}</> : '--'}{r.afaGroup ? ' · ' + r.afaGroup : ''}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'right' }}><button onClick={() => editOne(r)} style={linkBtn}>Edit</button><button onClick={() => removeOne(r.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', display: 'inline-flex', marginLeft: 10 }}><Trash2 size={14} /></button></td>
               </tr>
             ))}
-            {sorted.length===0 && (<tr><td colSpan={4} style={{padding:'20px 12px', textAlign:'center', color:'#9DB09D'}}>No Fellows added yet.</td></tr>)}
+            {sorted.length === 0 && (<tr><td colSpan={4} style={{ padding: '20px 12px', textAlign: 'center', color: '#9DB09D' }}>No Fellows added yet.</td></tr>)}
           </tbody>
         </table>
       </div>
@@ -2134,7 +2412,7 @@ function RosterPanel({ roster, staff, cityCodes, onChange, onAccount, showToast 
   );
 }
 
-function PlannerPanel({ planners, roles, onChange, onAccount, showToast }){
+function PlannerPanel({ planners, roles, onChange, onAccount, showToast }) {
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [error, setError] = useState('');
   const [role, setRole] = useState('academy_lead');
   const [group, setGroup] = useState('');
@@ -2142,7 +2420,7 @@ function PlannerPanel({ planners, roles, onChange, onAccount, showToast }){
   const [callSign, setCallSign] = useState('');
   const callSignTouched = useRef(false);
 
-  const accessLabel = id => (STAFF_ACCESS.find(a=>a.id===id)||{}).label || 'Resources only';
+  const accessLabel = id => (STAFF_ACCESS.find(a => a.id === id) || {}).label || 'Resources only';
 
   const addOne = (e) => {
     e.preventDefault();
@@ -2150,13 +2428,13 @@ function PlannerPanel({ planners, roles, onChange, onAccount, showToast }){
     if (!name.trim()) { setError('Enter a name.'); return; }
     if (!STAFF_EMAIL_RE.test(em)) { setError('Email must look like name@teachforbangladesh.org'); return; }
     if (em === SUPERADMIN_EMAIL) { setError('That address is already the built-in Superadmin.'); return; }
-    if (planners.some(p => p.email.toLowerCase()===em)) { setError('That email is already on the WA Staff list.'); return; }
+    if (planners.some(p => p.email.toLowerCase() === em)) { setError('That email is already on the WA Staff list.'); return; }
     const cs = (callSign.trim() || callSignFromName(name)).toUpperCase();
-    const planner = { id:'p'+Date.now(), name:name.trim(), email:em, role, access, callSign:cs, group: AFA_ROLES.includes(role) ? group.trim() : '' };
+    const planner = { id: 'p' + Date.now(), name: name.trim(), email: em, role, access, callSign: cs, group: AFA_ROLES.includes(role) ? group.trim() : '' };
     onChange([...planners, planner]); onAccount(planner, role);
     setName(''); setEmail(''); setRole('academy_lead'); setAccess('full'); setGroup(''); setCallSign(''); callSignTouched.current = false; setError(''); showToast('Staff added');
   };
-  const removeOne = (id) => { onChange(planners.filter(p=>p.id!==id)); showToast('Staff removed'); };
+  const removeOne = (id) => { onChange(planners.filter(p => p.id !== id)); showToast('Staff removed'); };
   const [editingStaff, setEditingStaff] = useState(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -2182,7 +2460,7 @@ function PlannerPanel({ planners, roles, onChange, onAccount, showToast }){
     const em = editEmail.trim().toLowerCase();
     if (!editName.trim()) { setEditError('Enter a name.'); return; }
     if (!STAFF_EMAIL_RE.test(em)) { setEditError('Email must look like name@teachforbangladesh.org'); return; }
-    if (em !== (editingStaff?.email||'').toLowerCase() && planners.some(p => p.email.toLowerCase()===em)) { setEditError('That email is already on the WA Staff list.'); return; }
+    if (em !== (editingStaff?.email || '').toLowerCase() && planners.some(p => p.email.toLowerCase() === em)) { setEditError('That email is already on the WA Staff list.'); return; }
     if (em === SUPERADMIN_EMAIL) { setEditError('That address is already the built-in Superadmin.'); return; }
     const cs = (editCallSign.trim() || callSignFromName(editName)).toUpperCase();
     const updated = {
@@ -2194,7 +2472,7 @@ function PlannerPanel({ planners, roles, onChange, onAccount, showToast }){
       group: AFA_ROLES.includes(editRole) ? editGroup.trim() : '',
       callSign: cs,
     };
-    onChange(planners.map(item=>item.id===editingStaff.id?updated:item));
+    onChange(planners.map(item => item.id === editingStaff.id ? updated : item));
     onAccount(updated, updated.role || 'academy_lead');
     setEditingStaff(null);
     setEditError('');
@@ -2205,65 +2483,65 @@ function PlannerPanel({ planners, roles, onChange, onAccount, showToast }){
     setEditingStaff(null);
     setEditError('');
   };
-  const sorted = planners.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const sorted = planners.slice().sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div>
-      <div style={{marginBottom:18, fontSize:13, color:'#D5E0D5', maxWidth:520}}>
+      <div style={{ marginBottom: 18, fontSize: 13, color: '#D5E0D5', maxWidth: 520 }}>
         WA Staff manage the calendar, roster and assessments. Academy Fellow Advisors (AFA) each carry a Group name that Fellows and sessions are assigned to.
       </div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, padding:'12px 16px', marginBottom:16, maxWidth:520, display:'flex', alignItems:'center', gap:10}}>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '12px 16px', marginBottom: 16, maxWidth: 520, display: 'flex', alignItems: 'center', gap: 10 }}>
         <ShieldCheck size={16} color="#D65641" />
         <div>
-          <div style={{fontSize:13, fontWeight:600}}>{SUPERADMIN_ACCOUNT.name} <span style={callSignChipStyle}>{callSignFromName(SUPERADMIN_ACCOUNT.name)}</span></div>
-          <div style={{fontSize:11.5, color:'#9DB09D'}}>Superadmin · built-in, can't be removed · can also be selected as a facilitator</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{SUPERADMIN_ACCOUNT.name} <span style={callSignChipStyle}>{callSignFromName(SUPERADMIN_ACCOUNT.name)}</span></div>
+          <div style={{ fontSize: 11.5, color: '#9DB09D' }}>Superadmin · built-in, can't be removed · can also be selected as a facilitator</div>
         </div>
       </div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, padding:18, marginBottom:20, maxWidth:560}}>
-        <form onSubmit={addOne} style={{display:'flex', gap:8, alignItems:'flex-end', flexWrap:'wrap'}}>
-          <div style={{flex:'1 1 160px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Name</div><input className={inputStyle} value={name} onChange={e=>{setName(e.target.value); if(!callSignTouched.current) setCallSign(callSignFromName(e.target.value));}} placeholder="Staff full name" /></div>
-          <div style={{flex:'1 1 220px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Email</div><input className={inputStyle} value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@teachforbangladesh.org" /></div>
-          <div style={{flex:'1 1 150px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Role</div><select className={inputStyle} value={role} onChange={e=>setRole(e.target.value)}>{(roles||DEFAULT_STAFF_ROLES).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
-          <div style={{flex:'1 1 150px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Access</div><select className={inputStyle} value={access} onChange={e=>setAccess(e.target.value)}>{STAFF_ACCESS.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
-          <div style={{flex:'1 1 90px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Call sign</div><input className={inputStyle} value={callSign} onChange={e=>{setCallSign(e.target.value); callSignTouched.current = true;}} placeholder="Auto" maxLength={4} style={{textTransform:'uppercase'}} /></div>
-          {AFA_ROLES.includes(role) && <div style={{flex:'1 1 150px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>AFA group name</div><input className={inputStyle} value={group} onChange={e=>setGroup(e.target.value)} placeholder="e.g. AFA Group 1" /></div>}
-          <button type="submit" className={btnPrimary+' h-[35px]'}><Plus size={14}/> Add</button>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, marginBottom: 20, maxWidth: 560 }}>
+        <form onSubmit={addOne} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 160px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Name</div><input className={inputStyle} value={name} onChange={e => { setName(e.target.value); if (!callSignTouched.current) setCallSign(callSignFromName(e.target.value)); }} placeholder="Staff full name" /></div>
+          <div style={{ flex: '1 1 220px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Email</div><input className={inputStyle} value={email} onChange={e => setEmail(e.target.value)} placeholder="name@teachforbangladesh.org" /></div>
+          <div style={{ flex: '1 1 150px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Role</div><select className={inputStyle} value={role} onChange={e => setRole(e.target.value)}>{(roles || DEFAULT_STAFF_ROLES).map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
+          <div style={{ flex: '1 1 150px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Access</div><select className={inputStyle} value={access} onChange={e => setAccess(e.target.value)}>{STAFF_ACCESS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
+          <div style={{ flex: '1 1 90px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Call sign</div><input className={inputStyle} value={callSign} onChange={e => { setCallSign(e.target.value); callSignTouched.current = true; }} placeholder="Auto" maxLength={4} style={{ textTransform: 'uppercase' }} /></div>
+          {AFA_ROLES.includes(role) && <div style={{ flex: '1 1 150px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>AFA group name</div><input className={inputStyle} value={group} onChange={e => setGroup(e.target.value)} placeholder="e.g. AFA Group 1" /></div>}
+          <button type="submit" className={btnPrimary + ' h-[35px]'}><Plus size={14} /> Add</button>
         </form>
-        {error && <div style={{color:'#D0A023', fontSize:12, marginTop:8}}>{error}</div>}
+        {error && <div style={{ color: '#D0A023', fontSize: 12, marginTop: 8 }}>{error}</div>}
       </div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, overflow:'hidden', maxWidth:560}}>
-        <table style={{width:'100%', borderCollapse:'collapse', fontSize:12.5}}>
-          <thead><tr style={{background:'#00402E', textAlign:'left'}}><th style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Name</th><th style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Call sign</th><th style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Role</th><th style={{padding:'9px 12px', fontWeight:600, color:'#D5E0D5', borderBottom:'1px solid #2A5C4B'}}>Access</th><th style={{padding:'9px 12px', borderBottom:'1px solid #2A5C4B'}}></th></tr></thead>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 560 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Name</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Call sign</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Role</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Access</th><th style={{ padding: '9px 12px', borderBottom: '1px solid #2A5C4B' }}></th></tr></thead>
           <tbody>
             {sorted.map(p => (
               editingStaff === p.id ? (
-                <tr key={p.id} style={{borderBottom:'1px solid #1F4A3C'}}>
-                  <td style={{padding:'12px 12px',colSpan:5}}>
-                    <form onSubmit={saveEdit} style={{display:'flex', gap:8, alignItems:'flex-end', flexWrap:'wrap'}}>
-                      <div style={{flex:'1 1 150px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Name</div><input className={inputStyle} value={editName} onChange={e=>{setEditName(e.target.value); setEditError('');}} placeholder="Staff full name" /></div>
-                      <div style={{flex:'1 1 180px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Email</div><input className={inputStyle} value={editEmail} onChange={e=>{setEditEmail(e.target.value); setEditError('');}} placeholder="name@teachforbangladesh.org" /></div>
-                      <div style={{flex:'1 1 140px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Role</div><select className={inputStyle} value={editRole} onChange={e=>setEditRole(e.target.value)}>{(roles||DEFAULT_STAFF_ROLES).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
-                      <div style={{flex:'1 1 140px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Access</div><select className={inputStyle} value={editAccess} onChange={e=>setEditAccess(e.target.value)}>{STAFF_ACCESS.map(a=><option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
-                      {AFA_ROLES.includes(editRole) && <div style={{flex:'1 1 140px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>AFA group</div><input className={inputStyle} value={editGroup} onChange={e=>{setEditGroup(e.target.value); setEditError('');}} placeholder="e.g. AFA Group 1" /></div>}
-                      <div style={{flex:'1 1 80px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Call sign</div><input className={inputStyle} value={editCallSign} onChange={e=>{setEditCallSign(e.target.value); setEditError('');}} placeholder="Auto" maxLength={4} style={{textTransform:'uppercase'}} /></div>
-                      <div style={{display:'flex', gap:6, alignItems:'center'}}>
+                <tr key={p.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                  <td style={{ padding: '12px 12px', colSpan: 5 }}>
+                    <form onSubmit={saveEdit} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <div style={{ flex: '1 1 150px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Name</div><input className={inputStyle} value={editName} onChange={e => { setEditName(e.target.value); setEditError(''); }} placeholder="Staff full name" /></div>
+                      <div style={{ flex: '1 1 180px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Email</div><input className={inputStyle} value={editEmail} onChange={e => { setEditEmail(e.target.value); setEditError(''); }} placeholder="name@teachforbangladesh.org" /></div>
+                      <div style={{ flex: '1 1 140px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Role</div><select className={inputStyle} value={editRole} onChange={e => setEditRole(e.target.value)}>{(roles || DEFAULT_STAFF_ROLES).map(r => <option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
+                      <div style={{ flex: '1 1 140px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Access</div><select className={inputStyle} value={editAccess} onChange={e => setEditAccess(e.target.value)}>{STAFF_ACCESS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
+                      {AFA_ROLES.includes(editRole) && <div style={{ flex: '1 1 140px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>AFA group</div><input className={inputStyle} value={editGroup} onChange={e => { setEditGroup(e.target.value); setEditError(''); }} placeholder="e.g. AFA Group 1" /></div>}
+                      <div style={{ flex: '1 1 80px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Call sign</div><input className={inputStyle} value={editCallSign} onChange={e => { setEditCallSign(e.target.value); setEditError(''); }} placeholder="Auto" maxLength={4} style={{ textTransform: 'uppercase' }} /></div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <button type="submit" className={btnPrimary}>Save</button>
                         <button type="button" onClick={cancelEdit} className={btnGhost}>Cancel</button>
                       </div>
                     </form>
-                    {editError && <div style={{color:'#D0A023', fontSize:12, marginTop:8}}>{editError}</div>}
+                    {editError && <div style={{ color: '#D0A023', fontSize: 12, marginTop: 8 }}>{editError}</div>}
                   </td>
                 </tr>
               ) : (
-                <tr key={p.id} style={{borderBottom:'1px solid #1F4A3C'}}>
-                  <td style={{padding:'8px 12px'}}>{p.name}<div style={{fontSize:11,color:'#9DB09D'}}>{p.email}</div></td>
-                  <td style={{padding:'8px 12px'}}><span style={callSignChipStyle}>{p.callSign || callSignFromName(p.name)}</span></td>
-                  <td style={{padding:'8px 12px', color:'#D5E0D5'}}>{getRoleLabel(p.role, roles)}{p.group?' · '+p.group:''}</td><td style={{padding:'8px 12px', color:'#D5E0D5'}}>{accessLabel(p.access)}</td>
-                  <td style={{padding:'8px 12px', textAlign:'right'}}><button onClick={()=>editOne(p)} style={linkBtn}>Edit</button><button onClick={()=>removeOne(p.id)} style={{background:'none', border:'none', color:'#D0A023', cursor:'pointer', display:'inline-flex', marginLeft:10}}><Trash2 size={14}/></button></td>
+                <tr key={p.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                  <td style={{ padding: '8px 12px' }}>{p.name}<div style={{ fontSize: 11, color: '#9DB09D' }}>{p.email}</div></td>
+                  <td style={{ padding: '8px 12px' }}><span style={callSignChipStyle}>{p.callSign || callSignFromName(p.name)}</span></td>
+                  <td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{getRoleLabel(p.role, roles)}{p.group ? ' · ' + p.group : ''}</td><td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{accessLabel(p.access)}</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right' }}><button onClick={() => editOne(p)} style={linkBtn}>Edit</button><button onClick={() => removeOne(p.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', display: 'inline-flex', marginLeft: 10 }}><Trash2 size={14} /></button></td>
                 </tr>
               )
             ))}
-            {sorted.length===0 && (<tr><td colSpan={5} style={{padding:'20px 12px', textAlign:'center', color:'#9DB09D'}}>No additional WA Staff yet.</td></tr>)}
+            {sorted.length === 0 && (<tr><td colSpan={5} style={{ padding: '20px 12px', textAlign: 'center', color: '#9DB09D' }}>No additional WA Staff yet.</td></tr>)}
           </tbody>
         </table>
       </div>
@@ -2271,9 +2549,9 @@ function PlannerPanel({ planners, roles, onChange, onAccount, showToast }){
   );
 }
 
-const callSignChipStyle = { fontSize:11, padding:'2px 7px', borderRadius:10, background:'#1F4A3C', color:'#D5E0D5', fontWeight:700, letterSpacing:0.5 };
+const callSignChipStyle = { fontSize: 11, padding: '2px 7px', borderRadius: 10, background: '#1F4A3C', color: '#D5E0D5', fontWeight: 700, letterSpacing: 0.5 };
 
-function RolesPanel({ roles, cityCodes, onRolesChange, onCityCodesChange, showToast }){
+function RolesPanel({ roles, cityCodes, onRolesChange, onCityCodesChange, showToast }) {
   const roleList = roles || DEFAULT_STAFF_ROLES;
   const [newRole, setNewRole] = useState('');
   const [newCity, setNewCity] = useState('');
@@ -2282,57 +2560,57 @@ function RolesPanel({ roles, cityCodes, onRolesChange, onCityCodesChange, showTo
     e.preventDefault();
     const label = newRole.trim();
     if (!label) return;
-    if (roleList.some(r=>r.label.toLowerCase()===label.toLowerCase())) { showToast('That role already exists'); return; }
+    if (roleList.some(r => r.label.toLowerCase() === label.toLowerCase())) { showToast('That role already exists'); return; }
     onRolesChange([...roleList, { id: roleIdFromLabel(label), label }]);
     setNewRole(''); showToast('Role added');
   };
-  const updateRole = (id, label) => onRolesChange(roleList.map(r=>r.id===id?{...r,label}:r));
-  const removeRole = id => { onRolesChange(roleList.filter(r=>r.id!==id)); showToast('Role removed'); };
+  const updateRole = (id, label) => onRolesChange(roleList.map(r => r.id === id ? { ...r, label } : r));
+  const removeRole = id => { onRolesChange(roleList.filter(r => r.id !== id)); showToast('Role removed'); };
   const addCity = e => {
     e.preventDefault();
     const city = newCity.trim();
     if (!city) return;
     const code = (newCityCode.trim() || callSignFromName(city)).toUpperCase();
-    if ((cityCodes||[]).some(c=>c.city.toLowerCase()===city.toLowerCase())) { showToast('That city already has a call sign'); return; }
-    onCityCodesChange([...(cityCodes||[]), { id:'city'+Date.now(), city, code }]);
+    if ((cityCodes || []).some(c => c.city.toLowerCase() === city.toLowerCase())) { showToast('That city already has a call sign'); return; }
+    onCityCodesChange([...(cityCodes || []), { id: 'city' + Date.now(), city, code }]);
     setNewCity(''); setNewCityCode(''); showToast('City call sign added');
   };
-  const updateCity = (id, key, value) => onCityCodesChange((cityCodes||[]).map(c=>c.id===id?{...c,[key]:value}:c));
-  const removeCity = id => { onCityCodesChange((cityCodes||[]).filter(c=>c.id!==id)); showToast('City call sign removed'); };
+  const updateCity = (id, key, value) => onCityCodesChange((cityCodes || []).map(c => c.id === id ? { ...c, [key]: value } : c));
+  const removeCity = id => { onCityCodesChange((cityCodes || []).filter(c => c.id !== id)); showToast('City call sign removed'); };
 
   return (
     <div>
-      <div style={{fontSize:13, color:'#D5E0D5', marginBottom:20, maxWidth:560}}>Add, edit, or remove staff roles used on the WA Staff list, and assign call signs to placement cities (shown next to a Fellow's city).</div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, padding:18, maxWidth:560, marginBottom:20}}>
-        <div style={{fontWeight:700, fontSize:14, marginBottom:10}}>Staff roles</div>
-        <form onSubmit={addRole} style={{display:'flex', gap:8, alignItems:'end', marginBottom:14}}>
-          <input className={inputStyle} value={newRole} onChange={e=>setNewRole(e.target.value)} placeholder="New role name (e.g. Assessment Lead)" />
-          <button type="submit" className={btnPrimary}><Plus size={14}/> Add</button>
+      <div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 20, maxWidth: 560 }}>Add, edit, or remove staff roles used on the WA Staff list, and assign call signs to placement cities (shown next to a Fellow's city).</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Staff roles</div>
+        <form onSubmit={addRole} style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 14 }}>
+          <input className={inputStyle} value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="New role name (e.g. Assessment Lead)" />
+          <button type="submit" className={btnPrimary}><Plus size={14} /> Add</button>
         </form>
-        <div style={{display:'flex', flexDirection:'column', gap:8}}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {roleList.map(r => (
-            <div key={r.id} style={{display:'flex', gap:8, alignItems:'center', border:'1px solid #1F4A3C', borderRadius:6, padding:'8px 10px'}}>
-              <input className={inputStyle} value={r.label} onChange={e=>updateRole(r.id, e.target.value)} />
-              <button onClick={()=>removeRole(r.id)} style={{...linkBtn, color:'#D0A023'}}>Delete</button>
+            <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1px solid #1F4A3C', borderRadius: 6, padding: '8px 10px' }}>
+              <input className={inputStyle} value={r.label} onChange={e => updateRole(r.id, e.target.value)} />
+              <button onClick={() => removeRole(r.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button>
             </div>
           ))}
         </div>
       </div>
-      <div style={{background:'#003223', border:'1px solid #2A5C4B', borderRadius:8, padding:18, maxWidth:560}}>
-        <div style={{fontWeight:700, fontSize:14, marginBottom:10}}>Placement-city call signs</div>
-        <form onSubmit={addCity} style={{display:'flex', gap:8, alignItems:'end', marginBottom:14, flexWrap:'wrap'}}>
-          <div style={{flex:'1 1 160px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>City</div><input className={inputStyle} value={newCity} onChange={e=>setNewCity(e.target.value)} placeholder="e.g. Dhaka" /></div>
-          <div style={{flex:'1 1 90px'}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>Call sign</div><input className={inputStyle} value={newCityCode} onChange={e=>setNewCityCode(e.target.value)} placeholder="Auto" maxLength={4} style={{textTransform:'uppercase'}} /></div>
-          <button type="submit" className={btnPrimary}><Plus size={14}/> Add</button>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560 }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Placement-city call signs</div>
+        <form onSubmit={addCity} style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 14, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 160px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>City</div><input className={inputStyle} value={newCity} onChange={e => setNewCity(e.target.value)} placeholder="e.g. Dhaka" /></div>
+          <div style={{ flex: '1 1 90px' }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>Call sign</div><input className={inputStyle} value={newCityCode} onChange={e => setNewCityCode(e.target.value)} placeholder="Auto" maxLength={4} style={{ textTransform: 'uppercase' }} /></div>
+          <button type="submit" className={btnPrimary}><Plus size={14} /> Add</button>
         </form>
-        {(cityCodes||[]).length===0 && <div style={{fontSize:12.5, color:'#9DB09D'}}>No city call signs yet.</div>}
-        <div style={{display:'flex', flexDirection:'column', gap:8}}>
-          {(cityCodes||[]).map(c => (
-            <div key={c.id} style={{display:'flex', gap:8, alignItems:'center', border:'1px solid #1F4A3C', borderRadius:6, padding:'8px 10px'}}>
+        {(cityCodes || []).length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No city call signs yet.</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {(cityCodes || []).map(c => (
+            <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1px solid #1F4A3C', borderRadius: 6, padding: '8px 10px' }}>
               <span style={callSignChipStyle}>{c.code}</span>
-              <input className={inputStyle} value={c.city} onChange={e=>updateCity(c.id,'city',e.target.value)} />
-              <input className={inputStyle+' w-[80px]!'} value={c.code} onChange={e=>updateCity(c.id,'code',e.target.value.toUpperCase())} maxLength={4} style={{textTransform:'uppercase'}} />
-              <button onClick={()=>removeCity(c.id)} style={{...linkBtn, color:'#D0A023'}}>Delete</button>
+              <input className={inputStyle} value={c.city} onChange={e => updateCity(c.id, 'city', e.target.value)} />
+              <input className={inputStyle + ' w-[80px]!'} value={c.code} onChange={e => updateCity(c.id, 'code', e.target.value.toUpperCase())} maxLength={4} style={{ textTransform: 'uppercase' }} />
+              <button onClick={() => removeCity(c.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button>
             </div>
           ))}
         </div>
@@ -2341,28 +2619,28 @@ function RolesPanel({ roles, cityCodes, onRolesChange, onCityCodesChange, showTo
   );
 }
 
-function RequestsPanel({ requests, roles, onResolve, onDelete }){
-  const sorted = requests.slice().sort((a,b)=> new Date(b.createdAt)-new Date(a.createdAt));
+function RequestsPanel({ requests, roles, onResolve, onDelete }) {
+  const sorted = requests.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return (
     <div>
-      <div style={{fontSize:12.5, color:'#9DB09D', marginBottom:16}}>{requests.filter(r=>!r.resolved).length} open · {requests.length} total</div>
-      {sorted.length===0 ? (
-        <div style={{padding:'40px 0', textAlign:'center', color:'#9DB09D', fontSize:14}}>No update requests yet.</div>
+      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>{requests.filter(r => !r.resolved).length} open · {requests.length} total</div>
+      {sorted.length === 0 ? (
+        <div style={{ padding: '40px 0', textAlign: 'center', color: '#9DB09D', fontSize: 14 }}>No update requests yet.</div>
       ) : (
-        <div style={{display:'flex', flexDirection:'column', gap:10, maxWidth:640}}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 640 }}>
           {sorted.map(r => (
-            <div key={r.id} style={{background:'#003223', border:'1px solid '+(r.resolved?'#2A5C4B':'#E0B98C'), borderRadius:8, padding:14, opacity:r.resolved?0.65:1}}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10}}>
+            <div key={r.id} style={{ background: '#003223', border: '1px solid ' + (r.resolved ? '#2A5C4B' : '#E0B98C'), borderRadius: 8, padding: 14, opacity: r.resolved ? 0.65 : 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                 <div>
-                  <div style={{fontWeight:600, fontSize:13.5}}>{r.sessionName}</div>
-                  <div style={{fontSize:11.5, color:'#9DB09D', marginTop:2}}>{r.requesterEmail} ({getRoleLabel(r.requesterRole, roles)}) · {fmtWhen(r.createdAt)}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.sessionName}</div>
+                  <div style={{ fontSize: 11.5, color: '#9DB09D', marginTop: 2 }}>{r.requesterEmail} ({getRoleLabel(r.requesterRole, roles)}) · {fmtWhen(r.createdAt)}</div>
                 </div>
-                <div style={{display:'flex', gap:6, flexShrink:0}}>
-                  <button onClick={()=>onResolve(r.id, !r.resolved)} className={btnGhost+' text-[11.5px] px-2 py-1'}>{r.resolved ? 'Reopen' : 'Mark resolved'}</button>
-                  <button onClick={()=>onDelete(r.id)} style={{background:'none', border:'none', color:'#D0A023', cursor:'pointer', display:'flex'}}><Trash2 size={14}/></button>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => onResolve(r.id, !r.resolved)} className={btnGhost + ' text-[11.5px] px-2 py-1'}>{r.resolved ? 'Reopen' : 'Mark resolved'}</button>
+                  <button onClick={() => onDelete(r.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', display: 'flex' }}><Trash2 size={14} /></button>
                 </div>
               </div>
-              <div style={{fontSize:13, marginTop:8, color:'#D5E0D5', lineHeight:1.4}}>{r.message}</div>
+              <div style={{ fontSize: 13, marginTop: 8, color: '#D5E0D5', lineHeight: 1.4 }}>{r.message}</div>
             </div>
           ))}
         </div>
@@ -2371,231 +2649,232 @@ function RequestsPanel({ requests, roles, onResolve, onDelete }){
   );
 }
 
-function LocalAssessmentsPanel({ assessments, sessions, roster, rooms, onAssessmentsChange, showToast, onToggleGradeRelease }){
+function LocalAssessmentsPanel({ assessments, sessions, roster, rooms, onAssessmentsChange, showToast, onToggleGradeRelease }) {
   const [editing, setEditing] = useState(null);
   const saveAssessment = assessment => {
-    const nextGroups = (assessment.assignmentGroups||[]).map(group=>({...group,fellowIds:resolveAssignmentGroup(group, roster)}));
-    const next = {...assessment, assignmentGroups:nextGroups, questionIds:(assessment.questions||[]).map(question=>question.id)};
-    onAssessmentsChange(assessments.some(item=>item.id===next.id) ? assessments.map(item=>item.id===next.id?next:item) : [...assessments,next]);
+    const nextGroups = (assessment.assignmentGroups || []).map(group => ({ ...group, fellowIds: resolveAssignmentGroup(group, roster) }));
+    const next = { ...assessment, assignmentGroups: nextGroups, questionIds: (assessment.questions || []).map(question => question.id) };
+    onAssessmentsChange(assessments.some(item => item.id === next.id) ? assessments.map(item => item.id === next.id ? next : item) : [...assessments, next]);
     setEditing(null); showToast('Assessment saved');
   };
-  const removeAssessment = id => { onAssessmentsChange(assessments.filter(item=>item.id!==id)); showToast('Assessment removed'); };
+  const removeAssessment = id => { onAssessmentsChange(assessments.filter(item => item.id !== id)); showToast('Assessment removed'); };
   return <div>
-    <div style={{display:'flex',gap:8,marginBottom:18,flexWrap:'wrap'}}><button onClick={()=>setEditing(newAssessment(sessions))} className={btnPrimary}><Plus size={14}/> Create assessment</button></div>
-    <div style={{fontSize:13,color:'#D5E0D5',marginBottom:18}}>Each assessment is linked to one session, but its questions and Fellow assignments are managed independently.</div>
-    {assessments.map(assessment=><div key={assessment.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,maxWidth:760,marginBottom:10}}><div style={{display:'flex',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}><div><div style={{fontWeight:700}}>{assessment.title || 'Untitled assessment'}</div><div style={{fontSize:12,color:'#D5E0D5',marginTop:4}}>{sessions.find(session=>String(session.id)===String(assessment.sessionId))?.name || 'Session not found'} · {assessment.status} · Grades {isGradeReleased(assessment) ? 'released' : 'hidden'}</div><div style={{fontSize:12,color:'#D5E0D5',marginTop:4}}>{(assessment.questions||[]).length} questions · {(assessment.assignmentGroups||[]).length} assignment groups · {(assessment.assignmentGroups||[]).reduce((count,group)=>count+(group.fellowIds||[]).length,0)} Fellows</div></div><div style={{display:'flex',gap:10,flexWrap:'wrap'}}><button onClick={()=>onToggleGradeRelease && onToggleGradeRelease(assessment)} style={linkBtn}>{isGradeReleased(assessment) ? 'Hide grades' : 'Release grades'}</button><button onClick={()=>setEditing(assessment)} style={linkBtn}>Edit</button><button onClick={()=>removeAssessment(assessment.id)} style={{...linkBtn,color:'#D0A023'}}>Delete</button></div></div></div>)}
-    {assessments.length===0 && <div style={{padding:'30px 0',color:'#9DB09D'}}>No assessments created yet.</div>}
-    {editing && <AssessmentOwnedEditor assessment={editing} sessions={sessions} roster={roster} rooms={rooms} onSave={saveAssessment} onClose={()=>setEditing(null)} />}
+    <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}><button onClick={() => setEditing(newAssessment(sessions))} className={btnPrimary}><Plus size={14} /> Create assessment</button></div>
+    <div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 18 }}>Each assessment is linked to one session, but its questions and Fellow assignments are managed independently.</div>
+    {assessments.map(assessment => <div key={assessment.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, maxWidth: 760, marginBottom: 10 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><div><div style={{ fontWeight: 700 }}>{assessment.title || 'Untitled assessment'}</div><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{sessions.find(session => String(session.id) === String(assessment.sessionId))?.name || 'Session not found'} · {assessment.status} · Grades {isGradeReleased(assessment) ? 'released' : 'hidden'}</div><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{(assessment.questions || []).length} questions · {(assessment.assignmentGroups || []).length} assignment groups · {(assessment.assignmentGroups || []).reduce((count, group) => count + (group.fellowIds || []).length, 0)} Fellows</div></div><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button onClick={() => onToggleGradeRelease && onToggleGradeRelease(assessment)} style={linkBtn}>{isGradeReleased(assessment) ? 'Hide grades' : 'Release grades'}</button><button onClick={() => setEditing(assessment)} style={linkBtn}>Edit</button><button onClick={() => removeAssessment(assessment.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div></div></div>)}
+    {assessments.length === 0 && <div style={{ padding: '30px 0', color: '#9DB09D' }}>No assessments created yet.</div>}
+    {editing && <AssessmentOwnedEditor assessment={editing} sessions={sessions} roster={roster} rooms={rooms} onSave={saveAssessment} onClose={() => setEditing(null)} />}
   </div>;
 }
 
-function AssessmentOwnedEditor({ assessment, sessions, roster, rooms, onSave, onClose }){
-  const [form,setForm]=useState({...assessment,questions:(assessment.questions||[]).map(question=>normalizeQuestion(question,assessment.id)),assignmentGroups:(assessment.assignmentGroups||[]).map(group=>({...group,roomIds:[...(group.roomIds||[])],questionIds:[...(group.questionIds||[])]}))});
-  const [questionEditing,setQuestionEditing]=useState(null);
-  const set=(key,value)=>setForm(current=>({...current,[key]:value}));
-  const updateGroup=(id,key,value)=>set('assignmentGroups',form.assignmentGroups.map(group=>group.id===id?{...group,[key]:value}:group));
-  const addGroup=()=>set('assignmentGroups',[...form.assignmentGroups,{id:'group'+Date.now(),track:'',afaGroup:'',placementCity:'',roomIds:[],fellowIds:[],questionIds:[]}]);
-  const saveQuestion=question=>{set('questions',form.questions.some(item=>item.id===question.id)?form.questions.map(item=>item.id===question.id?question:item):[...form.questions,question]);setQuestionEditing(null);};
-  const removeQuestion=id=>set('questions',form.questions.filter(question=>question.id!==id));
-  const save=()=>{
-    if(!form.title.trim() || !form.sessionId || !form.questions.length){window.alert('Add a title, session, and at least one question.');return;}
-    if(form.questions.some(question=>!question.text.trim() || (question.type==='paragraph' ? false : !question.options.filter(Boolean).length || !question.correct.length))){window.alert('Every choice question needs text, options, and at least one selected correct answer.');return;}
-    onSave({...form,questions:form.questions.map(question=>normalizeQuestion(question,form.id)),updatedAt:new Date().toISOString()});
+function AssessmentOwnedEditor({ assessment, sessions, roster, rooms, onSave, onClose }) {
+  const [form, setForm] = useState({ ...assessment, questions: (assessment.questions || []).map(question => normalizeQuestion(question, assessment.id)), assignmentGroups: (assessment.assignmentGroups || []).map(group => ({ ...group, roomIds: [...(group.roomIds || [])], questionIds: [...(group.questionIds || [])] })) });
+  const [questionEditing, setQuestionEditing] = useState(null);
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const updateGroup = (id, key, value) => set('assignmentGroups', form.assignmentGroups.map(group => group.id === id ? { ...group, [key]: value } : group));
+  const addGroup = () => set('assignmentGroups', [...form.assignmentGroups, { id: 'group' + Date.now(), track: '', afaGroup: '', placementCity: '', roomIds: [], fellowIds: [], questionIds: [] }]);
+  const saveQuestion = question => { set('questions', form.questions.some(item => item.id === question.id) ? form.questions.map(item => item.id === question.id ? question : item) : [...form.questions, question]); setQuestionEditing(null); };
+  const removeQuestion = id => set('questions', form.questions.filter(question => question.id !== id));
+  const save = () => {
+    if (!form.title.trim() || !form.sessionId || !form.questions.length) { window.alert('Add a title, session, and at least one question.'); return; }
+    if (form.questions.some(question => !question.text.trim() || (question.type === 'paragraph' ? false : !question.options.filter(Boolean).length || !question.correct.length))) { window.alert('Every choice question needs text, options, and at least one selected correct answer.'); return; }
+    onSave({ ...form, questions: form.questions.map(question => normalizeQuestion(question, form.id)), updatedAt: new Date().toISOString() });
   };
-  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:120}} onClick={onClose}><div onClick={event=>event.stopPropagation()} style={{width:560,maxWidth:'94vw',background:'#003223',height:'100%',overflowY:'auto',padding:22}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><b>{assessment.title?'Edit assessment':'Create assessment'}</b><button onClick={onClose} style={{background:'none',border:'none'}}><X size={18}/></button></div><Field label="Title"><input className={inputStyle} value={form.title} onChange={event=>set('title',event.target.value)} placeholder="Assessment title"/></Field><Field label="Session"><select className={inputStyle} value={form.sessionId} onChange={event=>set('sessionId',event.target.value)}>{sessions.map(session=><option key={session.id} value={session.id}>{session.name}</option>)}</select></Field><Field label="Description"><textarea className={inputStyle+' resize-y'} rows={2} value={form.description||''} onChange={event=>set('description',event.target.value)}/></Field><div style={{display:'flex',gap:10}}><Field label="Starts" style={{flex:1}}><input type="datetime-local" className={inputStyle} value={form.startsAt||''} onChange={event=>set('startsAt',event.target.value)}/></Field><Field label="Ends" style={{flex:1}}><input type="datetime-local" className={inputStyle} value={form.endsAt||''} onChange={event=>set('endsAt',event.target.value)}/></Field></div><Field label="Status"><select className={inputStyle} value={form.status} onChange={event=>set('status',event.target.value)}><option value="draft">Draft</option><option value="published">Published</option><option value="closed">Closed</option></select></Field>
-    <div style={{fontWeight:700,fontSize:13,margin:'18px 0 8px'}}>Questions in this assessment</div>{form.questions.map((question,index)=><div key={question.id} style={{border:'1px solid #2A5C4B',borderRadius:6,padding:10,marginBottom:7,display:'flex',justifyContent:'space-between',gap:8}}><div><b>{index+1}. {question.text||'Untitled question'}</b><div style={{fontSize:11.5,color:'#D5E0D5'}}>{question.type} · {question.correct.length} correct answer{question.correct.length===1?'':'s'}{question.targetGroupIds?.length?' · targeted':''}</div></div><div style={{display:'flex',gap:8}}><button onClick={()=>setQuestionEditing(question)} style={linkBtn}>Edit</button><button onClick={()=>removeQuestion(question.id)} style={{...linkBtn,color:'#D0A023'}}>Remove</button></div></div>)}<button onClick={()=>setQuestionEditing(newQuestion(form.id))} className={btnSecondary}><Plus size={14}/> Add question</button>
-    <div style={{fontWeight:700,fontSize:13,margin:'22px 0 8px'}}>Assignment groups</div>{form.assignmentGroups.map(group=><div key={group.id} style={{border:'1px solid #2A5C4B',borderRadius:6,padding:10,marginBottom:8}}><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><select className={inputStyle+' flex-[1_1_120px]'} value={group.track||''} onChange={event=>updateGroup(group.id,'track',event.target.value)}><option value="">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><input className={inputStyle+' flex-[1_1_120px]'} value={group.afaGroup||''} onChange={event=>updateGroup(group.id,'afaGroup',event.target.value)} placeholder="AFA group (optional)"/><input className={inputStyle+' flex-[1_1_120px]'} value={group.placementCity||''} onChange={event=>updateGroup(group.id,'placementCity',event.target.value)} placeholder="Placement city (optional)"/></div><select multiple className={inputStyle+' min-h-[64px] mt-[8px]'} value={group.roomIds||[]} onChange={event=>updateGroup(group.id,'roomIds',Array.from(event.target.selectedOptions,option=>option.value))}>{rooms.map(room=><option key={room.id} value={room.id}>{room.name}</option>)}</select><div style={{fontSize:11.5,color:'#D5E0D5',marginTop:5}}>{resolveAssignmentGroup(group,roster).length} Fellows match this group</div></div>)}<button onClick={addGroup} className={btnGhost+' px-1 py-0'}>+ Add assignment group</button><button onClick={save} className={btnPrimary+' w-full justify-center mt-[20px]'}>Save assessment</button>{questionEditing && <OwnedQuestionEditor question={questionEditing} groups={form.assignmentGroups} onSave={saveQuestion} onClose={()=>setQuestionEditing(null)}/>}</div></div>;
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 120 }} onClick={onClose}><div onClick={event => event.stopPropagation()} style={{ width: 560, maxWidth: '94vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><b>{assessment.title ? 'Edit assessment' : 'Create assessment'}</b><button onClick={onClose} style={{ background: 'none', border: 'none' }}><X size={18} /></button></div><Field label="Title"><input className={inputStyle} value={form.title} onChange={event => set('title', event.target.value)} placeholder="Assessment title" /></Field><Field label="Session"><select className={inputStyle} value={form.sessionId} onChange={event => set('sessionId', event.target.value)}>{sessions.map(session => <option key={session.id} value={session.id}>{session.name}</option>)}</select></Field><Field label="Description"><textarea className={inputStyle + ' resize-y'} rows={2} value={form.description || ''} onChange={event => set('description', event.target.value)} /></Field><div style={{ display: 'flex', gap: 10 }}><Field label="Starts" style={{ flex: 1 }}><input type="datetime-local" className={inputStyle} value={form.startsAt || ''} onChange={event => set('startsAt', event.target.value)} /></Field><Field label="Ends" style={{ flex: 1 }}><input type="datetime-local" className={inputStyle} value={form.endsAt || ''} onChange={event => set('endsAt', event.target.value)} /></Field></div><Field label="Status"><select className={inputStyle} value={form.status} onChange={event => set('status', event.target.value)}><option value="draft">Draft</option><option value="published">Published</option><option value="closed">Closed</option></select></Field>
+    <div style={{ fontWeight: 700, fontSize: 13, margin: '18px 0 8px' }}>Questions in this assessment</div>{form.questions.map((question, index) => <div key={question.id} style={{ border: '1px solid #2A5C4B', borderRadius: 6, padding: 10, marginBottom: 7, display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><b>{index + 1}. {question.text || 'Untitled question'}</b><div style={{ fontSize: 11.5, color: '#D5E0D5' }}>{question.type} · {question.correct.length} correct answer{question.correct.length === 1 ? '' : 's'}{question.targetGroupIds?.length ? ' · targeted' : ''}</div></div><div style={{ display: 'flex', gap: 8 }}><button onClick={() => setQuestionEditing(question)} style={linkBtn}>Edit</button><button onClick={() => removeQuestion(question.id)} style={{ ...linkBtn, color: '#D0A023' }}>Remove</button></div></div>)}<button onClick={() => setQuestionEditing(newQuestion(form.id))} className={btnSecondary}><Plus size={14} /> Add question</button>
+    <div style={{ fontWeight: 700, fontSize: 13, margin: '22px 0 8px' }}>Assignment groups</div>{form.assignmentGroups.map(group => <div key={group.id} style={{ border: '1px solid #2A5C4B', borderRadius: 6, padding: 10, marginBottom: 8 }}><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><select className={inputStyle + ' flex-[1_1_120px]'} value={group.track || ''} onChange={event => updateGroup(group.id, 'track', event.target.value)}><option value="">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><input className={inputStyle + ' flex-[1_1_120px]'} value={group.afaGroup || ''} onChange={event => updateGroup(group.id, 'afaGroup', event.target.value)} placeholder="AFA group (optional)" /><input className={inputStyle + ' flex-[1_1_120px]'} value={group.placementCity || ''} onChange={event => updateGroup(group.id, 'placementCity', event.target.value)} placeholder="Placement city (optional)" /></div><select multiple className={inputStyle + ' min-h-[64px] mt-[8px]'} value={group.roomIds || []} onChange={event => updateGroup(group.id, 'roomIds', Array.from(event.target.selectedOptions, option => option.value))}>{rooms.map(room => <option key={room.id} value={room.id}>{room.name}</option>)}</select><div style={{ fontSize: 11.5, color: '#D5E0D5', marginTop: 5 }}>{resolveAssignmentGroup(group, roster).length} Fellows match this group</div></div>)}<button onClick={addGroup} className={btnGhost + ' px-1 py-0'}>+ Add assignment group</button><button onClick={save} className={btnPrimary + ' w-full justify-center mt-[20px]'}>Save assessment</button>{questionEditing && <OwnedQuestionEditor question={questionEditing} groups={form.assignmentGroups} onSave={saveQuestion} onClose={() => setQuestionEditing(null)} />}</div></div>;
 }
 
-function OwnedQuestionEditor({ question, groups, onSave, onClose }){
-  const initialOptions = (question.options || ['']).map((option, index) => typeof option === 'string' ? {id:`option-${question.id}-${index}`,text:option} : {id:option.id || `option-${question.id}-${index}`,text:option.text || ''});
-  const [form,setForm]=useState({...question,options:initialOptions,correct:[...(question.correct||[])],targetGroupIds:[...(question.targetGroupIds||[])],imageUrl:normalizeImageUrl(question.imageUrl)});
-  const set=(key,value)=>setForm(current=>({...current,[key]:value}));
-  const updateOption=(id,key,value)=>set('options',form.options.map(option=>option.id===id?{...option,[key]:value}:option));
-  const removeOption=id=>{const options=form.options.filter(option=>option.id!==id);set('options',options);set('correct',form.correct.filter(answer=>options.some(option=>option.id===answer)));};
-  const toggleCorrect=id=>set('correct',form.correct.includes(id)?form.correct.filter(answer=>answer!==id):form.type==='single'?[id]:[...form.correct,id]);
-  const save=()=>{
-    const options=form.options.map(option=>({...option,text:option.text.trim()})).filter(option=>option.text);
-    if(!form.text.trim()){window.alert('Add question text.');return;}
-    if(form.type!=='paragraph' && (options.length<2 || !form.correct.some(answer=>options.some(option=>option.id===answer)))){window.alert('Add at least two options and select the correct answer beside the option.');return;}
-    onSave({...form,options,correct:form.type==='paragraph'?[]:form.correct.filter(answer=>options.some(option=>option.id===answer)),imageUrl:normalizeImageUrl(form.imageUrl),gradingMode:form.type==='paragraph'?'manual_review':'automatic',updatedAt:new Date().toISOString()});
+function OwnedQuestionEditor({ question, groups, onSave, onClose }) {
+  const initialOptions = (question.options || ['']).map((option, index) => typeof option === 'string' ? { id: `option-${question.id}-${index}`, text: option } : { id: option.id || `option-${question.id}-${index}`, text: option.text || '' });
+  const [form, setForm] = useState({ ...question, options: initialOptions, correct: [...(question.correct || [])], targetGroupIds: [...(question.targetGroupIds || [])], imageUrl: normalizeImageUrl(question.imageUrl) });
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const updateOption = (id, key, value) => set('options', form.options.map(option => option.id === id ? { ...option, [key]: value } : option));
+  const removeOption = id => { const options = form.options.filter(option => option.id !== id); set('options', options); set('correct', form.correct.filter(answer => options.some(option => option.id === answer))); };
+  const toggleCorrect = id => set('correct', form.correct.includes(id) ? form.correct.filter(answer => answer !== id) : form.type === 'single' ? [id] : [...form.correct, id]);
+  const save = () => {
+    const options = form.options.map(option => ({ ...option, text: option.text.trim() })).filter(option => option.text);
+    if (!form.text.trim()) { window.alert('Add question text.'); return; }
+    if (form.type !== 'paragraph' && (options.length < 2 || !form.correct.some(answer => options.some(option => option.id === answer)))) { window.alert('Add at least two options and select the correct answer beside the option.'); return; }
+    onSave({ ...form, options, correct: form.type === 'paragraph' ? [] : form.correct.filter(answer => options.some(option => option.id === answer)), imageUrl: normalizeImageUrl(form.imageUrl), gradingMode: form.type === 'paragraph' ? 'manual_review' : 'automatic', updatedAt: new Date().toISOString() });
   };
-  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:130}} onClick={onClose}><div onClick={event=>event.stopPropagation()} style={{width:500,maxWidth:'94vw',background:'#003223',height:'100%',overflowY:'auto',padding:22}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><b>Question editor</b><button onClick={onClose} style={{background:'none',border:'none'}}><X size={18}/></button></div><Field label="Question type"><select className={inputStyle} value={form.type} onChange={event=>set('type',event.target.value)}>{ASSESSMENT_TYPES.map(type=><option key={type} value={type}>{type}</option>)}</select></Field><Field label="Question text"><textarea className={inputStyle+' resize-y'} rows={3} value={form.text||''} onChange={event=>set('text',event.target.value)}/></Field><Field label="Image URL"><input type="url" className={inputStyle} value={form.imageUrl||''} onChange={event=>set('imageUrl',event.target.value)} placeholder="Paste a public image or Google Drive link"/><div style={{fontSize:11.5,color:'#9DB09D',marginTop:4}}>Drive files must be shared as Anyone with the link, Viewer.</div>{form.imageUrl&&<img src={normalizeImageUrl(form.imageUrl)} alt="Question preview" style={{display:'block',maxWidth:'100%',maxHeight:180,objectFit:'contain',marginTop:8,border:'1px solid #2A5C4B'}} onError={event=>{event.currentTarget.alt='Image could not be loaded';}}/>}</Field>{form.type==='paragraph'?<><Field label="Rubric"><textarea className={inputStyle+' resize-y'} rows={3} value={form.rubric||''} onChange={event=>set('rubric',event.target.value)} placeholder="What should staff look for when reviewing?"/></Field><Field label="Expected concepts"><input className={inputStyle} value={(form.expectedConcepts||[]).join(', ')} onChange={event=>set('expectedConcepts',event.target.value.split(',').map(item=>item.trim()).filter(Boolean))} placeholder="Concept 1, Concept 2"/></Field></>:<Field label="Options and correct answers"><div style={{fontSize:11.5,color:'#9DB09D',marginBottom:6}}>Select the radio button or checkbox beside every correct option.</div><div style={{display:'flex',flexDirection:'column',gap:7}}>{form.options.map((option,index)=><div key={option.id} style={{display:'flex',gap:7,alignItems:'center'}}><input type={form.type==='single'?'radio':'checkbox'} name={`correct-${question.id}`} checked={form.correct.includes(option.id)} onChange={()=>toggleCorrect(option.id)} aria-label={`Mark option ${index+1} correct`}/><input className={inputStyle+' flex-1'} value={option.text} onChange={event=>updateOption(option.id,'text',event.target.value)} placeholder={`Option ${index+1}`}/>{form.options.length>2&&<button onClick={()=>removeOption(option.id)} style={{...linkBtn,color:'#D0A023'}}>Remove</button>}</div>)}</div><button onClick={()=>set('options',[...form.options,{id:`option-${question.id}-${Date.now()}`,text:''}])} className={btnGhost+' px-[5px] py-0'}>+ Add option</button></Field>}{groups?.length>0&&<Field label="Optional question targets"><select multiple className={inputStyle+' min-h-[64px]'} value={form.targetGroupIds} onChange={event=>set('targetGroupIds',Array.from(event.target.selectedOptions,option=>option.value))}>{groups.map((group,index)=><option key={group.id} value={group.id}>Group {index+1} {group.track||'all tracks'} {group.afaGroup||''}</option>)}</select><div style={{fontSize:11.5,color:'#9DB09D',marginTop:4}}>Leave empty to assign this question to every assigned Fellow.</div></Field>}<div style={{display:'flex',gap:10}}><Field label="Points" style={{flex:1}}><input type="number" min="1" className={inputStyle} value={form.points||1} onChange={event=>set('points',Number(event.target.value))}/></Field><Field label="Time limit (minutes)" style={{flex:1}}><input type="number" min="0" className={inputStyle} value={form.timeLimit||0} onChange={event=>set('timeLimit',Number(event.target.value))}/></Field></div><button onClick={save} className={btnPrimary+' w-full justify-center'}>Save question</button></div></div>;
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 130 }} onClick={onClose}><div onClick={event => event.stopPropagation()} style={{ width: 500, maxWidth: '94vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><b>Question editor</b><button onClick={onClose} style={{ background: 'none', border: 'none' }}><X size={18} /></button></div><Field label="Question type"><select className={inputStyle} value={form.type} onChange={event => set('type', event.target.value)}>{ASSESSMENT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></Field><Field label="Question text"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.text || ''} onChange={event => set('text', event.target.value)} /></Field><Field label="Image URL"><input type="url" className={inputStyle} value={form.imageUrl || ''} onChange={event => set('imageUrl', event.target.value)} placeholder="Paste a public image or Google Drive link" /><div style={{ fontSize: 11.5, color: '#9DB09D', marginTop: 4 }}>Drive files must be shared as Anyone with the link, Viewer.</div>{form.imageUrl && <img src={normalizeImageUrl(form.imageUrl)} alt="Question preview" style={{ display: 'block', maxWidth: '100%', maxHeight: 180, objectFit: 'contain', marginTop: 8, border: '1px solid #2A5C4B' }} onError={event => { event.currentTarget.alt = 'Image could not be loaded'; }} />}</Field>{form.type === 'paragraph' ? <><Field label="Rubric"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.rubric || ''} onChange={event => set('rubric', event.target.value)} placeholder="What should staff look for when reviewing?" /></Field><Field label="Expected concepts"><input className={inputStyle} value={(form.expectedConcepts || []).join(', ')} onChange={event => set('expectedConcepts', event.target.value.split(',').map(item => item.trim()).filter(Boolean))} placeholder="Concept 1, Concept 2" /></Field></> : <Field label="Options and correct answers"><div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 6 }}>Select the radio button or checkbox beside every correct option.</div><div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>{form.options.map((option, index) => <div key={option.id} style={{ display: 'flex', gap: 7, alignItems: 'center' }}><input type={form.type === 'single' ? 'radio' : 'checkbox'} name={`correct-${question.id}`} checked={form.correct.includes(option.id)} onChange={() => toggleCorrect(option.id)} aria-label={`Mark option ${index + 1} correct`} /><input className={inputStyle + ' flex-1'} value={option.text} onChange={event => updateOption(option.id, 'text', event.target.value)} placeholder={`Option ${index + 1}`} />{form.options.length > 2 && <button onClick={() => removeOption(option.id)} style={{ ...linkBtn, color: '#D0A023' }}>Remove</button>}</div>)}</div><button onClick={() => set('options', [...form.options, { id: `option-${question.id}-${Date.now()}`, text: '' }])} className={btnGhost + ' px-[5px] py-0'}>+ Add option</button></Field>}{groups?.length > 0 && <Field label="Optional question targets"><select multiple className={inputStyle + ' min-h-[64px]'} value={form.targetGroupIds} onChange={event => set('targetGroupIds', Array.from(event.target.selectedOptions, option => option.value))}>{groups.map((group, index) => <option key={group.id} value={group.id}>Group {index + 1} {group.track || 'all tracks'} {group.afaGroup || ''}</option>)}</select><div style={{ fontSize: 11.5, color: '#9DB09D', marginTop: 4 }}>Leave empty to assign this question to every assigned Fellow.</div></Field>}<div style={{ display: 'flex', gap: 10 }}><Field label="Points" style={{ flex: 1 }}><input type="number" min="1" className={inputStyle} value={form.points || 1} onChange={event => set('points', Number(event.target.value))} /></Field><Field label="Time limit (minutes)" style={{ flex: 1 }}><input type="number" min="0" className={inputStyle} value={form.timeLimit || 0} onChange={event => set('timeLimit', Number(event.target.value))} /></Field></div><button onClick={save} className={btnPrimary + ' w-full justify-center'}>Save question</button></div></div>;
 }
 
-function LegacyOwnedQuestionEditor({ question, groups, onSave, onClose }){
-  const [form,setForm]=useState({...question,options:[...(question.options||[''])],correct:[...(question.correct||[])],targetGroupIds:[...(question.targetGroupIds||[])]});
-  const set=(key,value)=>setForm(current=>({...current,[key]:value}));
-  const updateOption=(index,value)=>set('options',form.options.map((option,itemIndex)=>itemIndex===index?value:option));
-  const toggleCorrect=option=>set('correct',form.correct.includes(option)?form.correct.filter(item=>item!==option):form.type==='single'?[option]:[...form.correct,option]);
-  const save=()=>{const options=form.options.map(option=>option.trim()).filter(Boolean);if(!form.text.trim()||options.length<2||!form.correct.length){window.alert('Add question text, at least two options, and select the correct answer.');return;}onSave({...form,options,correct:form.correct.filter(option=>options.includes(option)),updatedAt:new Date().toISOString()});};
-  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:130}} onClick={onClose}><div onClick={event=>event.stopPropagation()} style={{width:460,maxWidth:'94vw',background:'#003223',height:'100%',overflowY:'auto',padding:22}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><b>Question editor</b><button onClick={onClose} style={{background:'none',border:'none'}}><X size={18}/></button></div><Field label="Question type"><select className={inputStyle} value={form.type} onChange={event=>set('type',event.target.value)}>{ASSESSMENT_TYPES.map(type=><option key={type} value={type}>{type}</option>)}</select></Field><Field label="Question text"><textarea className={inputStyle+' resize-y'} rows={3} value={form.text} onChange={event=>set('text',event.target.value)}/></Field><Field label="Options"><div style={{display:'flex',flexDirection:'column',gap:6}}>{form.options.map((option,index)=><div key={index} style={{display:'flex',gap:6,alignItems:'center'}}><input type={form.type==='single'?'radio':'checkbox'} checked={form.correct.includes(option)&&Boolean(option)} onChange={()=>toggleCorrect(option)} title="Correct answer"/><input className={inputStyle} value={option} onChange={event=>updateOption(index,event.target.value)} placeholder={`Option ${index+1}`}/>{form.options.length>2&&<button onClick={()=>{const next=form.options.filter((_,itemIndex)=>itemIndex!==index);set('options',next);set('correct',form.correct.filter(item=>next.includes(item)));}} style={{...linkBtn,color:'#D0A023'}}>Remove</button>}</div>)}</div><button onClick={()=>set('options',[...form.options,''])} className={btnGhost+' px-[5px] py-0'}>+ Add option</button></Field><div style={{display:'flex',gap:10}}><Field label="Points" style={{flex:1}}><input type="number" min="1" className={inputStyle} value={form.points} onChange={event=>set('points',Number(event.target.value))}/></Field><Field label="Time limit (minutes)" style={{flex:1}}><input type="number" min="0" className={inputStyle} value={form.timeLimit||0} onChange={event=>set('timeLimit',Number(event.target.value))}/></Field></div><button onClick={save} className={btnPrimary+' w-full justify-center'}>Save question</button></div></div>;
+function LegacyOwnedQuestionEditor({ question, groups, onSave, onClose }) {
+  const [form, setForm] = useState({ ...question, options: [...(question.options || [''])], correct: [...(question.correct || [])], targetGroupIds: [...(question.targetGroupIds || [])] });
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const updateOption = (index, value) => set('options', form.options.map((option, itemIndex) => itemIndex === index ? value : option));
+  const toggleCorrect = option => set('correct', form.correct.includes(option) ? form.correct.filter(item => item !== option) : form.type === 'single' ? [option] : [...form.correct, option]);
+  const save = () => { const options = form.options.map(option => option.trim()).filter(Boolean); if (!form.text.trim() || options.length < 2 || !form.correct.length) { window.alert('Add question text, at least two options, and select the correct answer.'); return; } onSave({ ...form, options, correct: form.correct.filter(option => options.includes(option)), updatedAt: new Date().toISOString() }); };
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 130 }} onClick={onClose}><div onClick={event => event.stopPropagation()} style={{ width: 460, maxWidth: '94vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><b>Question editor</b><button onClick={onClose} style={{ background: 'none', border: 'none' }}><X size={18} /></button></div><Field label="Question type"><select className={inputStyle} value={form.type} onChange={event => set('type', event.target.value)}>{ASSESSMENT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></Field><Field label="Question text"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.text} onChange={event => set('text', event.target.value)} /></Field><Field label="Options"><div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{form.options.map((option, index) => <div key={index} style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type={form.type === 'single' ? 'radio' : 'checkbox'} checked={form.correct.includes(option) && Boolean(option)} onChange={() => toggleCorrect(option)} title="Correct answer" /><input className={inputStyle} value={option} onChange={event => updateOption(index, event.target.value)} placeholder={`Option ${index + 1}`} />{form.options.length > 2 && <button onClick={() => { const next = form.options.filter((_, itemIndex) => itemIndex !== index); set('options', next); set('correct', form.correct.filter(item => next.includes(item))); }} style={{ ...linkBtn, color: '#D0A023' }}>Remove</button>}</div>)}</div><button onClick={() => set('options', [...form.options, ''])} className={btnGhost + ' px-[5px] py-0'}>+ Add option</button></Field><div style={{ display: 'flex', gap: 10 }}><Field label="Points" style={{ flex: 1 }}><input type="number" min="1" className={inputStyle} value={form.points} onChange={event => set('points', Number(event.target.value))} /></Field><Field label="Time limit (minutes)" style={{ flex: 1 }}><input type="number" min="0" className={inputStyle} value={form.timeLimit || 0} onChange={event => set('timeLimit', Number(event.target.value))} /></Field></div><button onClick={save} className={btnPrimary + ' w-full justify-center'}>Save question</button></div></div>;
 }
 
-function AssessmentsPanel({ assessments, questions, sessions, roster, onAssessmentsChange, onQuestionsChange, showToast }){
+function AssessmentsPanel({ assessments, questions, sessions, roster, onAssessmentsChange, onQuestionsChange, showToast }) {
   const [editing, setEditing] = useState(null);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const saveAssessment = assessment => {
-    onAssessmentsChange(assessments.some(item=>item.id===assessment.id) ? assessments.map(item=>item.id===assessment.id?assessment:item) : [...assessments,assessment]);
+    onAssessmentsChange(assessments.some(item => item.id === assessment.id) ? assessments.map(item => item.id === assessment.id ? assessment : item) : [...assessments, assessment]);
     setEditing(null); showToast('Assessment saved');
   };
   const saveQuestion = question => {
-    onQuestionsChange(questions.some(item=>item.id===question.id) ? questions.map(item=>item.id===question.id?question:item) : [...questions,question]);
+    onQuestionsChange(questions.some(item => item.id === question.id) ? questions.map(item => item.id === question.id ? question : item) : [...questions, question]);
     setEditingQuestion(null); showToast('Question saved');
   };
-  const removeAssessment = id => { onAssessmentsChange(assessments.filter(item=>item.id!==id)); showToast('Assessment removed'); };
-  const removeQuestion = id => { onQuestionsChange(questions.filter(item=>item.id!==id)); showToast('Question removed'); };
+  const removeAssessment = id => { onAssessmentsChange(assessments.filter(item => item.id !== id)); showToast('Assessment removed'); };
+  const removeQuestion = id => { onQuestionsChange(questions.filter(item => item.id !== id)); showToast('Question removed'); };
   return <div>
-    <div style={{display:'flex',gap:8,marginBottom:18,flexWrap:'wrap'}}><button onClick={()=>setEditing(newAssessment(sessions))} className={btnPrimary}><Plus size={14}/> Create assessment</button><button onClick={()=>setEditingQuestion(newQuestion())} className={btnSecondary}><Plus size={14}/> Add question</button></div>
-    <div style={{fontSize:13,color:'#D5E0D5',marginBottom:18}}>Assessments are linked to one session. Use Primary or Secondary assignment groups and set a Bangladesh-time response window.</div>
-    {assessments.map(assessment=><div key={assessment.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:14,maxWidth:760,marginBottom:10}}><div style={{display:'flex',justifyContent:'space-between',gap:12}}><div><div style={{fontWeight:700}}>{assessment.title}</div><div style={{fontSize:12,color:'#D5E0D5',marginTop:4}}>{sessions.find(session=>String(session.id)===String(assessment.sessionId))?.name || 'Session not found'} · {assessment.status} · {assessment.startsAt || 'No start'} to {assessment.endsAt || 'No end'}</div><div style={{fontSize:12,color:'#D5E0D5',marginTop:4}}>{(assessment.questionIds||[]).length} questions · {(assessment.assignmentGroups||[]).length} assignment groups</div></div><div style={{display:'flex',gap:10}}><button onClick={()=>setEditing(assessment)} style={linkBtn}>Edit</button><button onClick={()=>removeAssessment(assessment.id)} style={{...linkBtn,color:'#D0A023'}}>Delete</button></div></div></div>)}
-    {assessments.length===0 && <div style={{padding:'30px 0',color:'#9DB09D'}}>No assessments created yet.</div>}
-    <div style={{marginTop:28,fontWeight:700,marginBottom:10}}>Question bank</div>
-    {questions.map(question=><div key={question.id} style={{background:'#003223',border:'1px solid #2A5C4B',borderRadius:8,padding:12,maxWidth:760,marginBottom:8,display:'flex',justifyContent:'space-between',gap:12}}><div><b>{question.text || 'Untitled question'}</b><div style={{fontSize:12,color:'#D5E0D5',marginTop:4}}>{question.type} · {question.points} points{question.imageUrl?' · image':''}</div></div><div style={{display:'flex',gap:10}}><button onClick={()=>setEditingQuestion(question)} style={linkBtn}>Edit</button><button onClick={()=>removeQuestion(question.id)} style={{...linkBtn,color:'#D0A023'}}>Delete</button></div></div>)}
-    {editing && <AssessmentEditor assessment={editing} sessions={sessions} roster={roster} questions={questions} onSave={saveAssessment} onClose={()=>setEditing(null)} />}
-    {editingQuestion && <QuestionEditor question={editingQuestion} onSave={saveQuestion} onClose={()=>setEditingQuestion(null)} />}
+    <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}><button onClick={() => setEditing(newAssessment(sessions))} className={btnPrimary}><Plus size={14} /> Create assessment</button><button onClick={() => setEditingQuestion(newQuestion())} className={btnSecondary}><Plus size={14} /> Add question</button></div>
+    <div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 18 }}>Assessments are linked to one session. Use Primary or Secondary assignment groups and set a Bangladesh-time response window.</div>
+    {assessments.map(assessment => <div key={assessment.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, maxWidth: 760, marginBottom: 10 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><div style={{ fontWeight: 700 }}>{assessment.title}</div><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{sessions.find(session => String(session.id) === String(assessment.sessionId))?.name || 'Session not found'} · {assessment.status} · {assessment.startsAt || 'No start'} to {assessment.endsAt || 'No end'}</div><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{(assessment.questionIds || []).length} questions · {(assessment.assignmentGroups || []).length} assignment groups</div></div><div style={{ display: 'flex', gap: 10 }}><button onClick={() => setEditing(assessment)} style={linkBtn}>Edit</button><button onClick={() => removeAssessment(assessment.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div></div></div>)}
+    {assessments.length === 0 && <div style={{ padding: '30px 0', color: '#9DB09D' }}>No assessments created yet.</div>}
+    <div style={{ marginTop: 28, fontWeight: 700, marginBottom: 10 }}>Question bank</div>
+    {questions.map(question => <div key={question.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12, maxWidth: 760, marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 12 }}><div><b>{question.text || 'Untitled question'}</b><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{question.type} · {question.points} points{question.imageUrl ? ' · image' : ''}</div></div><div style={{ display: 'flex', gap: 10 }}><button onClick={() => setEditingQuestion(question)} style={linkBtn}>Edit</button><button onClick={() => removeQuestion(question.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div></div>)}
+    {editing && <AssessmentEditor assessment={editing} sessions={sessions} roster={roster} questions={questions} onSave={saveAssessment} onClose={() => setEditing(null)} />}
+    {editingQuestion && <QuestionEditor question={editingQuestion} onSave={saveQuestion} onClose={() => setEditingQuestion(null)} />}
   </div>;
 }
 
-function newAssessment(sessions){
-  const session = sessions.find(item=>item.date) || sessions[0];
-  return {id:'assessment'+Date.now(),sessionId:session?.id||'',title:'',description:'',status:'draft',startsAt:'',endsAt:'',durationMinutes:30,questionIds:[],questions:[],assignmentGroups:[{id:'group'+Date.now(),track:'',fellowIds:[],questionIds:[]}],createdAt:new Date().toISOString()};
+function newAssessment(sessions) {
+  const session = sessions.find(item => item.date) || sessions[0];
+  return { id: 'assessment' + Date.now(), sessionId: session?.id || '', title: '', description: '', status: 'draft', startsAt: '', endsAt: '', durationMinutes: 30, questionIds: [], questions: [], assignmentGroups: [{ id: 'group' + Date.now(), track: '', fellowIds: [], questionIds: [] }], createdAt: new Date().toISOString() };
 }
 
-function newQuestion(){ return {id:'question'+Date.now(),type:'single',text:'',options:[''],gridRows:[''],gridCols:[''],correct:[],points:1,timeLimit:0,imageUrl:''}; }
+function newQuestion() { return { id: 'question' + Date.now(), type: 'single', text: '', options: [''], gridRows: [''], gridCols: [''], correct: [], points: 1, timeLimit: 0, imageUrl: '' }; }
 
-function AssessmentEditor({ assessment, sessions, roster, questions, onSave, onClose }){
-  const [form,setForm]=useState({...assessment,assignmentGroups:(assessment.assignmentGroups||[]).map(group=>({...group,fellowIds:[...(group.fellowIds||[])],questionIds:[...(group.questionIds||[])]}))});
-  const set=(key,value)=>setForm(current=>({...current,[key]:value}));
-  const addGroup=()=>set('assignmentGroups',[...(form.assignmentGroups||[]),{id:'group'+Date.now(),track:'secondary',fellowIds:[],questionIds:[]}]);
-  const updateGroup=(id,key,value)=>set('assignmentGroups',form.assignmentGroups.map(group=>group.id===id?{...group,[key]:value}:group));
-  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:120}} onClick={onClose}><div onClick={event=>event.stopPropagation()} style={{width:460,maxWidth:'94vw',background:'#003223',height:'100%',overflowY:'auto',padding:22}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><b>{assessment.title?'Edit assessment':'Create assessment'}</b><button onClick={onClose} style={{background:'none',border:'none'}}><X size={18}/></button></div><Field label="Title"><input className={inputStyle} value={form.title} onChange={event=>set('title',event.target.value)} placeholder="Exit ticket title"/></Field><Field label="Session"><select className={inputStyle} value={form.sessionId} onChange={event=>set('sessionId',event.target.value)}>{sessions.map(session=><option key={session.id} value={session.id}>{session.name}</option>)}</select></Field><Field label="Description"><textarea className={inputStyle+' resize-y'} rows={3} value={form.description} onChange={event=>set('description',event.target.value)}/></Field><div style={{display:'flex',gap:10}}><Field label="Starts (Bangladesh time)" style={{flex:1}}><input type="datetime-local" className={inputStyle} value={form.startsAt} onChange={event=>set('startsAt',event.target.value)}/></Field><Field label="Ends (Bangladesh time)" style={{flex:1}}><input type="datetime-local" className={inputStyle} value={form.endsAt} onChange={event=>set('endsAt',event.target.value)}/></Field></div><Field label="Status"><select className={inputStyle} value={form.status} onChange={event=>set('status',event.target.value)}><option value="draft">Draft</option><option value="published">Published</option><option value="closed">Closed</option></select></Field><Field label="Questions"><select multiple className={inputStyle+' min-h-[100px]'} value={form.questionIds} onChange={event=>set('questionIds',Array.from(event.target.selectedOptions,option=>option.value))}>{questions.map(question=><option key={question.id} value={question.id}>{question.text||'Untitled question'}</option>)}</select></Field><Field label="Assignment groups"><div style={{display:'flex',flexDirection:'column',gap:10}}>{(form.assignmentGroups||[]).map(group=><div key={group.id} style={{border:'1px solid #2A5C4B',padding:10,borderRadius:6}}><select className={inputStyle} value={group.track} onChange={event=>updateGroup(group.id,'track',event.target.value)}><option value="primary">Primary Fellows</option><option value="secondary">Secondary Fellows</option></select><select multiple className={inputStyle+' min-h-[70px] mt-[8px]'} value={group.fellowIds} onChange={event=>updateGroup(group.id,'fellowIds',Array.from(event.target.selectedOptions,option=>option.value))}>{roster.map(fellow=><option key={fellow.id} value={fellow.id}>{fellow.name} · {fellow.afaGroup||'No AFA group'}</option>)}</select></div>)}</div><button onClick={addGroup} className={btnGhost+' mt-[8px]'}>+ Add assignment group</button></Field><div style={{display:'flex',gap:8,marginTop:18}}><button onClick={()=>onSave({...form,updatedAt:new Date().toISOString()})} className={btnPrimary+' flex-1 justify-center'}>Save assessment</button><button onClick={onClose} className={btnGhost}>Cancel</button></div></div></div>;
+function AssessmentEditor({ assessment, sessions, roster, questions, onSave, onClose }) {
+  const [form, setForm] = useState({ ...assessment, assignmentGroups: (assessment.assignmentGroups || []).map(group => ({ ...group, fellowIds: [...(group.fellowIds || [])], questionIds: [...(group.questionIds || [])] })) });
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const addGroup = () => set('assignmentGroups', [...(form.assignmentGroups || []), { id: 'group' + Date.now(), track: 'secondary', fellowIds: [], questionIds: [] }]);
+  const updateGroup = (id, key, value) => set('assignmentGroups', form.assignmentGroups.map(group => group.id === id ? { ...group, [key]: value } : group));
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 120 }} onClick={onClose}><div onClick={event => event.stopPropagation()} style={{ width: 460, maxWidth: '94vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><b>{assessment.title ? 'Edit assessment' : 'Create assessment'}</b><button onClick={onClose} style={{ background: 'none', border: 'none' }}><X size={18} /></button></div><Field label="Title"><input className={inputStyle} value={form.title} onChange={event => set('title', event.target.value)} placeholder="Exit ticket title" /></Field><Field label="Session"><select className={inputStyle} value={form.sessionId} onChange={event => set('sessionId', event.target.value)}>{sessions.map(session => <option key={session.id} value={session.id}>{session.name}</option>)}</select></Field><Field label="Description"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.description} onChange={event => set('description', event.target.value)} /></Field><div style={{ display: 'flex', gap: 10 }}><Field label="Starts (Bangladesh time)" style={{ flex: 1 }}><input type="datetime-local" className={inputStyle} value={form.startsAt} onChange={event => set('startsAt', event.target.value)} /></Field><Field label="Ends (Bangladesh time)" style={{ flex: 1 }}><input type="datetime-local" className={inputStyle} value={form.endsAt} onChange={event => set('endsAt', event.target.value)} /></Field></div><Field label="Status"><select className={inputStyle} value={form.status} onChange={event => set('status', event.target.value)}><option value="draft">Draft</option><option value="published">Published</option><option value="closed">Closed</option></select></Field><Field label="Questions"><select multiple className={inputStyle + ' min-h-[100px]'} value={form.questionIds} onChange={event => set('questionIds', Array.from(event.target.selectedOptions, option => option.value))}>{questions.map(question => <option key={question.id} value={question.id}>{question.text || 'Untitled question'}</option>)}</select></Field><Field label="Assignment groups"><div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{(form.assignmentGroups || []).map(group => <div key={group.id} style={{ border: '1px solid #2A5C4B', padding: 10, borderRadius: 6 }}><select className={inputStyle} value={group.track} onChange={event => updateGroup(group.id, 'track', event.target.value)}><option value="primary">Primary Fellows</option><option value="secondary">Secondary Fellows</option></select><select multiple className={inputStyle + ' min-h-[70px] mt-[8px]'} value={group.fellowIds} onChange={event => updateGroup(group.id, 'fellowIds', Array.from(event.target.selectedOptions, option => option.value))}>{roster.map(fellow => <option key={fellow.id} value={fellow.id}>{fellow.name} · {fellow.afaGroup || 'No AFA group'}</option>)}</select></div>)}</div><button onClick={addGroup} className={btnGhost + ' mt-[8px]'}>+ Add assignment group</button></Field><div style={{ display: 'flex', gap: 8, marginTop: 18 }}><button onClick={() => onSave({ ...form, updatedAt: new Date().toISOString() })} className={btnPrimary + ' flex-1 justify-center'}>Save assessment</button><button onClick={onClose} className={btnGhost}>Cancel</button></div></div></div>;
 }
 
-function QuestionEditor({ question, onSave, onClose }){
-  const [form,setForm]=useState({...question,options:[...(question.options||[''])],gridRows:[...(question.gridRows||[''])],gridCols:[...(question.gridCols||[''])],correct:[...(question.correct||[])]});
-  const set=(key,value)=>setForm(current=>({...current,[key]:value}));
-  const updateList=(key,index,value)=>set(key,form[key].map((item,itemIndex)=>itemIndex===index?value:item));
-  const listEditor=(key,label)=><Field label={label}><div style={{display:'flex',flexDirection:'column',gap:6}}>{form[key].map((item,index)=><div key={index} style={{display:'flex',gap:6}}><input className={inputStyle} value={item} onChange={event=>updateList(key,index,event.target.value)}/>{form[key].length>1&&<button onClick={()=>set(key,form[key].filter((_,itemIndex)=>itemIndex!==index))} style={{...linkBtn,color:'#D0A023'}}>Remove</button>}</div>)}<button onClick={()=>set(key,[...form[key],''])} className={btnGhost+' px-1 py-0'}>+ Add</button></div></Field>;
-  return <div style={{position:'fixed',inset:0,background:'rgba(27,39,51,.4)',display:'flex',justifyContent:'flex-end',zIndex:130}} onClick={onClose}><div onClick={event=>event.stopPropagation()} style={{width:460,maxWidth:'94vw',background:'#003223',height:'100%',overflowY:'auto',padding:22}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:18}}><b>Question editor</b><button onClick={onClose} style={{background:'none',border:'none'}}><X size={18}/></button></div><Field label="Question type"><select className={inputStyle} value={form.type} onChange={event=>set('type',event.target.value)}>{ASSESSMENT_TYPES.map(type=><option key={type} value={type}>{type}</option>)}</select></Field><Field label="Question text"><textarea className={inputStyle+' resize-y'} rows={4} value={form.text} onChange={event=>set('text',event.target.value)}/></Field>{['single','multiple','check'].includes(form.type)&&listEditor('options','Options')}{['mcq_grid','checkbox_grid'].includes(form.type)&&<>{listEditor('gridRows','Grid rows')}{listEditor('gridCols','Grid columns')}</>}<Field label="Correct answer JSON"><input className={inputStyle} value={Array.isArray(form.correct)?JSON.stringify(form.correct):form.correct} onChange={event=>set('correct',event.target.value)}/></Field><div style={{display:'flex',gap:10}}><Field label="Points" style={{flex:1}}><input type="number" min="0" className={inputStyle} value={form.points} onChange={event=>set('points',Number(event.target.value))}/></Field><Field label="Time limit (minutes)" style={{flex:1}}><input type="number" min="0" className={inputStyle} value={form.timeLimit} onChange={event=>set('timeLimit',Number(event.target.value))}/></Field></div><Field label="Image URL (JPG, JPEG, or PNG)"><input type="url" className={inputStyle} value={form.imageUrl} onChange={event=>set('imageUrl',event.target.value)} placeholder="https://..."/></Field><button onClick={()=>onSave({...form,updatedAt:new Date().toISOString()})} className={btnPrimary+' w-full justify-center mt-[10px]'}>Save question</button></div></div>;
+function QuestionEditor({ question, onSave, onClose }) {
+  const [form, setForm] = useState({ ...question, options: [...(question.options || [''])], gridRows: [...(question.gridRows || [''])], gridCols: [...(question.gridCols || [''])], correct: [...(question.correct || [])] });
+  const set = (key, value) => setForm(current => ({ ...current, [key]: value }));
+  const updateList = (key, index, value) => set(key, form[key].map((item, itemIndex) => itemIndex === index ? value : item));
+  const listEditor = (key, label) => <Field label={label}><div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{form[key].map((item, index) => <div key={index} style={{ display: 'flex', gap: 6 }}><input className={inputStyle} value={item} onChange={event => updateList(key, index, event.target.value)} />{form[key].length > 1 && <button onClick={() => set(key, form[key].filter((_, itemIndex) => itemIndex !== index))} style={{ ...linkBtn, color: '#D0A023' }}>Remove</button>}</div>)}<button onClick={() => set(key, [...form[key], ''])} className={btnGhost + ' px-1 py-0'}>+ Add</button></div></Field>;
+  return <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 130 }} onClick={onClose}><div onClick={event => event.stopPropagation()} style={{ width: 460, maxWidth: '94vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><b>Question editor</b><button onClick={onClose} style={{ background: 'none', border: 'none' }}><X size={18} /></button></div><Field label="Question type"><select className={inputStyle} value={form.type} onChange={event => set('type', event.target.value)}>{ASSESSMENT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select></Field><Field label="Question text"><textarea className={inputStyle + ' resize-y'} rows={4} value={form.text} onChange={event => set('text', event.target.value)} /></Field>{['single', 'multiple', 'check'].includes(form.type) && listEditor('options', 'Options')}{['mcq_grid', 'checkbox_grid'].includes(form.type) && <>{listEditor('gridRows', 'Grid rows')}{listEditor('gridCols', 'Grid columns')}</>}<Field label="Correct answer JSON"><input className={inputStyle} value={Array.isArray(form.correct) ? JSON.stringify(form.correct) : form.correct} onChange={event => set('correct', event.target.value)} /></Field><div style={{ display: 'flex', gap: 10 }}><Field label="Points" style={{ flex: 1 }}><input type="number" min="0" className={inputStyle} value={form.points} onChange={event => set('points', Number(event.target.value))} /></Field><Field label="Time limit (minutes)" style={{ flex: 1 }}><input type="number" min="0" className={inputStyle} value={form.timeLimit} onChange={event => set('timeLimit', Number(event.target.value))} /></Field></div><Field label="Image URL (JPG, JPEG, or PNG)"><input type="url" className={inputStyle} value={form.imageUrl} onChange={event => set('imageUrl', event.target.value)} placeholder="https://..." /></Field><button onClick={() => onSave({ ...form, updatedAt: new Date().toISOString() })} className={btnPrimary + ' w-full justify-center mt-[10px]'}>Save question</button></div></div>;
 }
 
-function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessionTypes, pillarTags, modes, rooms, staff, weeks, startDate }){
-  const [form, setForm] = useState({ ...session, type: session.type || session.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(session.pillarIds) ? session.pillarIds : [], facilitators: (session.facilitators||[]).map(f => typeof f==='string' ? {id:newResId(), staffName:f, roomId:''} : {id:f.id||newResId(), staffName:f.staffName||f.name||'', roomId:f.roomId||'', group:f.group||''}), resources: session.resources ? session.resources.map(r=>({...r})) : [], outcomes: (session.outcomes||[]).filter(Boolean).map(text=>({id:newResId(), text})), notes:session.notes||'', fellowNotes:session.fellowNotes||'', attendanceCode:session.attendanceCode||'' });
-  const set = (k,v) => setForm(f => ({...f, [k]:v}));
-  const addResource = () => set('resources', [...form.resources, {id:newResId(), label:RESOURCE_KINDS[0], url:''}]);
-  const updateResource = (id, key, val) => set('resources', form.resources.map(r => r.id===id ? {...r,[key]:val} : r));
-  const removeResource = (id) => set('resources', form.resources.filter(r=>r.id!==id));
-  const addOutcome = () => set('outcomes', [...form.outcomes, {id:newResId(), text:''}]);
-  const updateOutcome = (id, val) => set('outcomes', form.outcomes.map(o => o.id===id ? {...o, text:val} : o));
-  const removeOutcome = (id) => set('outcomes', form.outcomes.filter(o=>o.id!==id));
-  const addFacilitator = () => set('facilitators', [...form.facilitators, {id:newResId(), staffName:'', roomId:''}]);
-  const updateFacilitator = (id, key, val) => set('facilitators', form.facilitators.map(f => f.id===id ? {...f,[key]:val} : f));
-  const removeFacilitator = (id) => set('facilitators', form.facilitators.filter(f=>f.id!==id));
+function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessionTypes, pillarTags, modes, rooms, staff, weeks, startDate }) {
+  const [form, setForm] = useState({ ...session, type: session.type || session.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(session.pillarIds) ? session.pillarIds : [], facilitators: (session.facilitators || []).map(f => typeof f === 'string' ? { id: newResId(), staffName: f, roomId: '' } : { id: f.id || newResId(), staffName: f.staffName || f.name || '', roomId: f.roomId || '', group: f.group || '' }), resources: session.resources ? session.resources.map(r => ({ ...r })) : [], outcomes: (session.outcomes || []).filter(Boolean).map(text => ({ id: newResId(), text })), notes: session.notes || '', fellowNotes: session.fellowNotes || '', attendanceCode: session.attendanceCode || '' });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const addResource = () => set('resources', [...form.resources, { id: newResId(), label: RESOURCE_KINDS[0], url: '' }]);
+  const updateResource = (id, key, val) => set('resources', form.resources.map(r => r.id === id ? { ...r, [key]: val } : r));
+  const removeResource = (id) => set('resources', form.resources.filter(r => r.id !== id));
+  const addOutcome = () => set('outcomes', [...form.outcomes, { id: newResId(), text: '' }]);
+  const updateOutcome = (id, val) => set('outcomes', form.outcomes.map(o => o.id === id ? { ...o, text: val } : o));
+  const removeOutcome = (id) => set('outcomes', form.outcomes.filter(o => o.id !== id));
+  const addFacilitator = () => set('facilitators', [...form.facilitators, { id: newResId(), staffName: '', roomId: '' }]);
+  const updateFacilitator = (id, key, val) => set('facilitators', form.facilitators.map(f => f.id === id ? { ...f, [key]: val } : f));
+  const removeFacilitator = (id) => set('facilitators', form.facilitators.filter(f => f.id !== id));
   // Facilitator options: all WA Staff plus the built-in Superadmin (who can also facilitate).
   const staffOptions = () => {
-    const list = (staff||[]).slice();
-    if (!list.some(p=>p.id==='superadmin' || p.email===SUPERADMIN_EMAIL)) list.push(SUPERADMIN_ACCOUNT);
+    const list = (staff || []).slice();
+    if (!list.some(p => p.id === 'superadmin' || p.email === SUPERADMIN_EMAIL)) list.push(SUPERADMIN_ACCOUNT);
     return list;
   };
 
   const handleSave = () => {
-    const weekday = form.date ? new Date(form.date+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'}) : '';
+    const weekday = form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '';
     const derivedWeek = form.date && startDate ? weekForDate(form.date, startDate) : null;
     onSave({
-      id: form.id, week: derivedWeek!=null ? derivedWeek : (form.date ? form.week : (form.week===''? null : Number(form.week))),
+      id: form.id, week: derivedWeek != null ? derivedWeek : (form.date ? form.week : (form.week === '' ? null : Number(form.week))),
       date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: form.end || null,
       name: form.name, type: form.type, pillarIds: form.pillarIds || [], mode: form.mode,
-      facilitators: form.facilitators.map(f=>{ const rec={id:f.id||newResId(), staffName:(f.staffName||'').trim(), roomId:(f.roomId||'').trim()}; if(f.group) rec.group=f.group; return rec; }).filter(f=>f.staffName || f.roomId || f.group),
+      facilitators: form.facilitators.map(f => { const rec = { id: f.id || newResId(), staffName: (f.staffName || '').trim(), roomId: (f.roomId || '').trim() }; if (f.group) rec.group = f.group; return rec; }).filter(f => f.staffName || f.roomId || f.group),
       roomIds: form.roomIds || [],
-      resources: form.resources.filter(r=>r.url.trim()),
-      outcomes: form.outcomes.map(o=>(o.text||'').trim()).filter(Boolean),
-      notes: form.notes.trim(), fellowNotes: form.fellowNotes.trim(), afaGroup:form.afaGroup.trim(), attendanceCode:form.attendanceCode.trim(),
+      resources: form.resources.filter(r => r.url.trim()),
+      outcomes: form.outcomes.map(o => (o.text || '').trim()).filter(Boolean),
+      notes: form.notes.trim(), fellowNotes: form.fellowNotes.trim(), afaGroup: form.afaGroup.trim(), attendanceCode: form.attendanceCode.trim(),
       calendared: !!form.date && !!form.start && !!form.end,
     });
   };
 
   return (
-    <div style={{position:'fixed', inset:0, background:'rgba(27,39,51,0.4)', display:'flex', justifyContent:'flex-end', zIndex:100}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{width:400, maxWidth:'92vw', background:'#003223', height:'100%', overflowY:'auto', padding:22, boxShadow:'-8px 0 24px rgba(0,0,0,.12)'}}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18}}>
-          <div style={{fontWeight:700, fontSize:15}}>{session.id ? 'Edit session' : 'New session'}</div>
-          <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'#9DB09D'}}><X size={18}/></button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 100 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22, boxShadow: '-8px 0 24px rgba(0,0,0,.12)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{session.id ? 'Edit session' : 'New session'}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9DB09D' }}><X size={18} /></button>
         </div>
-        <Field label="Session name"><input disabled={!canEditSchedule} className={inputStyle+(canEditSchedule?'':' opacity-60')} value={form.name} onChange={e=>set('name', e.target.value)} placeholder="e.g. Backward Planning Workshop" /></Field>
-        <div style={{display:'flex', gap:10, opacity:canEditSchedule?1:0.6}}>
-          <Field label="Date" style={{flex:1}}><input disabled={!canEditSchedule} type="date" className={inputStyle} value={form.date||''} onChange={e=>set('date', e.target.value)} /></Field>
-          <Field label="Week" style={{width:110}}><select disabled={!canEditSchedule} className={inputStyle} value={form.week??''} onChange={e=>set('week', e.target.value)}><option value="">--</option>{(weeks||WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2,'0')}</option>)}</select></Field>
+        <Field label="Session name"><input disabled={!canEditSchedule} className={inputStyle + (canEditSchedule ? '' : ' opacity-60')} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Backward Planning Workshop" /></Field>
+        <div style={{ display: 'flex', gap: 10, opacity: canEditSchedule ? 1 : 0.6 }}>
+          <Field label="Date" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="date" className={inputStyle} value={form.date || ''} onChange={e => set('date', e.target.value)} /></Field>
+          <Field label="Week" style={{ width: 110 }}><select disabled={!canEditSchedule} className={inputStyle} value={form.week ?? ''} onChange={e => set('week', e.target.value)}><option value="">--</option>{(weeks || WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}</select></Field>
         </div>
-        <div style={{display:'flex', gap:10, opacity:canEditSchedule?1:0.6}}>
-          <Field label="Start time" style={{flex:1}}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.start||''} onChange={e=>set('start', e.target.value)} /></Field>
-          <Field label="End time" style={{flex:1}}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.end||''} onChange={e=>set('end', e.target.value)} /></Field>
+        <div style={{ display: 'flex', gap: 10, opacity: canEditSchedule ? 1 : 0.6 }}>
+          <Field label="Start time" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.start || ''} onChange={e => set('start', e.target.value)} /></Field>
+          <Field label="End time" style={{ flex: 1 }}><input disabled={!canEditSchedule} type="time" className={inputStyle} value={form.end || ''} onChange={e => set('end', e.target.value)} /></Field>
         </div>
-        <Field label="Type of session"><select disabled={!canEditSchedule} className={inputStyle} value={form.type} onChange={e=>set('type', e.target.value)}>{(sessionTypes||DEFAULT_SESSION_TYPES).map(p => <option key={p.id||p.name} value={p.name}>{p.name}</option>)}</select></Field>
-        <Field label="Pillars (tags)"><div style={{display:'flex', flexWrap:'wrap', gap:6}}>{(pillarTags||[]).length===0 && <span style={{fontSize:12, color:'#9DB09D'}}>No pillars defined yet -- add them under Pillars.</span>}{(pillarTags||[]).map(p => { const on=(form.pillarIds||[]).map(String).includes(String(p.id)); return <button type="button" key={p.id} onClick={()=>set('pillarIds', on ? (form.pillarIds||[]).filter(id=>String(id)!==String(p.id)) : [...(form.pillarIds||[]), p.id])} className={on?btnPrimary:btnSecondary} style={{fontSize:12, padding:'4px 10px'}}>{p.name}</button>; })}</div></Field>
-        <Field label="Work mode (for time tracking)"><select disabled={!canEditSchedule} className={inputStyle} value={form.mode} onChange={e=>set('mode', e.target.value)}>{(modes||DEFAULT_MODES).map(m => <option key={m.id||m.name} value={m.name}>{m.name}</option>)}</select></Field>
+        <Field label="Type of session"><select disabled={!canEditSchedule} className={inputStyle} value={form.type} onChange={e => set('type', e.target.value)}>{(sessionTypes || DEFAULT_SESSION_TYPES).map(p => <option key={p.id || p.name} value={p.name}>{p.name}</option>)}</select></Field>
+        <Field label="Pillars (tags)"><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>{(pillarTags || []).length === 0 && <span style={{ fontSize: 12, color: '#9DB09D' }}>No pillars defined yet -- add them under Pillars.</span>}{(pillarTags || []).map(p => { const on = (form.pillarIds || []).map(String).includes(String(p.id)); return <button type="button" key={p.id} onClick={() => set('pillarIds', on ? (form.pillarIds || []).filter(id => String(id) !== String(p.id)) : [...(form.pillarIds || []), p.id])} className={on ? btnPrimary : btnSecondary} style={{ fontSize: 12, padding: '4px 10px' }}>{p.name}</button>; })}</div></Field>
+        <Field label="Work mode (for time tracking)"><select disabled={!canEditSchedule} className={inputStyle} value={form.mode} onChange={e => set('mode', e.target.value)}>{(modes || DEFAULT_MODES).map(m => <option key={m.id || m.name} value={m.name}>{m.name}</option>)}</select></Field>
         <Field label="Facilitators">
-          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {form.facilitators.map(f => (
-              <div key={f.id} style={{display:'flex', gap:6, alignItems:'center', flexWrap:'wrap', border:'1px solid #E5E9EC', borderRadius:6, padding:8}}>
-                {staffOptions().length>0 ? (
-                  <select disabled={!canEditSchedule} className={inputStyle+' w-auto flex-1 min-w-[130px]'} value={f.staffName||''} onChange={e=>updateFacilitator(f.id,'staffName',e.target.value)}>
+              <div key={f.id} style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', border: '1px solid #E5E9EC', borderRadius: 6, padding: 8 }}>
+                {staffOptions().length > 0 ? (
+                  <select disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[130px]'} value={f.staffName || ''} onChange={e => updateFacilitator(f.id, 'staffName', e.target.value)}>
                     <option value="">Facilitator name…</option>
-                    {staffOptions().map(p=><option key={p.id||p.email||p.name} value={p.name}>{p.name}{p.callSign ? ' ('+p.callSign+')' : ''}{p.role && AFA_ROLES.includes(p.role) && p.group ? ' -- '+p.group : ''}</option>)}
+                    {staffOptions().map(p => <option key={p.id || p.email || p.name} value={p.name}>{p.name}{p.callSign ? ' (' + p.callSign + ')' : ''}{p.role && AFA_ROLES.includes(p.role) && p.group ? ' -- ' + p.group : ''}</option>)}
                   </select>
                 ) : (
-                  <input disabled={!canEditSchedule} className={inputStyle+' w-auto flex-1 min-w-[130px]'} placeholder="Facilitator name" value={f.staffName||''} onChange={e=>updateFacilitator(f.id,'staffName',e.target.value)} />
+                  <input disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[130px]'} placeholder="Facilitator name" value={f.staffName || ''} onChange={e => updateFacilitator(f.id, 'staffName', e.target.value)} />
                 )}
-                <select disabled={!canEditSchedule} className={inputStyle+' w-auto flex-1 min-w-[120px]'} value={f.roomId||''} onChange={e=>updateFacilitator(f.id,'roomId',e.target.value)}>
+                <select disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[120px]'} value={f.roomId || ''} onChange={e => updateFacilitator(f.id, 'roomId', e.target.value)}>
                   <option value="">Session room…</option>
-                  {(rooms||[]).map(room=><option key={room.id} value={room.id}>{room.name}</option>)}
+                  {(rooms || []).map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
                 </select>
-                <button onClick={()=>removeFacilitator(f.id)} style={{background:'none', border:'none', color:'#D0A023', cursor:'pointer', flexShrink:0}}><X size={15}/></button>
+                <button onClick={() => removeFacilitator(f.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', flexShrink: 0 }}><X size={15} /></button>
               </div>
             ))}
           </div>
-          <button disabled={!canEditSchedule} onClick={addFacilitator} className={btnGhost+' mt-2 px-1 py-1.5'}><Plus size={13}/> Add facilitator</button>
-          <div style={{fontSize:11, color:'#9DB09D', marginTop:6}}>Session rooms and AFA rooms are managed in the Rooms tab.</div>
+          <button disabled={!canEditSchedule} onClick={addFacilitator} className={btnGhost + ' mt-2 px-1 py-1.5'}><Plus size={13} /> Add facilitator</button>
+          <div style={{ fontSize: 11, color: '#9DB09D', marginTop: 6 }}>Session rooms and AFA rooms are managed in the Rooms tab.</div>
         </Field>
-        <Field label="Attendance code"><input disabled={!canEditSchedule} className={inputStyle+(canEditSchedule?'':' opacity-60')} value={form.attendanceCode||''} onChange={e=>set('attendanceCode',e.target.value)} placeholder="Code Fellows enter for attendance" /></Field>
-        <Field label="Planner notes (internal)"><textarea className={inputStyle+' resize-y'} rows={3} value={form.notes} onChange={e=>set('notes', e.target.value)} placeholder="Internal planning notes" /></Field>
-        <Field label="Fellow-visible notes"><textarea className={inputStyle+' resize-y'} rows={3} value={form.fellowNotes} onChange={e=>set('fellowNotes', e.target.value)} placeholder="Notes Fellows should see" /></Field>
+        <Field label="Attendance code"><input disabled={!canEditSchedule} className={inputStyle + (canEditSchedule ? '' : ' opacity-60')} value={form.attendanceCode || ''} onChange={e => set('attendanceCode', e.target.value)} placeholder="Code Fellows enter for attendance" /></Field>
+
+        <Field label="Planner notes (internal)"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Internal planning notes" /></Field>
+        <Field label="Fellow-visible notes"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.fellowNotes} onChange={e => set('fellowNotes', e.target.value)} placeholder="Notes Fellows should see" /></Field>
         <Field label="Resources">
-          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {form.resources.map(r => (
-              <div key={r.id} style={{display:'flex', gap:6, alignItems:'center'}}>
-                <select className={inputStyle+' w-[120px]! shrink-0'} value={r.label} onChange={e=>updateResource(r.id,'label',e.target.value)}>{RESOURCE_KINDS.map(k => <option key={k} value={k}>{k}</option>)}</select>
-                <input className={inputStyle} placeholder="https://…" value={r.url} onChange={e=>updateResource(r.id,'url',e.target.value)} />
-                <button onClick={()=>removeResource(r.id)} style={{background:'none', border:'none', color:'#D0A023', cursor:'pointer', flexShrink:0}}><X size={15}/></button>
+              <div key={r.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <select className={inputStyle + ' w-[120px]! shrink-0'} value={r.label} onChange={e => updateResource(r.id, 'label', e.target.value)}>{RESOURCE_KINDS.map(k => <option key={k} value={k}>{k}</option>)}</select>
+                <input className={inputStyle} placeholder="https://…" value={r.url} onChange={e => updateResource(r.id, 'url', e.target.value)} />
+                <button onClick={() => removeResource(r.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', flexShrink: 0 }}><X size={15} /></button>
               </div>
             ))}
           </div>
-          <button onClick={addResource} className={btnGhost+' mt-2 px-1 py-1.5'}><Plus size={13}/> Add resource link</button>
+          <button onClick={addResource} className={btnGhost + ' mt-2 px-1 py-1.5'}><Plus size={13} /> Add resource link</button>
         </Field>
         <Field label="Outcomes">
-          <div style={{display:'flex', flexDirection:'column', gap:8}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {form.outcomes.map(o => (
-              <div key={o.id} style={{display:'flex', gap:6, alignItems:'center'}}>
-                <input className={inputStyle} placeholder="Outcome" value={o.text} onChange={e=>updateOutcome(o.id,e.target.value)} />
-                <button onClick={()=>removeOutcome(o.id)} style={{background:'none', border:'none', color:'#D0A023', cursor:'pointer', flexShrink:0}}><X size={15}/></button>
+              <div key={o.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input className={inputStyle} placeholder="Outcome" value={o.text} onChange={e => updateOutcome(o.id, e.target.value)} />
+                <button onClick={() => removeOutcome(o.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', flexShrink: 0 }}><X size={15} /></button>
               </div>
             ))}
           </div>
-          <button onClick={addOutcome} className={btnGhost+' mt-2 px-1 py-1.5'}><Plus size={13}/> Add outcome</button>
+          <button onClick={addOutcome} className={btnGhost + ' mt-2 px-1 py-1.5'}><Plus size={13} /> Add outcome</button>
         </Field>
-        <div style={{display:'flex', gap:8, marginTop:20}}>
-          <button onClick={handleSave} className={btnPrimary+' flex-1 justify-center py-2.5'}>Save session</button>
-          {onDelete && <button onClick={()=>{ if(window.confirm('Delete this session?')) onDelete(session.id); }} className={btnSecondary+' text-[#D0A023] border-[#E3B8B8]'}>Delete</button>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          <button onClick={handleSave} className={btnPrimary + ' flex-1 justify-center py-2.5'}>Save session</button>
+          {onDelete && <button onClick={() => { if (window.confirm('Delete this session?')) onDelete(session.id); }} className={btnSecondary + ' text-[#D0A023] border-[#E3B8B8]'}>Delete</button>}
         </div>
       </div>
     </div>
   );
 }
 
-function Field({ label, children, style }){
-  return (<div style={{marginBottom:14, ...style}}><div style={{fontSize:12, color:'#D5E0D5', fontWeight:600, marginBottom:5}}>{label}</div>{children}</div>);
+function Field({ label, children, style }) {
+  return (<div style={{ marginBottom: 14, ...style }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>{label}</div>{children}</div>);
 }
 const inputStyle = 'w-full px-2.5 py-2 rounded-md border border-[#C9CDD2] text-[13px] bg-white text-[#252625] box-border';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowOverview, AttendanceCodePanel, IncidentLogPanel, DeviceRequestPanel, computeAttemptScore, computeAttemptPercentage, weekForDate, generateAttendanceCodes, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowOverview, AttendanceCodePanel, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, generateAttendanceCodes, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel };

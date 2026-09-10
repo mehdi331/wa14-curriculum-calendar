@@ -1,7 +1,7 @@
 // Thin wrapper so the rest of the app can keep calling storage.get/set/delete
 // the same way it did inside Claude's artifact environment, but backed by a
 // real, free Firestore database instead of window.storage.
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 const COLLECTION = 'wa14';
 
@@ -38,6 +38,12 @@ export const storage = {
   async delete(key) {
     await deleteDoc(doc(db, COLLECTION, key));
     return { key, deleted: true };
+  },
+  subscribe(key, callback) {
+    return onSnapshot(doc(db, COLLECTION, key), (snap) => {
+      try { callback(snap.exists() ? { key, value: snap.data().value } : null); }
+      catch (error) { console.error('subscribe callback failed', key, error); }
+    }, (error) => { console.error('subscribe failed', key, error); });
   },
 };
 
