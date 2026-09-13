@@ -888,6 +888,12 @@ const duplicateSession = (s) => {
   persist([...base, copy]);
   showToast('Duplicated as "' + copy.name + '" — ' + (copy.week != null ? 'Week ' + String(copy.week).padStart(2, '0') : 'unscheduled'));
 };
+const unscheduleSession = (s) => {
+  const next = { ...s, date: '', weekday: '', start: '', end: '', week: null, calendared: false };
+  persist((sessionsRef.current || []).map(x => String(x.id) === String(next.id) ? next : x));
+  setViewing(null);
+  showToast('Removed "' + (next.name || 'Untitled session') + '" from the calendar');
+};
 const resetSeed = () => {
   if (!window.confirm('Reset all sessions back to the original WA14 schedule? Your edits will be lost.')) return;
   persist(SEED); showToast('Reset to original schedule');
@@ -1064,7 +1070,7 @@ return (
     )}
     {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({ ...session, date, start, end, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared: true }); setPlacement(null); }} onClose={() => setPlacement(null)} onAddSession={(date, start, end) => { setPlacement(null); setEditing({ ...blankSession(), date, start, end, weekday: date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '', week: date ? (weekForDate(date, academySettings?.startDate) ?? activeWeek) : 0, calendared: !!date && !!start && !!end }); }} />}
     {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next) => { saveSession(next); setAssigning(null); }} onClose={() => setAssigning(null)} />}
-    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} onDuplicate={isFullAdmin ? duplicateSession : null} />}
+    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} onDuplicate={isFullAdmin ? duplicateSession : null} onRemove={isFullAdmin ? unscheduleSession : null} />}
     {isAdmin && staffEditing && (
       <StaffTaskEditor task={staffEditing === 'new' ? null : staffEditing} isFullAdmin={isFullAdmin} onSave={saveStaffTask} onDelete={isFullAdmin && staffEditing !== 'new' ? deleteStaffTask : null} onClose={() => setStaffEditing(null)} />
     )}
@@ -2303,7 +2309,7 @@ function AnalyticsPanel({ sessions, attendance, attempts, onSeedDemo, onDeleteDe
   return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Attendance and assessment overview for Staff.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>On-time attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{onTime}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Late attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{late}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Completed assessments</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{completed}</div></div></div><div style={{ marginTop: 24, fontSize: 13, fontWeight: 700 }}>Session attendance</div><div style={{ marginTop: 8, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 780 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: 9 }}>Session</th><th style={{ padding: 9 }}>On time</th><th style={{ padding: 9 }}>Late</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}><td style={{ padding: 9 }}>{session.name}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length}</td></tr>)}</tbody></table></div></div>;
 }
 
-function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit, onDuplicate }) {
+function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit, onDuplicate, onRemove }) {
   const color = getTypeColor(session.type, sessionTypes);
   const pillarTagNames = sessionPillarNames(session, pillarTags);
   const [reqOpen, setReqOpen] = useState(false);
@@ -2335,6 +2341,7 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         {auth.role !== 'fellow' && <button onClick={onAssign} className={btnSecondary + ' w-full justify-center mt-1'}>Assign rooms</button>}
         {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#9DB09D]'}><Edit size={12} /> Edit session</button>}
         {auth.role !== 'fellow' && onDuplicate && <button onClick={() => { onClose(); onDuplicate(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#D0A023]'}><CopyIcon size={12} /> Duplicate session</button>}
+        {auth.role !== 'fellow' && onRemove && <button onClick={() => { if (!window.confirm('Remove this session from the calendar? It will move to the unscheduled list.')) return; onClose(); onRemove(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#D65641]'}><Trash2 size={12} /> Remove from calendar</button>}
 
         {session.resources && session.resources.length > 0 && (
           <div style={{ marginTop: 18 }}>
