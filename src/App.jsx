@@ -504,12 +504,14 @@ function LoginGate({ onLogin, onLocalLogin, onRedirectLogin, error, busy }) {
   );
 }
 
-const HASH_TABS = ['calendar', 'sessions', 'attendance', 'summary', 'fellows', 'rooms', 'sessionTypes', 'pillarTags', 'modes', 'requests', 'assessments', 'review', 'analytics', 'incidents', 'devices', 'planners', 'roles', 'staffCalendar'];
+const HASH_TABS = ['dashboard', 'calendar', 'sessions', 'attendance', 'summary', 'fellows', 'rooms', 'sessionTypes', 'pillarTags', 'modes', 'requests', 'assessments', 'review', 'analytics', 'incidents', 'devices', 'planners', 'roles', 'staffCalendar', 'legend'];
 
 function normalizeHashTab(hash, isAdmin, isFullAdmin, isSuperadmin) {
-  const base = HASH_TABS.includes(hash) ? hash : 'calendar';
+  const base = HASH_TABS.includes(hash) ? hash : (isAdmin ? 'dashboard' : 'calendar');
   if (base === 'staffCalendar' && isAdmin) return 'staffCalendar';
   if (base === 'calendar') return 'calendar';
+  if (base === 'dashboard') return isAdmin ? 'dashboard' : 'calendar';
+  if (base === 'legend') return 'legend';
   if (base === 'sessions' && isAdmin) return 'sessions';
   if (base === 'attendance' && isFullAdmin) return 'attendance';
   if ((base === 'summary' || base === 'fellows' || base === 'rooms' || base === 'sessionTypes' || base === 'pillarTags' || base === 'modes' || base === 'requests') && isFullAdmin) return base;
@@ -930,7 +932,13 @@ const saveStaffTask = (t) => {
   persistStaffTasks(next); setStaffEditing(null); showToast('Staff task saved');
 };
 const deleteStaffTask = (id) => { persistStaffTasks(staffTasks.filter(x => String(x.id) !== String(id))); setStaffEditing(null); showToast('Staff task removed'); };
-const exportExcel = async () => {
+const exportSheetFile = (filename, sheets) => {
+  const wb = XLSX.utils.book_new();
+  (sheets || []).forEach(({ name, rows }) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows || []), name));
+  XLSX.writeFile(wb, filename);
+  showToast('Exported ' + filename);
+};
+const sessionRows = () => {
   const rows = sessions.map(s => ({
     Week: s.week != null ? 'Week ' + String(s.week).padStart(2, '0') : '',
     Date: s.date || '', Weekday: s.weekday || '', Start: s.start || '', End: s.end || '',
@@ -942,21 +950,32 @@ const exportExcel = async () => {
     Calendared: s.calendared ? 'Yes' : 'No',
   }));
   rows.sort((a, b) => (a.Date || 'zzzz').localeCompare(b.Date || 'zzzz') || (a.Start || '').localeCompare(b.Start || ''));
-  const wb = XLSX.utils.book_new();
-  const append = (name, data) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), name);
-  append('Calendar', rows);
-  append('Sessions', rows);
-  append('Time Summary', sessions.map(session => ({ Week: session.week, Mode: session.mode, Session: session.name, DurationMinutes: session.start && session.end ? durationMin(session) : '' })));
-  append('Fellows', roster.map(fellow => ({ Name: fellow.name, Email: fellow.email, Track: fellow.track, Grade: fellow.grade, PlacementCity: fellow.placementCity, AFAGroup: fellow.afaGroup, RoomIds: (fellow.roomIds || []).join(', ') })));
-  append('Assessments', assessments.map(assessment => ({ Title: assessment.title, SessionId: assessment.sessionId, Status: assessment.status, Questions: (assessment.questions || []).length, Fellows: (assessment.assignmentGroups || []).flatMap(group => group.fellowIds || []).length })));
-  append('Questions', assessments.flatMap(assessment => (assessment.questions || []).map(question => ({ Assessment: assessment.title, Question: question.text, Type: question.type, ImageUrl: question.imageUrl || '', Options: (question.options || []).map(option => typeof option === 'string' ? option : option.text).join(' | '), Correct: (question.correct || []).join(' | '), Rubric: question.rubric || '', ExpectedConcepts: (question.expectedConcepts || []).join(' | '), Points: question.points }))));
-  append('Attempts', assessmentAttempts.map(attempt => ({ AssessmentId: attempt.assessmentId, FellowId: attempt.fellowId, Status: attempt.status, StartedAt: attempt.startedAt, SubmittedAt: attempt.submittedAt || '', Answers: JSON.stringify(attempt.answers || {}), Reviews: JSON.stringify(attempt.reviews || {}) })));
-  append('Paragraph reviews', assessmentAttempts.flatMap(attempt => Object.entries(attempt.reviews || {}).map(([questionId, review]) => ({ AssessmentId: attempt.assessmentId, FellowId: attempt.fellowId, QuestionId: questionId, Status: review.status || '', Score: review.score ?? '', Feedback: review.feedback || '', Reviewer: review.reviewer || '', ReviewedAt: review.reviewedAt || '', AISuggestedScore: review.aiSuggestion?.suggestedScore ?? '', AIConfidence: review.aiSuggestion?.confidence ?? '', AIFeedback: review.aiSuggestion?.feedback || '' }))));
-  append('Attendance', attendance.map(entry => ({ SessionId: entry.sessionId, FellowId: entry.fellowId, Status: entry.status, RecordedAt: entry.recordedAt })));
-  append('Analytics', sessions.map(session => ({ Session: session.name, OnTime: attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length, Late: attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length })));
-  XLSX.writeFile(wb, 'WA14_Training_Design_Export.xlsx');
-  showToast('Exported to Excel');
+  return rows;
 };
+const pageExporters = {
+  calendar: () => exportSheetFile('Fellow_Training_System_Calendar.xlsx', [{ name: 'Calendar', rows: sessionRows() }]),
+  sessions: () => exportSheetFile('Fellow_Training_System_Sessions.xlsx', [{ name: 'Sessions', rows: sessionRows() }]),
+  staffCalendar: () => exportSheetFile('Fellow_Training_System_Staff_Calendar.xlsx', [{ name: 'Calendar', rows: sessionRows() }]),
+  attendance: () => exportSheetFile('Fellow_Training_System_Attendance.xlsx', [{ name: 'Attendance', rows: attendance.map(entry => ({ SessionId: entry.sessionId, FellowId: entry.fellowId, Status: entry.status, RecordedAt: entry.recordedAt })) }]),
+  summary: () => exportSheetFile('Fellow_Training_System_Time_Summary.xlsx', [{ name: 'Time Summary', rows: sessions.map(session => ({ Week: session.week, Mode: session.mode, Session: session.name, DurationMinutes: session.start && session.end ? durationMin(session) : '' })) }]),
+  fellows: () => exportSheetFile('Fellow_Training_System_Fellows.xlsx', [{ name: 'Fellows', rows: roster.map(fellow => ({ Name: fellow.name, Email: fellow.email, Track: fellow.track, Grade: fellow.grade, PlacementCity: fellow.placementCity, AFAGroup: fellow.afaGroup, RoomIds: (fellow.roomIds || []).join(', ') })) }]),
+  rooms: () => exportSheetFile('Fellow_Training_System_Rooms.xlsx', [{ name: 'Rooms', rows: rooms.map(room => ({ Name: room.name, Facilitator: room.facilitator || '', LocationType: room.locationType || '', PhysicalLocation: room.physicalLocation || '', OnlinePlatform: room.onlinePlatform || '', MeetingUrl: room.meetingUrl || '', AccessInstructions: room.accessInstructions || '', FellowIds: (room.fellowIds || []).join(', ') })) }]),
+  sessionTypes: () => exportSheetFile('Fellow_Training_System_Session_Types.xlsx', [{ name: 'Session Types', rows: sessionTypes.map(t => ({ Name: t.name, Color: t.color || '' })) }]),
+  pillarTags: () => exportSheetFile('Fellow_Training_System_Pillars.xlsx', [{ name: 'Pillars', rows: pillarTags.map(p => ({ Name: p.name })) }]),
+  modes: () => exportSheetFile('Fellow_Training_System_Work_Modes.xlsx', [{ name: 'Work Modes', rows: modes.map(m => ({ Name: m.name })) }]),
+  requests: () => exportSheetFile('Fellow_Training_System_Requests.xlsx', [{ name: 'Requests', rows: requests.map(r => ({ SessionId: r.sessionId, SessionName: r.sessionName || '', RequesterEmail: r.requesterEmail || '', RequesterRole: r.requesterRole || '', Message: r.message || '', CreatedAt: r.createdAt || '', Resolved: r.resolved ? 'Yes' : 'No' })) }]),
+  assessments: () => exportSheetFile('Fellow_Training_System_Assessments.xlsx', [
+    { name: 'Assessments', rows: assessments.map(assessment => ({ Title: assessment.title, SessionId: assessment.sessionId, Status: assessment.status, Questions: (assessment.questions || []).length, Fellows: (assessment.assignmentGroups || []).flatMap(group => group.fellowIds || []).length })) },
+    { name: 'Questions', rows: assessments.flatMap(assessment => (assessment.questions || []).map(question => ({ Assessment: assessment.title, Question: question.text, Type: question.type, ImageUrl: question.imageUrl || '', Options: (question.options || []).map(option => typeof option === 'string' ? option : option.text).join(' | '), Correct: (question.correct || []).join(' | '), Rubric: question.rubric || '', ExpectedConcepts: (question.expectedConcepts || []).join(' | '), Points: question.points }))) },
+  ]),
+  review: () => exportSheetFile('Fellow_Training_System_Paragraph_Reviews.xlsx', [{ name: 'Paragraph reviews', rows: assessmentAttempts.flatMap(attempt => Object.entries(attempt.reviews || {}).map(([questionId, review]) => ({ AssessmentId: attempt.assessmentId, FellowId: attempt.fellowId, QuestionId: questionId, Status: review.status || '', Score: review.score ?? '', Feedback: review.feedback || '', Reviewer: review.reviewer || '', ReviewedAt: review.reviewedAt || '', AISuggestedScore: review.aiSuggestion?.suggestedScore ?? '', AIConfidence: review.aiSuggestion?.confidence ?? '', AIFeedback: review.aiSuggestion?.feedback || '' }))) }]),
+  analytics: () => exportSheetFile('Fellow_Training_System_Analytics.xlsx', [{ name: 'Analytics', rows: sessions.map(session => ({ Session: session.name, OnTime: attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length, Late: attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length })) }]),
+  incidents: () => exportSheetFile('Fellow_Training_System_Incidents.xlsx', [{ name: 'Incidents', rows: assessmentIncidents.map(item => ({ Time: item.createdAt || '', FellowId: item.fellowId || '', AssessmentId: item.assessmentId || '', Type: item.type || '', DeviceId: item.deviceId || '', Details: item.details || '' })) }]),
+  devices: () => exportSheetFile('Fellow_Training_System_Devices.xlsx', [{ name: 'Devices', rows: deviceRequests.map(r => ({ RequestedAt: r.requestedAt || '', FellowId: r.fellowId || '', AssessmentId: r.assessmentId || '', OldDeviceId: r.oldDeviceId || '', NewDeviceId: r.newDeviceId || '', Status: r.status || '', ResolvedAt: r.resolvedAt || '' })) }]),
+  planners: () => exportSheetFile('Fellow_Training_System_WA_Staff.xlsx', [{ name: 'WA Staff', rows: planners.map(p => ({ Name: p.name, Email: p.email || '', Role: p.role || '', CallSign: p.callSign || '', Group: p.group || '' })) }]),
+  roles: () => exportSheetFile('Fellow_Training_System_Roles.xlsx', [{ name: 'Roles', rows: roles.map(r => ({ Id: r.id, Label: r.label || '' })) }, { name: 'City codes', rows: (cityCodes || []).map(c => ({ City: c.city, Code: c.code })) }]),
+};
+const pageExportFor = (t) => pageExporters[t] || null;
 
 const requestUpdate = (req) => {
   const entry = { id: 'req' + Date.now(), ...req, createdAt: new Date().toISOString(), resolved: false };
@@ -1035,10 +1054,21 @@ return (
       <div className="wa14-content flex-1 min-w-0">
         <TopBar
           tab={tab} isFullAdmin={isFullAdmin} auth={auth} onLogout={onLogout} roles={roles}
-          onExport={exportExcel} onImport={importExcel} onReset={resetSeed} onAdd={() => setEditing('new')}
+          onAdd={() => setEditing('new')}
         />
         {toast && <div className={toastStyle}>{toast}</div>}
         <div className="wa14-content-inner pt-5 px-6 pb-10">
+          {isFullAdmin && pageExportFor(tab) && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              {tab === 'sessions' && (
+                <div style={{ display: 'flex', gap: 8, marginRight: 'auto' }}>
+                  <button onClick={importExcel} className={btnSecondary}><Upload size={14} /> Import Excel</button>
+                  <button onClick={resetSeed} className={btnGhost}><RotateCcw size={14} /> Reset</button>
+                </div>
+              )}
+              <button onClick={pageExportFor(tab)} className={btnSecondary}><Download size={14} /> Export Excel</button>
+            </div>
+          )}
           {(tab === 'calendar' || tab === 'sessions') && auth.role !== 'fellow' && (
             <FilterBar typeFilter={typeFilter} setTypeFilter={setTypeFilter} pillarTagFilter={pillarTagFilter} setPillarTagFilter={setPillarTagFilter} modeFilter={modeFilter} setModeFilter={setModeFilter} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} />
           )}
@@ -1059,8 +1089,14 @@ return (
               />
             </>
           )}
+          {tab === 'dashboard' && isAdmin && (
+            <DashboardPanel sessions={filtered} staff={planners} modes={modes} auth={auth} isFullAdmin={isFullAdmin} rooms={rooms} onSelect={setViewing} />
+          )}
+          {tab === 'legend' && (
+            <LegendPanel sessionTypes={sessionTypes} staff={planners} cityCodes={cityCodes} />
+          )}
           {tab === 'sessions' && isAdmin && (
-            <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} onDuplicate={duplicateSession} rooms={rooms} weeks={weeks} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners} startDate={academySettings?.startDate || null} />
+            <SessionsTable sessions={filtered} search={sessionSearch} setSearch={setSessionSearch} weekFilter={weekFilter} setWeekFilter={setWeekFilter} onEdit={setEditing} onDelete={deleteSession} onDuplicate={duplicateSession} onView={setViewing} rooms={rooms} weeks={weeks} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners} startDate={academySettings?.startDate || null} />
           )}
           {tab === 'staffCalendar' && isAdmin && (
             <StaffCalendar
@@ -1095,7 +1131,7 @@ return (
     )}
     {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({ ...session, date, start, end, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared: true }); setPlacement(null); }} onClose={() => setPlacement(null)} onAddSession={(date, start, end) => { setPlacement(null); setEditing({ ...blankSession(), date, start, end, weekday: date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '', week: date ? (weekForDate(date, academySettings?.startDate) ?? activeWeek) : 0, calendared: !!date && !!start && !!end }); }} />}
     {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next) => { saveSession(next); setAssigning(null); }} onClose={() => setAssigning(null)} />}
-    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} onDuplicate={isFullAdmin ? duplicateSession : null} onRemove={isFullAdmin ? unscheduleSession : null} />}
+    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} onDuplicate={isFullAdmin ? duplicateSession : null} onRemove={isFullAdmin ? unscheduleSession : null} onDelete={isFullAdmin ? deleteSession : null} />}
     {isAdmin && staffEditing && (
       <StaffTaskEditor task={staffEditing === 'new' ? null : staffEditing} isFullAdmin={isFullAdmin} onSave={saveStaffTask} onDelete={isFullAdmin && staffEditing !== 'new' ? deleteStaffTask : null} onClose={() => setStaffEditing(null)} />
     )}
@@ -1149,6 +1185,7 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
   const bandScale = makeBandScale(busyBands);
   const totalHeight = bandScale.total;
   const staffColor = '#D0A023';
+  const staffScrollRef = useRef(null);
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -1180,7 +1217,8 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
           ))}
         </div>
       )}
-      <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+      <div className="wa14-cal-scroll-wrap">
+      <div ref={staffScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
           <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
             <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
             <div className="relative" style={{ height: totalHeight }}>
@@ -1241,6 +1279,8 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
             );
           })}
         </div></div>
+      <FloatingScrollbar targetRef={staffScrollRef} />
+      </div>
       <div style={{ marginTop: 18, background: '#fff', border: '1px solid #DDE2E6', borderRadius: 8, padding: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Staff task list</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, minWidth: 480 }}>
@@ -1320,7 +1360,9 @@ function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
 function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests }) {
   const [open, setOpen] = useState(false);
   const tabs = [
+    ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }] : []),
     { id: 'calendar', label: 'Winter Academy Calendar', icon: CalendarIcon },
+    { id: 'legend', label: 'Legend', icon: ListIcon },
     ...(isAdmin ? [{ id: 'sessions', label: 'Sessions', icon: TableIcon }] : []),
     ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance', icon: KeyIcon }] : []),
     ...(isFullAdmin ? [
@@ -1367,17 +1409,14 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests
   );
 }
 
-function TopBar({ tab, isFullAdmin, auth, onLogout, onExport, onImport, onReset, onAdd, roles }) {
+function TopBar({ tab, isFullAdmin, auth, onLogout, onAdd, roles }) {
   return (
     <div className="bg-[#003223] border-b border-[#2A5C4B] px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 sticky top-0 z-20">
-      <div className="py-2.5 min-w-[170px]"><div className="font-extrabold text-lg sm:text-xl leading-tight">Training and Design</div><div className="text-[11.5px] text-[#9DB09D] mt-[3px] wa14-hide-mobile">Teach For Bangladesh</div></div>
+      <div className="py-2.5 min-w-[170px]"><div className="font-extrabold text-lg sm:text-xl leading-tight">Fellow Training System</div><div className="text-[11.5px] text-[#9DB09D] mt-[3px] wa14-hide-mobile">Teach For Bangladesh</div></div>
       <div className="flex items-center gap-3.5 py-3 flex-wrap">
         {isFullAdmin && (
           <div className="flex gap-2 flex-wrap">
             {(tab === 'calendar' || tab === 'sessions') && <button onClick={onAdd} className={btnPrimary}><Plus size={14} /> Add session</button>}
-            <button onClick={onImport} className={btnSecondary}><Upload size={14} /> Import Excel</button>
-            <button onClick={onExport} className={btnSecondary}><Download size={14} /> Export Excel</button>
-            <button onClick={onReset} className={btnGhost}><RotateCcw size={14} /> Reset</button>
           </div>
         )}
         <div className="flex items-center gap-2 text-xs text-[#9DB09D] border-l border-[#1F4A3C] pl-3.5 min-w-0">
@@ -1461,6 +1500,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
   });
   const bandScale = makeBandScale(busyBands);
   const totalHeight = bandScale.total;
+  const calScrollRef = useRef(null);
 
   return (
     <div>
@@ -1492,7 +1532,8 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
           ))}
         </div>
       )}
-      <div className="wa14-cal-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+      <div className="wa14-cal-scroll-wrap">
+      <div ref={calScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
           <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
             <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
             <div className="relative" style={{ height: totalHeight }}>
@@ -1542,7 +1583,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                         {height > 56 && ((s.rooms || []).length > 0 || (s.roomIds || []).length > 0) && (
                           <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><DoorOpen size={9} /> {getVisibleRooms(s, auth, roster, rooms).map(r => r.name + ' · ' + (r.facilitator || 'Facilitator not set')).join(', ') || 'Room not assigned'}</div>
                         )}
-                        {height > 56 && s.resources && s.resources.length > 0 && (
+                        {auth.role !== 'fellow' && height > 56 && s.resources && s.resources.length > 0 && (
                           <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><LinkIcon size={9} /> {s.resources.length} resource{s.resources.length > 1 ? 's' : ''}</div>
                         )}
                       </div>
@@ -1553,12 +1594,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
             );
           })}
         </div></div>
-      <div style={{ marginTop: 18, background: '#fff', border: '1px solid #DDE2E6', borderRadius: 8, padding: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Session list</div>
-        <div className="wa14-table-scroll"><div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18, minWidth: 480 }}>{weekSessions.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || toMin(a.start) - toMin(b.start)).map(s => <div key={s.id} onClick={() => onSelect(s)} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 0', borderBottom: '1px solid #EEF0F2', fontSize: 12.5, cursor: 'pointer' }}><span style={{ color: '#003223' }}>{s.name}</span><span style={{ color: '#003223', whiteSpace: 'nowrap' }}>{dateLabel(s.date)} · {s.start}–{s.end} · {fmtDur(durationMin(s))}</span></div>)}</div></div>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#003223' }}>Unscheduled sessions</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{sessions.filter(s => !s.date).map(s => <div key={s.id} draggable={!!onDrop} onDragStart={e => e.dataTransfer.setData('sessionId', String(s.id))} onClick={() => onPlace ? onPlace(s, '', '') : onSelect(s)} style={{ padding: '8px 10px', border: '1px solid #DDE2E6', borderLeft: '3px solid ' + getTypeColor(s.type, sessionTypes), borderRadius: 5, cursor: onDrop ? 'grab' : 'pointer', fontSize: 12.5 }}>{s.name || '(untitled)'}</div>)}</div>
-        {sessions.filter(s => !s.date).length === 0 && <div style={{ fontSize: 12.5, color: '#003223' }}>All sessions are scheduled.</div>}
+      <FloatingScrollbar targetRef={calScrollRef} />
       </div>
     </div>
   );
@@ -1984,8 +2020,202 @@ function DeviceRequestPanel({ requests, attempts, assessments, roster, onResolve
   );
 }
 
-function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, onDuplicate, rooms, weeks, sessionTypes, pillarTags, staff, startDate }) {
+// Per-mode calendared session counts + assigned minutes (same "scheduled" definition as TimeSummary).
+function modeTotals(sessions, modes) {
+  const modeList = modes || DEFAULT_MODES;
+  const modeNames = modeList.map(m => m.name);
+  const out = {};
+  modeNames.forEach(m => { out[m] = { count: 0, minutes: 0 }; });
+  (sessions || []).filter(s => s.calendared && s.start && s.end && s.week != null).forEach(s => {
+    const m = modeNames.includes(s.mode) ? s.mode : (modeNames[0] || 'Sync');
+    if (m && out[m]) { out[m].count += 1; out[m].minutes += durationMin(s); }
+  });
+  return out;
+}
+
+// Floating horizontal scrollbar that stays pinned to the bottom of the viewport
+// while its linked scroll container is on screen. The container's onScroll and
+// window resize keep the thumb in sync.
+function FloatingScrollbar({ targetRef }) {
+  const [state, setState] = useState({ show: false, size: 1, pos: 0 });
+  const trackRef = useRef(null);
+  useEffect(() => {
+    const el = targetRef.current;
+    if (!el) return;
+    const measure = () => {
+      const show = el.scrollWidth > el.clientWidth + 1;
+      const size = el.clientWidth / Math.max(1, el.scrollWidth);
+      const pos = el.scrollLeft / Math.max(1, el.scrollWidth - el.clientWidth);
+      setState({ show, size, pos });
+    };
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    window.addEventListener('resize', measure);
+    return () => { el.removeEventListener('scroll', measure); window.removeEventListener('resize', measure); };
+  }, [targetRef]);
+  if (!state.show) return null;
+  const jump = (e) => {
+    const el = targetRef.current, tr = trackRef.current;
+    if (!el || !tr) return;
+    const frac = (e.clientX - tr.getBoundingClientRect().left) / Math.max(1, tr.clientWidth);
+    el.scrollLeft = frac * (el.scrollWidth - el.clientWidth);
+  };
+  const thumbDown = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const el = targetRef.current;
+    if (!el) return;
+    const startX = e.clientX, startLeft = el.scrollLeft;
+    const move = (ev) => { el.scrollLeft = startLeft + (ev.clientX - startX) * (el.scrollWidth / el.clientWidth); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div ref={trackRef} onPointerDown={jump} style={{ position: 'sticky', bottom: 0, zIndex: 30, height: 14, display: 'flex', alignItems: 'center', background: 'rgba(37,38,37,0.55)', cursor: 'pointer', userSelect: 'none' }}>
+      <div style={{ position: 'relative', width: '100%', height: 6 }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, borderRadius: 3, background: 'rgba(37,38,37,0.4)' }} />
+        <div onPointerDown={thumbDown} style={{ position: 'absolute', top: 0, height: 6, borderRadius: 3, background: '#1F6F78', left: `calc(${state.pos * (100 - Math.max(state.size * 100, 20))}% )`, width: Math.max(state.size * 100, 20) + '%', cursor: 'grab' }} />
+      </div>
+    </div>
+  );
+}
+
+function DashboardPanel({ sessions, staff, modes, auth, isFullAdmin, rooms, onSelect }) {
+  const now = new Date();
+  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const upcoming = (sessions || []).filter(s => {
+    const st = sessionDateTime(s, 'start');
+    return st && st >= now && st <= in24h;
+  }).sort((a, b) => sessionDateTime(a, 'start') - sessionDateTime(b, 'start'));
+  const allStaff = [...(staff || []), SUPERADMIN_ACCOUNT];
+  const counts = allStaff.map(person => ({
+    person,
+    count: (sessions || []).filter(s => s.calendared && s.date && (s.facilitators || []).some(f => {
+      if (typeof f === 'string') return f === person.name || f === person.email;
+      const superadminMatch = f.staffName === SUPERADMIN_ACCOUNT.name || f.staffName === SUPERADMIN_ACCOUNT.email || (f.id && String(f.id) === 'superadmin');
+      return superadminMatch ? String(person.id) === 'superadmin' : (f.staffName === person.name || f.staffName === person.email);
+    })).length,
+  })).sort((a, b) => b.count - a.count || (a.person.name || '').localeCompare(b.person.name || ''));
+  const totals = modeTotals(sessions, modes);
+  const modeNames = (modes || DEFAULT_MODES).map(m => m.name);
+  const roomLabel = s => {
+    const named = (s.rooms || []).map(r => r.name).filter(Boolean)
+      .concat((s.roomIds || []).map(id => (rooms || []).find(r => r.id === id)?.name).filter(Boolean));
+    return named.join(', ') || 'Room not assigned';
+  };
+  const row = s => (
+    <div key={s.id} onClick={() => onSelect && onSelect(s)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid #1F4A3C', cursor: onSelect ? 'pointer' : 'default', flexWrap: 'wrap' }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 600 }}>{s.name}</div>
+        <div style={{ fontSize: 11.5, color: '#9DB09D', marginTop: 3 }}>{dateLabel(s.date)} · {s.weekday} · {s.start}–{s.end} · {fmtDur(durationMin(s))} · {roomLabel(s)}</div>
+      </div>
+      <div style={{ fontSize: 12, color: '#9DB09D', whiteSpace: 'nowrap' }}>{sessionDateTime(s, 'start').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div>
+    </div>
+  );
+  return (
+    <div style={{ maxWidth: 1000 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Dashboard</div>
+      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 18 }}>Sessions in the next 24 hours, staff load, and work-mode hours.</div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#D5E0D5' }}>Upcoming sessions (next 24 hours)</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
+        {upcoming.length === 0 ? <div style={{ padding: 14, fontSize: 12.5, color: '#D5E0D5' }}>No sessions in the next 24 hours.</div> : upcoming.map(row)}
+      </div>
+
+      {!isFullAdmin && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#D5E0D5' }}>My sessions</div>
+          <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '14px 16px', marginBottom: 24, maxWidth: 480 }}>
+            {counts.filter(c => c.person.id === auth.fellowId || c.person.email === auth.email || c.person.name === (auth.name || '')).map(c => (
+              <div key={String(c.person.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontWeight: 600 }}>{c.person.name}</span>
+                <span style={{ fontSize: 20, fontWeight: 700 }}>{c.count} session{c.count === 1 ? '' : 's'}</span>
+              </div>
+            ))}
+            {counts.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No staff record matches your account.</div>}
+          </div>
+        </>
+      )}
+
+      {isFullAdmin && (
+        <>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#D5E0D5' }}>Sessions per staff</div>
+          <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', marginBottom: 24, maxWidth: 620 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Staff</th><th style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Sessions</th></tr></thead>
+              <tbody>{counts.map(c => (
+                <tr key={String(c.person.id)} style={{ borderTop: '1px solid #1F4A3C' }}>
+                  <td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{c.person.name}{c.person.callSign ? ' · ' + String(c.person.callSign).toUpperCase() : ''}</td>
+                  <td style={{ padding: '8px 12px', fontWeight: 700 }}>{c.count}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#D5E0D5' }}>Work modes — calendared sessions & assigned hours</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
+        {modeNames.map(m => (
+          <div key={m} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '14px 16px' }}>
+            <div style={{ fontSize: 12.5, color: '#D5E0D5', fontWeight: 600, marginBottom: 8 }}>{m}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 3 }}>{fmtDur(totals[m].minutes)}</div>
+            <div style={{ fontSize: 11.5, color: '#9DB09D' }}>{totals[m].count} calendared session{totals[m].count === 1 ? '' : 's'}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LegendPanel({ sessionTypes, staff, cityCodes }) {
+  const types = (sessionTypes && sessionTypes.length ? sessionTypes : DEFAULT_SESSION_TYPES);
+  const people = [...(staff || []), SUPERADMIN_ACCOUNT];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, maxWidth: 1100 }}>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Session types</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {types.map(t => (
+            <div key={String(t.id) + (t.name || '')} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, background: getTypeColor(t.name, null), flexShrink: 0 }} />
+              <span style={{ color: '#D5E0D5' }}>{t.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Facilitators</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {people.map(p => (
+            <div key={String(p.id) + (p.name || '')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+              <span style={{ color: '#D5E0D5' }}>{p.name || ''}</span>
+              <span style={callSignChipStyle}>{p.callSign || callSignFromName(p.name)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Regions</div>
+        {!(cityCodes || []).length ? <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No region call signs yet.</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(cityCodes || []).map(c => (
+              <div key={String(c.id) + (c.city || '')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
+                <span style={{ color: '#D5E0D5' }}>{c.city}</span>
+                <span style={callSignChipStyle}>{c.code}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, onDuplicate, onView, rooms, weeks, sessionTypes, pillarTags, staff, startDate }) {
   const displayedWeek = (s) => (s.date && startDate) ? weekForDate(s.date, startDate) : (s.week != null ? s.week : null);
+  const tableScrollRef = useRef(null);
+  const fav = ok => <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>{ok ? <CheckIcon size={14} color="#5FA97E" weight="bold" /> : <X size={14} color="#D65641" weight="bold" />}</span>;
   const rows = useMemo(() => {
     let r = sessions.slice();
     const query = search.trim().toLowerCase();
@@ -2005,23 +2235,22 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
         </select>
         <span style={{ fontSize: 12.5, color: '#9DB09D' }}>{rows.length} sessions</span>
       </div>
-      <div className="wa14-table-scroll" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>
-        <table style={{ minWidth: 1200, borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Week', 'Date', 'Time', 'Session', 'Type', 'Mode', 'Pillars', 'Facilitators', 'Outcomes', ''].map(h => (<th key={h} style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>))}</tr></thead>
+      <div className="wa14-table-scroll-wrap"><div ref={tableScrollRef} className="wa14-table-scroll wa14-floating-scroll" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>
+        <table style={{ minWidth: 920, borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Week', 'Date', 'Time', 'Session', 'Type', 'Mode', 'Pillars', 'Facilitators', 'Outcomes', ''].map(h => (<th key={h} style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B', textAlign: h === 'Type' || h === 'Mode' || h === 'Pillars' || h === 'Facilitators' || h === 'Outcomes' ? 'center' : 'left' }}>{h}</th>))}</tr></thead>
           <tbody>
             {rows.map(s => (
-              <tr key={s.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+              <tr key={s.id} onClick={() => onView && onView(s)} style={{ borderBottom: '1px solid #1F4A3C', cursor: onView ? 'pointer' : 'default' }}>
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap', fontWeight: 600 }}>{displayedWeek(s) != null ? 'Week ' + String(displayedWeek(s)).padStart(2, '0') : '--'}</td>
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.date ? dateLabel(s.date) : '--'}</td>
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.start ? s.start + ' - ' + s.end : '--'}</td>
-                <td style={{ padding: '8px 12px', fontWeight: 500, cursor: 'pointer', maxWidth: 220 }} onClick={() => onEdit(s)}>{s.name || '(untitled)'}</td>
-                <td style={{ padding: '8px 12px' }}><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: (getTypeColor(s.type, sessionTypes) || '#ccc') + '26', color: '#D5E0D5' }}>{s.type}</span></td>
-                <td style={{ padding: '8px 12px' }}><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: (getModeColor(s.mode, null) || '#ccc') + '26', color: getModeColor(s.mode, null), fontWeight: 600 }}>{s.mode}</span></td>
-                <td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{sessionPillarNames(s, pillarTags).join(', ') || '--'}</td>
-                <td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{fmtFacilitators(s.facilitators, rooms, staff) || '--'}</td>
-
-                <td style={{ padding: '8px 12px', color: '#D5E0D5', maxWidth: 260 }}>{s.outcomes && s.outcomes.length ? s.outcomes.join('; ') : '--'}</td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '8px 12px', fontWeight: 500, maxWidth: 220 }}>{s.name || '(untitled)'}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav(Boolean(s.type))}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav(Boolean(s.mode))}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav(sessionPillarNames(s, pillarTags).length > 0)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav((s.facilitators || []).length > 0)}</td>
+                <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav((s.outcomes || []).length > 0)}</td>
+                <td onClick={e => e.stopPropagation()} style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button onClick={() => onEdit(s)} style={linkBtn}>Edit</button>
                   <button onClick={() => onDuplicate(s)} style={{ ...linkBtn, marginLeft: 10 }}>Duplicate</button>
                   <button onClick={() => { if (window.confirm('Delete this session?')) onDelete(s.id); }} style={{ ...linkBtn, color: '#D0A023', marginLeft: 10 }}>Delete</button>
@@ -2029,7 +2258,8 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
+      <FloatingScrollbar targetRef={tableScrollRef} />
       </div>
     </div>
   );
@@ -2075,10 +2305,10 @@ function PillarsPanel({ pillarTags, onChange, showToast }) {
 
 function WorkModesPanel({ modes, onChange, showToast }) {
   const list = modes || [];
-  const [name, setName] = useState(''); const [color, setColor] = useState('#D65641');
-  const save = e => { e.preventDefault(); if (!name.trim()) return; onChange([...list, { id: 'mode' + Date.now(), name: name.trim(), color }]); setName(''); showToast('Work mode added'); };
-  const update = (id, key, value) => onChange(list.map(p => p.id === id ? { ...p, [key]: value } : p));
-  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Add, edit, or remove work modes (e.g. Sync, Async, Coaching, Clinic, Break). Work modes are used for time tracking.</div><form onSubmit={save} style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 18, maxWidth: 560 }}><input className={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="New work mode name" /><input type="color" value={color} onChange={e => setColor(e.target.value)} style={{ width: 42, height: 35 }} /><button type="submit" className={btnPrimary}><Plus size={14} /> Add</button></form><div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 560 }}>{list.map(p => <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 10 }}><input className={inputStyle} value={p.name} onChange={e => update(p.id, 'name', e.target.value)} /><input type="color" value={p.color} onChange={e => update(p.id, 'color', e.target.value)} style={{ width: 42, height: 35 }} /><button onClick={() => onChange(list.filter(item => item.id !== p.id))} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div>)}</div></div>;
+  const [name, setName] = useState('');
+  const save = e => { e.preventDefault(); if (!name.trim()) return; onChange([...list, { id: 'mode' + Date.now(), name: name.trim(), color: DEFAULT_MODE_COLORS[name.trim()] || '#9DB09D' }]); setName(''); showToast('Work mode added'); };
+  const update = (id, value) => onChange(list.map(p => p.id === id ? { ...p, name: value } : p));
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Add, edit, or remove work modes (e.g. Sync, Async, Coaching, Clinic, Break). Work modes are used for time tracking and appear without colors.</div><form onSubmit={save} style={{ display: 'flex', gap: 8, alignItems: 'end', marginBottom: 18, maxWidth: 560 }}><input className={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="New work mode name" /><button type="submit" className={btnPrimary}><Plus size={14} /> Add</button></form><div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 560 }}>{list.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No work modes yet.</div>}{list.map(p => <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 10 }}><span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, background: '#1F4A3C', color: '#D5E0D5', fontWeight: 600 }}>{p.name}</span><input className={inputStyle} value={p.name} onChange={e => update(p.id, e.target.value)} /><button onClick={() => onChange(list.filter(item => item.id !== p.id))} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button></div>)}</div></div>;
 }
 
 const linkBtn = { background: 'none', border: 'none', color: '#D65641', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0 };
@@ -2103,7 +2333,7 @@ function TimeSummary({ sessions, weeks, modes }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: 12, marginBottom: 24 }}>
         {modeNames.map(m => (
           <div key={m} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '16px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: getModeColor(m, modes) }} /><span style={{ fontSize: 12.5, color: '#D5E0D5', fontWeight: 600 }}>{m}</span></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}><Clock size={13} /><span style={{ fontSize: 12.5, color: '#D5E0D5', fontWeight: 600 }}>{m}</span></div>
             <div style={{ fontSize: 24, fontWeight: 700 }}>{fmtDur(byMode[m].total)}</div>
           </div>
         ))}
@@ -2118,7 +2348,7 @@ function TimeSummary({ sessions, weeks, modes }) {
           <tbody>
             {modeNames.map(m => (
               <tr key={m} style={{ borderBottom: '1px solid #1F4A3C' }}>
-                <td style={{ padding: '8px 12px', fontWeight: 600, color: getModeColor(m, modes) }}>{m}</td>
+                <td style={{ padding: '8px 12px', fontWeight: 600, color: '#D5E0D5' }}>{m}</td>
                 {weekList.map(w => <td key={w} style={{ padding: '8px 10px', textAlign: 'center', color: '#D5E0D5' }}>{fmtDur(byMode[m].byWeek[w] || 0)}</td>)}
                 <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 600 }}>{fmtDur(byMode[m].total)}</td>
               </tr>
@@ -2355,7 +2585,7 @@ function AnalyticsPanel({ sessions, attendance, attempts, onSeedDemo, onDeleteDe
   return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Attendance and assessment overview for Staff.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>On-time attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{onTime}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Late attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{late}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Completed assessments</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{completed}</div></div></div><div style={{ marginTop: 24, fontSize: 13, fontWeight: 700 }}>Session attendance</div><div style={{ marginTop: 8, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 780 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: 9 }}>Session</th><th style={{ padding: 9 }}>On time</th><th style={{ padding: 9 }}>Late</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}><td style={{ padding: 9 }}>{session.name}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length}</td></tr>)}</tbody></table></div></div>;
 }
 
-function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit, onDuplicate, onRemove }) {
+function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit, onDuplicate, onRemove, onDelete }) {
   const color = getTypeColor(session.type, sessionTypes);
   const pillarTagNames = sessionPillarNames(session, pillarTags);
   const [reqOpen, setReqOpen] = useState(false);
@@ -2377,7 +2607,7 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 12, background: color + '26', color: '#D5E0D5', fontWeight: 600 }}>{session.type}</span>
-          <span style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 12, background: (getModeColor(session.mode, modes) || '#ccc') + '26', color: getModeColor(session.mode, modes), fontWeight: 600 }}>{session.mode}</span>
+          <span style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 12, background: '#1F4A3C', color: '#D5E0D5', fontWeight: 600 }}>{session.mode}</span>
           {pillarTagNames.map(name => <span key={name} style={{ fontSize: 11.5, padding: '3px 10px', borderRadius: 12, background: '#1F4A3C', color: '#D5E0D5', fontWeight: 600 }}>{name}</span>)}
         </div>
         <DetailRow label="When">{session.date ? dateLabel(session.date) + ' · ' + session.weekday : 'Unscheduled'}</DetailRow>
@@ -2388,8 +2618,9 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#9DB09D]'}><Edit size={12} /> Edit session</button>}
         {auth.role !== 'fellow' && onDuplicate && <button onClick={() => { onClose(); onDuplicate(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#D0A023]'}><CopyIcon size={12} /> Duplicate session</button>}
         {auth.role !== 'fellow' && onRemove && <button onClick={() => { if (!window.confirm('Remove this session from the calendar? It will move to the unscheduled list.')) return; onClose(); onRemove(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#D65641]'}><Trash2 size={12} /> Remove from calendar</button>}
+        {auth.role !== 'fellow' && onDelete && <button onClick={() => { if (!window.confirm('Delete this session?')) return; onClose(); onDelete(session.id); }} className={btnSecondary + ' text-[#D0A023] border-[#E3B8B8] w-full justify-center mt-1'}>Delete session</button>}
 
-        {session.resources && session.resources.length > 0 && (
+        {auth.role !== 'fellow' && session.resources && session.resources.length > 0 && (
           <div style={{ marginTop: 18 }}>
             <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 8 }}>Resources</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

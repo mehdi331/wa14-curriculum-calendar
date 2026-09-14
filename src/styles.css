@@ -45,6 +45,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .wa14-content-inner { padding: 20px 24px 40px; }
 .wa14-cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .wa14-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.wa14-floating-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.wa14-floating-scroll::-webkit-scrollbar { display: none; }
 .wa14-table-scroll table { min-width: 760px; }
 .wa14-grid-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .proctored { user-select: none; -webkit-user-select: none; }
