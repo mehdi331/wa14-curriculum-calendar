@@ -41,6 +41,31 @@ const WEEKS = [0, 1, 2, 3, 4, 5, 6];
 const GRID_START = 0;      // 00:00 -- full-day grid
 const GRID_END = 24 * 60;    // 24:00 (end-of-day boundary)
 const PX_PER_MIN = 0.95;
+const BAND_BUSY_PER_MIN = PX_PER_MIN * 2;  // hour rows that contain at least one entry
+const BAND_IDLE_PER_MIN = PX_PER_MIN / 2;  // hour rows empty on every visible day
+
+// Builds a vertical time scale where each hourly band has its own height:
+// bands containing entries render at 2x the base size, completely empty bands at half.
+function makeBandScale(busyBands) {
+  const offsets = [];
+  let total = 0;
+  for (let band = 0; band < 24; band++) {
+    offsets[band] = total;
+    total += 60 * (busyBands.has(band) ? BAND_BUSY_PER_MIN : BAND_IDLE_PER_MIN);
+  }
+  const y = mins => {
+    if (mins >= GRID_END) return total;
+    const band = Math.max(0, Math.min(23, Math.floor((mins - GRID_START) / 60)));
+    return offsets[band] + (mins - (GRID_START + band * 60)) * (busyBands.has(band) ? BAND_BUSY_PER_MIN : BAND_IDLE_PER_MIN);
+  };
+  const minutesAt = py => {
+    let band = 0;
+    while (band < 23 && py >= offsets[band] + 60 * (busyBands.has(band) ? BAND_BUSY_PER_MIN : BAND_IDLE_PER_MIN)) band++;
+    const scale = busyBands.has(band) ? BAND_BUSY_PER_MIN : BAND_IDLE_PER_MIN;
+    return Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + band * 60 + Math.round((py - offsets[band]) / scale / 15) * 15));
+  };
+  return { offsets, total, y, minutesAt };
+}
 
 // ---- Access rule ---------------------------------------------------------
 // Staff / planners use single-word emails: name@teachforbangladesh.org
@@ -1111,10 +1136,19 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
   };
   const visibleDays = days.filter(([d]) => !hiddenDays[d]);
   const hours = []; for (let m = GRID_START; m < GRID_END; m += 60) hours.push(m);
-  const totalHeight = (GRID_END - GRID_START) * PX_PER_MIN;
-  const staffColor = '#D0A023';
   const staffWeekTasks = showStaff ? staffTasks.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek || 0)) : [];
   const mainWeekTasks = showMain ? sessions.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek || 0)) : [];
+  const visibleDayDates = new Set(visibleDays.map(([d]) => d));
+  const busyBands = new Set();
+  [...staffWeekTasks, ...mainWeekTasks].forEach(s => {
+    if (!visibleDayDates.has(s.date)) return;
+    const start = toMin(s.start) || 0;
+    const end = wrapsMidnight(s) ? GRID_END : (toMin(s.end) || Math.min(start + 60, GRID_END));
+    for (let band = Math.floor(start / 60); band < Math.ceil(end / 60) && band < 24; band++) busyBands.add(band);
+  });
+  const bandScale = makeBandScale(busyBands);
+  const totalHeight = bandScale.total;
+  const staffColor = '#D0A023';
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -1150,7 +1184,7 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
           <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
             <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
             <div className="relative" style={{ height: totalHeight }}>
-              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: (m - GRID_START) * PX_PER_MIN - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
+              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
             </div>
           </div>
           {visibleDays.map(([d, wd]) => {
@@ -1164,21 +1198,22 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
                 <div className="relative" style={{ height: totalHeight }} onClick={e => {
                   if (!isFullAdmin || e.target !== e.currentTarget) return;
                   const rect = e.currentTarget.getBoundingClientRect();
-                  const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15));
+                  const minutes = bandScale.minutesAt(e.clientY - rect.top);
                   const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
                   onEditStaff({ ...blankStaffTask(), date: d, weekday: wd, start, end: start });
                 }} onDragOver={e => e.preventDefault()} onDrop={e => {
                   e.preventDefault();
-                  try { const item = JSON.parse(e.dataTransfer.getData('application/json')); if (item.kind !== 'staff-task' || !isFullAdmin) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15)); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); const weekday = new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }); onEditStaff({ ...item, date: d, weekday, start, end: start, week: startDate ? weekForDate(d, startDate) : 0, calendared: true }); } catch {}
+                  try { const item = JSON.parse(e.dataTransfer.getData('application/json')); if (item.kind !== 'staff-task' || !isFullAdmin) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = bandScale.minutesAt(e.clientY - rect.top); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); const weekday = new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }); onEditStaff({ ...item, date: d, weekday, start, end: start, week: startDate ? weekForDate(d, startDate) : 0, calendared: true }); } catch {}
                 }}>
-                  {hours.map(m => (<div key={m} style={{ position: 'absolute', top: (m - GRID_START) * PX_PER_MIN, left: 0, right: 0, borderTop: '1px solid #F2F3F4' }} />))}
+                  {hours.map(m => (<div key={m} style={{ position: 'absolute', top: bandScale.offsets[(m - GRID_START) / 60], left: 0, right: 0, borderTop: '1px solid #F2F3F4' }} />))}
                   {dayMain.map(({ s, col, cols }) => {
                     const start = toMin(s.start) || 0;
-                    const height = Math.max((wrapsMidnight(s) ? (24 * 60 - start) : (((toMin(s.end) || start)) - start)) * PX_PER_MIN, 16);
+                    const endMin = wrapsMidnight(s) ? GRID_END : (toMin(s.end) || start);
+                    const height = Math.max(bandScale.y(endMin) - bandScale.y(start), 16);
                     const color = getTypeColor(s.type, null);
                     return (
                       <div key={'main-' + s.id} onClick={() => onSelect(s)} style={{
-                        position: 'absolute', top: start * PX_PER_MIN, left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height,
+                        position: 'absolute', top: bandScale.y(start), left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height,
                         background: color + '26', borderLeft: '3px solid ' + color, borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', opacity: 0.7
                       }} title={s.name + ' (main session)'}>
                         <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}</div>
@@ -1188,10 +1223,11 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
                   })}
                   {dayStaff.map(({ s, col, cols }) => {
                     const start = toMin(s.start) || 0;
-                    const height = Math.max((wrapsMidnight(s) ? (24 * 60 - start) : (((toMin(s.end) || start)) - start)) * PX_PER_MIN, 16);
+                    const endMin = wrapsMidnight(s) ? GRID_END : (toMin(s.end) || start);
+                    const height = Math.max(bandScale.y(endMin) - bandScale.y(start), 16);
                     return (
                       <div key={'staff-' + s.id} draggable={isFullAdmin} onDragStart={e => e.dataTransfer.setData('application/json', JSON.stringify(s))} onClick={() => isFullAdmin ? onEditStaff(s) : onSelect(s)} style={{
-                        position: 'absolute', top: start * PX_PER_MIN, left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height,
+                        position: 'absolute', top: bandScale.y(start), left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height,
                         background: staffColor + '26', borderLeft: '3px solid ' + staffColor, borderRadius: 4, padding: '3px 6px', cursor: isFullAdmin ? 'grab' : 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', boxShadow: 'inset 0 0 0 1px ' + staffColor
                       }} title={s.name + ' (staff task)'}>
                         <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}{s.owner ? ' · ' + s.owner : ''}</div>
@@ -1284,7 +1320,7 @@ function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
 function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests }) {
   const [open, setOpen] = useState(false);
   const tabs = [
-    { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
+    { id: 'calendar', label: 'Winter Academy Calendar', icon: CalendarIcon },
     ...(isAdmin ? [{ id: 'sessions', label: 'Sessions', icon: TableIcon }] : []),
     ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance', icon: KeyIcon }] : []),
     ...(isFullAdmin ? [
@@ -1315,7 +1351,7 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests
     <>
       <div className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3 py-2 bg-[#005B3F] border-b border-[#2A5C4B]">
         <button onClick={() => setOpen(v => !v)} className={btnSecondary} aria-label="Toggle navigation"><ListIcon size={16} /> Menu {openRequests > 0 && <span className="ml-1 text-xs font-bold text-[#D65641]">({openRequests})</span>}</button>
-        <div className="text-[13px] font-bold text-[#D5E0D5]">{tabs.find(t => t.id === tab)?.label || 'Calendar'}</div>
+        <div className="text-[13px] font-bold text-[#D5E0D5]">{tabs.find(t => t.id === tab)?.label || 'Winter Academy Calendar'}</div>
       </div>
       {open && <button aria-label="Close navigation" onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,32,0.35)', border: 0, zIndex: 40 }} />}
       <nav className={`wa14-sidebar shrink-0 bg-[#005B3F] text-[#D5E0D5] flex flex-col sticky top-0 self-stretch overflow-hidden transition-all duration-200 ease-out ${open ? 'w-[196px] open' : 'w-[54px]'} max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-[41] max-lg:w-[220px] ${open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-[110%]'}`}>
@@ -1414,8 +1450,17 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
   const visibleDays = days.filter(([d]) => !hiddenDays[d]);
   const hours = [];
   for (let m = GRID_START; m < GRID_END; m += 60) hours.push(m);
-  const totalHeight = (GRID_END - GRID_START) * PX_PER_MIN;
   const weekSessions = sessions.filter(s => days.some(d => d[0] === s.date) || s.week === (activeWeek || 0));
+  const visibleDayDates = new Set(visibleDays.map(([d]) => d));
+  const busyBands = new Set();
+  weekSessions.forEach(s => {
+    if (!visibleDayDates.has(s.date)) return;
+    const start = toMin(s.start) || 0;
+    const end = wrapsMidnight(s) ? GRID_END : (toMin(s.end) || Math.min(start + 60, GRID_END));
+    for (let band = Math.floor(start / 60); band < Math.ceil(end / 60) && band < 24; band++) busyBands.add(band);
+  });
+  const bandScale = makeBandScale(busyBands);
+  const totalHeight = bandScale.total;
 
   return (
     <div>
@@ -1451,7 +1496,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
           <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
             <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
             <div className="relative" style={{ height: totalHeight }}>
-              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: (m - GRID_START) * PX_PER_MIN - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
+              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
             </div>
           </div>
           {visibleDays.map(([d, wd]) => {
@@ -1464,10 +1509,10 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                 <div className="h-[46px] box-border border-b border-[#EEF0F2] bg-[#F7F8F9] text-[12.5px] font-semibold text-center pt-[5px] text-[#003223]">
                   {wd}<div className="font-normal text-[#003223] text-[11px] leading-tight">{dateLabel(d)}</div>
                 </div>
-                <div className="relative" style={{ height: totalHeight }} onClick={e => { if (!onPlace || e.target !== e.currentTarget) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15)); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onPlace(null, d, start); }} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const id = Number(e.dataTransfer.getData('sessionId')); const session = sessions.find(item => item.id === id); if (!session || !onDrop) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = Math.max(GRID_START, Math.min(GRID_END - 15, GRID_START + Math.round((e.clientY - rect.top) / PX_PER_MIN / 15) * 15)); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onDrop(session, d, start); }}>
-                  {hours.map(m => (<div key={m} style={{ position: 'absolute', top: (m - GRID_START) * PX_PER_MIN, left: 0, right: 0, borderTop: '1px solid #F2F3F4' }} />))}
+                <div className="relative" style={{ height: totalHeight }} onClick={e => { if (!onPlace || e.target !== e.currentTarget) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = bandScale.minutesAt(e.clientY - rect.top); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onPlace(null, d, start); }} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const id = Number(e.dataTransfer.getData('sessionId')); const session = sessions.find(item => item.id === id); if (!session || !onDrop) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = bandScale.minutesAt(e.clientY - rect.top); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onDrop(session, d, start); }}>
+                  {hours.map(m => (<div key={m} style={{ position: 'absolute', top: bandScale.offsets[(m - GRID_START) / 60], left: 0, right: 0, borderTop: '1px solid #F2F3F4' }} />))}
                   {carryOver.map(s => {
-                    const height = Math.max(toMin(s.end) * PX_PER_MIN, 16);
+                    const height = Math.max(bandScale.y(toMin(s.end)), 16);
                     const color = getTypeColor(s.type, sessionTypes);
                     return (
                       <div key={s.id + '-cont'} draggable={!!onDrop} onDragStart={e => e.dataTransfer.setData('sessionId', String(s.id))} onClick={() => onSelect(s)} style={{
@@ -1481,11 +1526,12 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                   })}
                   {layoutOverlapping(daySessions).map(({ s, col, cols }) => {
                     const start = toMin(s.start) || 0;
-                    const height = Math.max((wrapsMidnight(s) ? (24 * 60 - start) : (((toMin(s.end) || start)) - start)) * PX_PER_MIN, 16);
+                    const endMin = wrapsMidnight(s) ? GRID_END : (toMin(s.end) || start);
+                    const height = Math.max(bandScale.y(endMin) - bandScale.y(start), 16);
                     const color = getTypeColor(s.type, sessionTypes);
                     return (
                       <div key={s.id} draggable={!!onDrop} onDragStart={e => e.dataTransfer.setData('sessionId', String(s.id))} onClick={() => onSelect(s)} style={{
-                        position: 'absolute', top: start * PX_PER_MIN, left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height, background: color + '26', borderLeft: '3px solid ' + color,
+                        position: 'absolute', top: bandScale.y(start), left: `calc(${col * 100 / cols}% + 2px)`, width: `calc(${100 / cols}% - 4px)`, height, background: color + '26', borderLeft: '3px solid ' + color,
                         borderRadius: 4, padding: '3px 6px', cursor: 'pointer', overflow: 'hidden', fontSize: 10.5, lineHeight: 1.25, boxSizing: 'border-box', overflowWrap: 'breakWord', wordBreak: 'breakWord'
                       }} title={s.name}>
                         <div style={{ fontWeight: 600, color: '#1B2733' }}>{s.name}</div>
