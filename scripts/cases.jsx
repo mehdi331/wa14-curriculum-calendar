@@ -33,6 +33,11 @@ const sessions = [
   { id: 3, week: 2, date: '', weekday: '', start: '', end: '', name: 'Unscheduled', type: 'Coaching', pillarIds: [], mode: 'Sync', facilitators: [], roomIds: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: false },
 ];
 const afaGroups = ['AFA 1', 'Legacy AFA 9'];
+const attendanceRecs = [
+  { sessionId: 1, fellowId: 'fe1', fellowName: 'Fellow One', status: 'on_time', recordedAt: '2026-10-25T09:02:00Z', method: 'button' },
+  { sessionId: 1, fellowId: 'fe2', fellowName: 'Fellow Two', status: 'late', recordedAt: '2026-10-25T09:08:00Z', method: 'button' },
+];
+const fellowAuth = { email: 'f1@x.dev', role: 'fellow', fellowId: 'fe1', afaGroup: 'AFA 1' };
 
 const hidden = {};
 const noop = () => {};
@@ -50,6 +55,8 @@ export const cases = [
   ['WorkModesPanel', () => <P.WorkModesPanel modes={null} onChange={noop} showToast={noop} />],
   ['TimeSummary', () => <P.TimeSummary sessions={sessions} modes={null} />],
   ['ExpandedAnalyticsPanel', () => <P.ExpandedAnalyticsPanel sessions={sessions} attendance={[]} attempts={[]} assessments={[]} roster={roster} afaGroups={afaGroups} onSeedDemo={noop} onDeleteDemo={noop} />],
+  ['FellowAttendanceBreakdown', () => <P.FellowAttendanceBreakdown sessions={sessions} attendance={[{ id: 'a1', sessionId: 1, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T09:05:00.000Z' }, { id: 'a2', sessionId: 1, fellowId: 'fe2', status: 'late', recordedAt: '2026-10-25T09:20:00.000Z' }]} fellows={roster} roster={roster} />],
+  ['ExpandedAnalyticsPanel-attendance', () => <P.ExpandedAnalyticsPanel sessions={sessions} attendance={[{ id: 'a1', sessionId: 1, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T09:05:00.000Z' }, { id: 'a2', sessionId: 1, fellowId: 'fe2', status: 'late', recordedAt: '2026-10-25T09:20:00.000Z' }, { id: 'a3', sessionId: 2, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T10:05:00.000Z' }]} attempts={[]} assessments={[]} roster={roster} afaGroups={afaGroups} onSeedDemo={noop} onDeleteDemo={noop} />],
   ['ParagraphReviewPanel', () => <P.ParagraphReviewPanel attempts={[]} assessments={[]} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={noop} />],
   ['ViewPanel', () => <P.ViewPanel session={sessions[0]} auth={auth} rooms={rooms} sessionTypes={null} pillarTags={null} modes={null} onAssign={noop} onRequestUpdate={noop} onClose={noop} />],
   ['RosterPanel', () => <P.RosterPanel roster={roster} staff={planners} cityCodes={[{ id:'c1', city:'Dhaka', code:'DH' }]} onChange={noop} onAccount={noop} showToast={noop} />],
@@ -67,7 +74,10 @@ export const cases = [
   ['StaffTaskEditor-edit', () => <P.StaffTaskEditor task={{ id: 'st1', kind: 'staff-task', name: 'Prep slides', date: '2026-10-25', weekday: 'Sunday', start: '09:00', end: '10:00', week: 1, notes: 'some notes', owner: 'Mehdi', status: 'todo' }} isFullAdmin onSave={noop} onDelete={noop} onClose={noop} />],
   ['TopBar', () => <P.TopBar tab="calendar" isFullAdmin auth={auth} onLogout={noop} onExport={noop} onImport={noop} onReset={noop} onAdd={noop} />],
   ['FilterBar', () => <P.FilterBar typeFilter="all" setTypeFilter={noop} pillarTagFilter="all" setPillarTagFilter={noop} modeFilter="all" setModeFilter={noop} sessionTypes={null} pillarTags={null} modes={null} />],
-  ['AttendanceCodePanel', () => <P.AttendanceCodePanel sessions={sessions} codes={[{ id:'c1', sessionId:1, code:'AB12CD', used:false, usedBy:'', usedByName:'', usedAt:'' }]} attendance={[]} roster={roster} onGenerate={noop} onDeleteSessionCodes={noop} onExport={noop} />],
+  ['MyAttendancePanel', () => <P.MyAttendancePanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} />],
+  ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} onExport={noop} />],
+  ['FellowOverview', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} />],
+  ['FellowAnalyticsPanel', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} />],
   ['IncidentLogPanel', () => <P.IncidentLogPanel incidents={[{ id:'i1', createdAt:new Date().toISOString(), fellowId:'fe1', assessmentId:'a1', type:'tab_hidden', deviceId:'dev-abc', details:'Tab hidden' }]} attempts={attempts} assessments={assessments} roster={roster} sessions={sessions} />],
   ['DeviceRequestPanel', () => <P.DeviceRequestPanel requests={[{ id:'dev1', attemptId:'at1', assessmentId:'a1', fellowId:'fe1', oldDeviceId:'dev-old', newDeviceId:'dev-new', status:'pending', requestedAt:new Date().toISOString() }]} attempts={attempts} assessments={assessments} roster={roster} onResolve={noop} />],
   ['SessionAssessmentBreakdown', () => <P.SessionAssessmentBreakdown sessions={sessions} assessments={assessments} attempts={attempts} roster={roster} fellows={roster} />],

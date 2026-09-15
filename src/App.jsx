@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, Copy as CopyIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon, NotePencil as Edit } from '@phosphor-icons/react';
+import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, Copy as CopyIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon, NotePencil as Edit, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, GoogleAuthProvider } from 'firebase/auth';
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
@@ -145,21 +145,7 @@ function toIsoDate(d) {
   const day = String(d.getDate()).padStart(2, '0');
   return y + '-' + m + '-' + day;
 }
-// Responsive design, attendance codes, grade release & assessment integrity helpers
-function generateAttendanceCodes(count, length) {
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const codes = new Set();
-  const size = Math.max(4, Math.min(10, Number(length) || 6));
-  const total = Math.max(1, Math.min(500, Number(count) || 20));
-  let guard = 0;
-  while (codes.size < total && guard < total * 50) {
-    guard += 1;
-    let code = '';
-    for (let i = 0; i < size; i += 1) code += alphabet[Math.floor(Math.random() * alphabet.length)];
-    codes.add(code);
-  }
-  return Array.from(codes);
-}
+// Responsive design, attendance, scheduling, grade release & assessment integrity helpers
 function friendlyFellowName(entry, roster) {
   if (!entry) return 'Fellow';
   const found = (roster || []).find(item => String(item.id) === String(entry.fellowId || entry.fellow_id || entry.id));
@@ -546,7 +532,7 @@ function MainApp({ auth, onLogout }) {
   const [assessmentQuestions, setAssessmentQuestions] = useState(null);
   const [assessmentAttempts, setAssessmentAttempts] = useState(null);
   const [attendance, setAttendance] = useState(null);
-  const [attendanceCodes, setAttendanceCodes] = useState(null);
+  
   const [assessmentIncidents, setAssessmentIncidents] = useState(null);
   const [deviceRequests, setDeviceRequests] = useState(null);
   const [staffTasks, setStaffTasks] = useState(null);
@@ -588,7 +574,7 @@ function MainApp({ auth, onLogout }) {
   const questionsSaveTimer = useRef(null);
   const attemptsSaveTimer = useRef(null);
   const attendanceSaveTimer = useRef(null);
-  const attendanceCodesSaveTimer = useRef(null);
+  
   const incidentsSaveTimer = useRef(null);
   const deviceRequestsSaveTimer = useRef(null);
 
@@ -658,8 +644,8 @@ function MainApp({ auth, onLogout }) {
       catch (e) { setAssessmentAttempts([]); }
       try { setAttendance(parseStoredArray(await storage.get(ASSESSMENT_KEYS.attendance))); }
       catch (e) { setAttendance([]); }
-      try { setAttendanceCodes(parseStoredArray(await storage.get(ASSESSMENT_KEYS.attendanceCodes))); }
-      catch (e) { setAttendanceCodes([]); }
+      
+      
       try { setAssessmentIncidents(parseStoredArray(await storage.get(ASSESSMENT_KEYS.incidents))); }
       catch (e) { setAssessmentIncidents([]); }
       try { setDeviceRequests(parseStoredArray(await storage.get(ASSESSMENT_KEYS.deviceRequests))); }
@@ -725,7 +711,7 @@ function MainApp({ auth, onLogout }) {
   const persistAssessmentQuestions = debouncedPersist(setAssessmentQuestions, questionsSaveTimer, ASSESSMENT_KEYS.questions);
   const persistAssessmentAttempts = debouncedPersist(setAssessmentAttempts, attemptsSaveTimer, ASSESSMENT_KEYS.attempts, err => { if (err) showToast('Save failed: ' + (err.code || err.message) + ' -- check that you are signed in with a Teach For Bangladesh account.'); });
   const persistAttendance = debouncedPersist(setAttendance, attendanceSaveTimer, ASSESSMENT_KEYS.attendance);
-  const persistAttendanceCodes = debouncedPersist(setAttendanceCodes, attendanceCodesSaveTimer, ASSESSMENT_KEYS.attendanceCodes);
+  
   const persistAssessmentIncidents = debouncedPersist(setAssessmentIncidents, incidentsSaveTimer, ASSESSMENT_KEYS.incidents);
   const persistDeviceRequests = debouncedPersist(setDeviceRequests, deviceRequestsSaveTimer, ASSESSMENT_KEYS.deviceRequests);
   const persistRoomsAndRoster = nextRooms => {
@@ -747,35 +733,30 @@ function MainApp({ auth, onLogout }) {
   const entry = { id: 'inc' + Date.now() + Math.floor(Math.random() * 1000), createdAt: new Date().toISOString(), ...(incident || {}) };
   persistAssessmentIncidents([...(assessmentIncidents || []), entry]);
 };
-const reportAttendanceCode = (session, code, fellowEntry) => {
-  const normalized = String(code || '').trim().toUpperCase();
-  const match = (attendanceCodes || []).find(c => String(c.sessionId) === String(session.id) && String(c.code).toUpperCase() === normalized);
-  if (!match) { showToast('Invalid code for this session'); return false; }
-  if (match.used) { showToast('This code has already been used'); return false; }
-  const fellowId = fellowEntry?.fellowId || auth.fellowId;
-  const fellowName = friendlyFellowName({ ...fellowEntry, fellowId }, roster);
-  persistAttendanceCodes((attendanceCodes || []).map(c => String(c.id) === String(match.id) ? { ...c, used: true, usedBy: fellowId, usedByName: fellowName, usedAt: new Date().toISOString() } : c));
-  persistAttendance([...(attendance || []), { id: 'att' + Date.now(), sessionId: session.id, fellowId, fellowName, status: 'on_time', recordedAt: new Date().toISOString(), codeUsed: match.code }]);
-  showToast('Attendance recorded');
+const recordFellowAttendance = (session) => {
+  const phase = attendancePhase(session);
+  if (!attendanceEligible(session)) { showToast('Attendance is only available for Sync, Workshop, and Clinic sessions.'); return false; }
+  if (phase === 'upcoming') { showToast('Attendance opens at the session start time.'); return false; }
+  if (phase === 'closed') { showToast('The attendance window has closed.'); return false; }
+  const fellowId = auth.fellowId;
+  const fellowName = friendlyFellowName({ ...auth, fellowId }, roster);
+  if ((attendance || []).some(entry => String(entry.sessionId) === String(session.id) && String(entry.fellowId) === String(fellowId))) { showToast('Attendance already recorded for this session.'); return false; }
+  const status = phase === 'on_time' ? 'on_time' : 'late';
+  persistAttendance([...(attendance || []), { id: 'att' + Date.now(), sessionId: session.id, fellowId, fellowName, status, recordedAt: new Date().toISOString(), method: 'button' }]);
+  showToast(status === 'on_time' ? 'Attendance recorded' : 'Late attendance recorded');
   return true;
 };
-const generateSessionCodes = (session, count, length) => {
-  const list = generateAttendanceCodes(count, length).map(code => ({ id: 'code-' + Date.now() + '-' + code, sessionId: session.id, sessionName: session.name, date: session.date || '', code, used: false, usedBy: '', usedByName: '', usedAt: '', createdAt: new Date().toISOString() }));
-  persistAttendanceCodes([...(attendanceCodes || []).filter(c => String(c.sessionId) !== String(session.id)), ...list]);
-  showToast('Generated ' + list.length + ' codes for ' + session.name);
-};
-const exportAttendanceCodes = (sessionId) => {
-  const targetSessions = sessionId ? sessions.filter(s => String(s.id) === String(sessionId)) : sessions.slice();
-  const rows = targetSessions.flatMap(session => {
-    const list = (attendanceCodes || []).filter(c => String(c.sessionId) === String(session.id));
-    if (!list.length) return [{ Session: session.name, Date: session.date || '', 'Start Time': session.start || '', Code: '(no codes generated yet)', Used: '', 'Fellow Name': '', 'Used At': '' }];
-    return list.map(c => ({ Session: session.name, Date: session.date || '', 'Start Time': session.start || '', Code: c.code, Used: c.used ? 'Yes' : 'No', 'Fellow Name': c.usedByName || friendlyFellowName({ fellowId: c.usedBy }, roster), 'Used At': c.usedAt || '' }));
+const exportAttendanceRecords = () => {
+  const rows = (attendance || []).slice().sort((a, b) => String(b.recordedAt || '').localeCompare(String(a.recordedAt || ''))).map(entry => {
+    const session = sessions.find(ss => String(ss.id) === String(entry.sessionId));
+    return { Session: session && session.name ? session.name : String(entry.sessionId), Date: session ? session.date || '' : '', 'Start Time': session ? session.start || '' : '', 'Fellow Name': entry.fellowName || friendlyFellowName({ fellowId: entry.fellowId }, roster), Status: entry.status === 'on_time' ? 'On time' : entry.status === 'late' ? 'Late' : (entry.status || ''), 'Recorded At': entry.recordedAt ? new Date(entry.recordedAt).toLocaleString() : '' };
   });
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Attendance Codes');
-  XLSX.writeFile(wb, 'WA14_Attendance_Codes.xlsx');
-  showToast('Attendance codes exported');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Attendance');
+  XLSX.writeFile(wb, 'Fellow_Training_System_Attendance.xlsx');
+  showToast('Attendance exported');
 };
+
 const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
 
 const importExcel = () => {
@@ -956,7 +937,6 @@ const pageExporters = {
   calendar: () => exportSheetFile('Fellow_Training_System_Calendar.xlsx', [{ name: 'Calendar', rows: sessionRows() }]),
   sessions: () => exportSheetFile('Fellow_Training_System_Sessions.xlsx', [{ name: 'Sessions', rows: sessionRows() }]),
   staffCalendar: () => exportSheetFile('Fellow_Training_System_Staff_Calendar.xlsx', [{ name: 'Calendar', rows: sessionRows() }]),
-  attendance: () => exportSheetFile('Fellow_Training_System_Attendance.xlsx', [{ name: 'Attendance', rows: attendance.map(entry => ({ SessionId: entry.sessionId, FellowId: entry.fellowId, Status: entry.status, RecordedAt: entry.recordedAt })) }]),
   summary: () => exportSheetFile('Fellow_Training_System_Time_Summary.xlsx', [{ name: 'Time Summary', rows: sessions.map(session => ({ Week: session.week, Mode: session.mode, Session: session.name, DurationMinutes: session.start && session.end ? durationMin(session) : '' })) }]),
   fellows: () => exportSheetFile('Fellow_Training_System_Fellows.xlsx', [{ name: 'Fellows', rows: roster.map(fellow => ({ Name: fellow.name, Email: fellow.email, Track: fellow.track, Grade: fellow.grade, PlacementCity: fellow.placementCity, AFAGroup: fellow.afaGroup, RoomIds: (fellow.roomIds || []).join(', ') })) }]),
   rooms: () => exportSheetFile('Fellow_Training_System_Rooms.xlsx', [{ name: 'Rooms', rows: rooms.map(room => ({ Name: room.name, Facilitator: room.facilitator || '', LocationType: room.locationType || '', PhysicalLocation: room.physicalLocation || '', OnlinePlatform: room.onlinePlatform || '', MeetingUrl: room.meetingUrl || '', AccessInstructions: room.accessInstructions || '', FellowIds: (room.fellowIds || []).join(', ') })) }]),
@@ -987,7 +967,7 @@ const deleteRequest = (id) => persistRequests(requests.filter(r => r.id !== id))
 const seedDemo = () => {
   if (!window.confirm('Create demo Fellows, sessions, questions, and assessments?')) return;
   const demoFellows = Array.from({ length: 10 }, (_, index) => ({ id: `demo-fellow-${index + 1}`, name: `DEMO Fellow ${String(index + 1).padStart(2, '0')}`, email: `demo.fellow${index + 1}@teachforbangladesh.org`, afaGroup: `DEMO AFA ${index % 3 + 1}`, track: index % 2 ? 'secondary' : 'primary', placementCity: ['Dhaka', 'Chattogram', 'Rajshahi'][index % 3] }));
-  const demoSessions = Array.from({ length: 5 }, (_, index) => ({ id: 90000 + index, week: index % 3, date: `2026-11-${String(1 + index).padStart(2, '0')}`, weekday: 'Sunday', start: '10:00', end: '11:00', name: `DEMO Session ${index + 1}`, pillar: 'Academic Content', mode: 'Workshop', facilitators: ['Demo Facilitator'], resources: [], outcomes: ['Demo outcome'], notes: '', fellowNotes: '', afaGroup: `DEMO AFA ${index % 3 + 1}`, attendanceCode: `DEMO${index + 1}`, calendared: true }));
+  const demoSessions = Array.from({ length: 5 }, (_, index) => ({ id: 90000 + index, week: index % 3, date: `2026-11-${String(1 + index).padStart(2, '0')}`, weekday: 'Sunday', start: '10:00', end: '11:00', name: `DEMO Session ${index + 1}`, pillar: 'Academic Content', mode: 'Workshop', facilitators: ['Demo Facilitator'], resources: [], outcomes: ['Demo outcome'], notes: '', fellowNotes: '', afaGroup: `DEMO AFA ${index % 3 + 1}`, calendared: true }));
   const demoQuestions = Array.from({ length: 5 }, (_, index) => ({ id: `demo-question-${index + 1}`, type: 'single', text: `DEMO Question ${index + 1}`, options: ['Option A', 'Option B', 'Option C'], gridRows: ['Row 1'], gridCols: ['Column 1'], correct: ['Option A'], points: 1, timeLimit: 0, imageUrl: '' }));
   const demoAssessments = demoSessions.map((session, index) => ({ id: `demo-assessment-${index + 1}`, sessionId: session.id, title: `DEMO Assessment ${index + 1}`, description: 'Demo assessment', status: 'published', startsAt: '2026-10-01T00:00', endsAt: '2026-12-31T23:59', durationMinutes: 20, questionIds: demoQuestions.map(question => question.id), assignmentGroups: [{ id: `demo-group-${index + 1}`, track: index % 2 ? 'secondary' : 'primary', fellowIds: demoFellows.filter(fellow => fellow.track === (index % 2 ? 'secondary' : 'primary')).map(fellow => fellow.id), questionIds: demoQuestions.map(question => question.id) }], demo: true }));
   demoQuestions.push({ id: 'demo-paragraph-question', type: 'paragraph', text: 'DEMO reflection: Describe one teaching practice you will apply and why.', options: [], correct: [], points: 3, timeLimit: 0, imageUrl: '', rubric: 'Name a specific teaching practice and explain why it supports learning.', expectedConcepts: ['specific practice', 'reasoning'] });
@@ -1043,14 +1023,14 @@ const calendarSessions = auth.role === 'fellow' ? filtered.filter(session => fel
 
 const openRequests = (requests || []).filter(r => !r.resolved).length;
 
-if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !attendanceCodes || !assessmentIncidents || !deviceRequests || !staffTasks) {
+if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !assessmentIncidents || !deviceRequests || !staffTasks) {
   return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading schedule...</div>;
 }
 
 return (
   <div className="wa14-app min-h-screen flex flex-col" style={{ fontFamily: FONT, background: '#252625', color: '#D5E0D5' }}>
     <div className="wa14-main flex flex-1 min-h-screen">
-      <Sidebar tab={tab} setTab={setTab} isAdmin={isAdmin} isFullAdmin={isFullAdmin} isSuperadmin={isSuperadmin} openRequests={openRequests} />
+      <Sidebar tab={tab} setTab={setTab} isAdmin={isAdmin} isFullAdmin={isFullAdmin} isSuperadmin={isSuperadmin} isFellow={auth.role === 'fellow'} openRequests={openRequests} />
       <div className="wa14-content flex-1 min-w-0">
         <TopBar
           tab={tab} isFullAdmin={isFullAdmin} auth={auth} onLogout={onLogout} roles={roles}
@@ -1075,7 +1055,7 @@ return (
 
           {tab === 'calendar' && (
             <>
-              {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} codes={attendanceCodes} onAttendanceCode={(session, code) => reportAttendanceCode(session, code)} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload) => persistDeviceRequests([...(deviceRequests || []), payload])} showToast={showToast} /></>}
+              {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} onCheckIn={recordFellowAttendance} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload) => persistDeviceRequests([...(deviceRequests || []), payload])} showToast={showToast} /></>}
               <CalendarView
                 sessions={calendarSessions} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
                 hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
@@ -1088,6 +1068,9 @@ return (
                 } : null} auth={auth} roster={roster} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} staff={planners}
               />
             </>
+          )}
+          {tab === 'fellowAnalytics' && auth.role === 'fellow' && (
+            <FellowAnalyticsPanel sessions={sessions} attendance={attendance} auth={auth} assessments={assessments} attempts={assessmentAttempts} roster={roster} />
           )}
           {tab === 'dashboard' && isAdmin && (
             <DashboardPanel sessions={filtered} staff={planners} modes={modes} auth={auth} isFullAdmin={isFullAdmin} rooms={rooms} onSelect={setViewing} />
@@ -1106,7 +1089,7 @@ return (
             />
           )}
           {tab === 'attendance' && isFullAdmin && (
-            <AttendanceCodePanel sessions={sessions} codes={attendanceCodes} attendance={attendance} roster={roster} onGenerate={(sessionId, list) => { persistAttendanceCodes([...(attendanceCodes || []).filter(c => String(c.sessionId) !== String(sessionId)), ...list]); showToast('Generated ' + list.length + ' codes'); }} onDeleteSessionCodes={(sessionId) => { persistAttendanceCodes((attendanceCodes || []).filter(c => String(c.sessionId) !== String(sessionId))); showToast('Codes removed'); }} onExport={exportAttendanceCodes} />
+            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} onExport={exportAttendanceRecords} />
           )}
           {tab === 'summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} modes={modes} />}
           {tab === 'fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
@@ -1357,14 +1340,15 @@ function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
   );
 }
 
-function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests }) {
+function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, openRequests }) {
   const [open, setOpen] = useState(false);
   const tabs = [
     ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }] : []),
     { id: 'calendar', label: 'Winter Academy Calendar', icon: CalendarIcon },
+    ...(isFellow ? [{ id: 'fellowAnalytics', label: 'Analytics', icon: BarChart3 }] : []),
     { id: 'legend', label: 'Legend', icon: ListIcon },
     ...(isAdmin ? [{ id: 'sessions', label: 'Sessions', icon: TableIcon }] : []),
-    ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance', icon: KeyIcon }] : []),
+    ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance records', icon: KeyIcon }] : []),
     ...(isFullAdmin ? [
       { id: 'summary', label: 'Time Summary', icon: BarChart3 },
       { id: 'fellows', label: 'Fellows', icon: UserPlus },
@@ -1396,14 +1380,36 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests
         <div className="text-[13px] font-bold text-[#D5E0D5]">{tabs.find(t => t.id === tab)?.label || 'Winter Academy Calendar'}</div>
       </div>
       {open && <button aria-label="Close navigation" onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,32,0.35)', border: 0, zIndex: 40 }} />}
-      <nav className={`wa14-sidebar shrink-0 bg-[#005B3F] text-[#D5E0D5] flex flex-col sticky top-0 self-stretch overflow-hidden transition-all duration-200 ease-out ${open ? 'w-[196px] open' : 'w-[54px]'} max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-[41] max-lg:w-[220px] ${open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-[110%]'}`}>
-        <button onClick={() => setOpen(o => !o)} title="Toggle menu" className={`bg-transparent border-none text-[#FFFFFF] cursor-pointer py-3 text-xl leading-none ${open ? 'text-right pr-3' : 'text-center'}`}>{open ? '<' : '>'}</button>
-        {tabs.map(t => {
-          const Icon = t.icon; const active = tab === t.id;
-          return (
-            <a key={t.id} href={'#' + t.id} onClick={go(t.id)} title={t.label} className={`flex items-center gap-2.5 border-none px-3 py-3 text-[13px] whitespace-nowrap w-full text-left no-underline ${active ? 'bg-[#D65641] text-white font-semibold' : 'bg-transparent text-[#D5E0D5] font-medium'}`}><Icon size={17} />{(open || typeof window === 'undefined') && <span>{t.label}</span>}</a>
-          );
-        })}
+      <nav className={`wa14-sidebar relative z-[45] shrink-0 bg-[#005B3F] text-[#D5E0D5] flex flex-col sticky top-0 self-stretch overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${open ? 'w-[220px] open' : 'w-[56px]'} max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-[45] max-lg:w-[220px] ${open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-[110%]'}`}>
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#2A5C4B]/60 shrink-0">
+          {open && <span className="text-[11px] font-bold tracking-wider uppercase text-[#D5E0D5]/70 pl-1">Menu</span>}
+          <button onClick={() => setOpen(o => !o)} title={open ? 'Collapse menu' : 'Expand menu'} className="bg-transparent border-none text-[#FFFFFF] cursor-pointer p-1.5 rounded-md hover:bg-[#00402E] transition-colors flex items-center justify-center mx-auto">
+            {open ? <CaretLeft size={16} weight="bold" /> : <CaretRight size={16} weight="bold" />}
+          </button>
+        </div>
+        <div className="py-2 flex flex-col gap-0.5">
+          {tabs.map(t => {
+            const Icon = t.icon; const active = tab === t.id;
+            return (
+              <a
+                key={t.id}
+                href={'#' + t.id}
+                onClick={go(t.id)}
+                title={t.label}
+                className={`wa14-nav-item flex items-center gap-2.5 px-2.5 py-2 mx-1.5 rounded-lg text-[13px] whitespace-nowrap no-underline ${
+                  active
+                    ? 'bg-[#D65641] text-white font-semibold shadow-xs'
+                    : 'text-[#D5E0D5] hover:bg-[#00402E] hover:text-white font-medium'
+                }`}
+              >
+                <div className="w-7 h-7 flex items-center justify-center shrink-0 rounded-md">
+                  <Icon size={17} weight={active ? 'bold' : 'regular'} />
+                </div>
+                {(open || typeof window === 'undefined') && <span className="truncate">{t.label}</span>}
+              </a>
+            );
+          })}
+        </div>
       </nav>
     </>
   );
@@ -1411,28 +1417,39 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, openRequests
 
 function TopBar({ tab, isFullAdmin, auth, onLogout, onAdd, roles }) {
   return (
-    <div className="bg-[#003223] border-b border-[#2A5C4B] px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 sticky top-0 z-20">
-      <div className="py-2.5 min-w-[170px]"><div className="font-extrabold text-lg sm:text-xl leading-tight">Fellow Training System</div><div className="text-[11.5px] text-[#9DB09D] mt-[3px] wa14-hide-mobile">Teach For Bangladesh</div></div>
-      <div className="flex items-center gap-3.5 py-3 flex-wrap">
+    <div className="bg-[#003223]/95 backdrop-blur-md border-b border-[#2A5C4B] px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 sticky top-0 z-20 shadow-xs">
+      <div className="py-2.5 min-w-[170px]">
+        <div className="font-extrabold text-lg sm:text-xl leading-tight text-white tracking-tight">Fellow Training System</div>
+        <div className="text-[11.5px] text-[#9DB09D] mt-[2px] font-medium wa14-hide-mobile">Teach For Bangladesh</div>
+      </div>
+      <div className="flex items-center gap-3 py-2.5 flex-wrap">
         {isFullAdmin && (
           <div className="flex gap-2 flex-wrap">
-            {(tab === 'calendar' || tab === 'sessions') && <button onClick={onAdd} className={btnPrimary}><Plus size={14} /> Add session</button>}
+            {(tab === 'calendar' || tab === 'sessions') && (
+              <button onClick={onAdd} className={btnPrimary}>
+                <Plus size={14} weight="bold" /> Add session
+              </button>
+            )}
           </div>
         )}
-        <div className="flex items-center gap-2 text-xs text-[#9DB09D] border-l border-[#1F4A3C] pl-3.5 min-w-0">
-          <span className="truncate max-w-[180px] sm:max-w-none">{auth.email} · {getRoleLabel(auth.role, roles)}</span>
-          <button onClick={onLogout} title="Switch user" className="bg-transparent border-none cursor-pointer text-[#9DB09D] flex"><LogOut size={14} /></button>
+        <div className="flex items-center gap-2.5 text-xs text-[#9DB09D] border-l border-[#1F4A3C] pl-3.5 min-w-0">
+          <span className="truncate max-w-[180px] sm:max-w-none bg-[#00402E] px-2.5 py-1 rounded-md text-[#D5E0D5] font-medium border border-[#2A5C4B]/60">
+            {auth.email} · <span className="text-[#D65641] font-semibold">{getRoleLabel(auth.role, roles)}</span>
+          </span>
+          <button onClick={onLogout} title="Sign out / Switch user" className="bg-transparent border-none cursor-pointer text-[#9DB09D] hover:text-[#D65641] transition-colors flex p-1.5 rounded-md hover:bg-[#00402E]">
+            <LogOut size={16} />
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-const btnBase = 'inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-md px-3 py-2 cursor-pointer border border-transparent';
-const btnPrimary = btnBase + ' bg-[#D65641] text-[#D5E0D5]';
-const btnSecondary = btnBase + ' bg-[#003223] text-[#D5E0D5] border-[#2A5C4B]';
-const btnGhost = btnBase + ' bg-transparent text-[#D5E0D5]';
-const selectStyle = 'px-2.5 py-1.5 rounded-md border border-[#2A5C4B] text-[13px] bg-white text-[#252625]';
+const btnBase = 'inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-lg px-3 py-2 cursor-pointer border border-transparent transition-all duration-150 active:scale-[0.98]';
+const btnPrimary = btnBase + ' bg-[#D65641] text-white hover:bg-[#c04b37] shadow-xs';
+const btnSecondary = btnBase + ' bg-[#003223] text-[#D5E0D5] border-[#2A5C4B] hover:bg-[#00402E] hover:text-white';
+const btnGhost = btnBase + ' bg-transparent text-[#D5E0D5] hover:bg-[#00402E]/60 hover:text-white';
+const selectStyle = 'px-2.5 py-1.5 rounded-lg border border-[#2A5C4B] text-[13px] bg-white text-[#252625] shadow-xs';
 
 function FilterBar({ typeFilter, setTypeFilter, pillarTagFilter, setPillarTagFilter, modeFilter, setModeFilter, sessionTypes, pillarTags, modes }) {
   const anyFilter = typeFilter !== 'all' || modeFilter !== 'all' || pillarTagFilter !== 'all';
@@ -1709,30 +1726,144 @@ function sessionDateTime(session, field) {
   return new Date(`${session.date}T${session[field]}:00+06:00`);
 }
 
-function FellowOverview({ sessions, auth, rooms, attendance, codes, onAttendanceCode }) {
-  const now = new Date();
+const ATTENDANCE_MODES = ['sync', 'workshop', 'clinic'];
+function attendanceEligible(session) {
+  return ATTENDANCE_MODES.includes(String((session || {}).mode || '').trim().toLowerCase());
+}
+function attendancePhase(session, now = new Date()) {
+  const start = sessionDateTime(session, 'start');
+  if (!attendanceEligible(session) || !start) return null;
+  const mins = (now.getTime() - start.getTime()) / 60000;
+  if (mins < 0) return 'upcoming';
+  if (mins < 5) return 'on_time';
+  if (mins < 15) return 'late';
+  return 'closed';
+}
+
+function MyAttendancePanel({ sessions, attendance, auth }) {
+  const mine = (attendance || []).filter(entry => String(entry.fellowId) === String(auth.fellowId));
+  const myFor = session => mine.find(entry => String(entry.sessionId) === String(session.id));
+  const eligible = sessions.filter(session => attendanceEligible(session) && sessionDateTime(session, 'start'));
+  const attended = mine.length;
+  const onTime = mine.filter(entry => entry.status === 'on_time').length;
+  const late = mine.filter(entry => entry.status === 'late').length;
+  const missed = Math.max(0, eligible.length - attended);
+  const pct = eligible.length ? Math.round(attended / eligible.length * 100) : 0;
+  const statusOf = session => {
+    const rec = myFor(session);
+    if (!attendanceEligible(session)) return { label: 'Not required', color: '#9DB09D' };
+    if (!rec) return { label: 'No record', color: '#9DB09D' };
+    if (rec.status === 'on_time') return { label: 'On time', color: '#2D7A4F' };
+    if (rec.status === 'late') return { label: 'Late', color: '#D0A023' };
+    return { label: rec.status || 'Recorded', color: '#D5E0D5' };
+  };
+  return (
+    <div style={{ maxWidth: 960 }}>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>My Attendance</div>
+      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 16 }}>Per-session attendance for Sync, Workshop, and Clinic sessions. You can mark yourself present within the first 5 minutes (on time) or within 15 minutes from the start (late).</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, maxWidth: 780, marginBottom: 18 }}>
+        <Metric label="Attendance records" value={attended} />
+        <Metric label="On time" value={onTime} />
+        <Metric label="Late" value={late} />
+        <Metric label="Missed" value={missed} />
+        <Metric label="Attendance %" value={pct + '%'} />
+      </div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Date', 'Session', 'Time', 'Status', 'Recorded'].map(h => <th key={h} style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {sessions.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.start || '').localeCompare(String(a.start || ''))).map(session => {
+              const rec = myFor(session);
+              const st = statusOf(session);
+              return (
+                <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                  <td style={{ padding: '8px 12px' }}>{session.date ? dateLabel(session.date) : '--'}</td>
+                  <td style={{ padding: '8px 12px', fontWeight: 600 }}>{session.name || 'Session'}</td>
+                  <td style={{ padding: '8px 12px' }}>{session.start ? session.start + '\u2013' + (session.end || '') : '--'}</td>
+                  <td style={{ padding: '8px 12px', color: st.color, fontWeight: 700 }}>{st.label}</td>
+                  <td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{rec && rec.recordedAt ? new Date(rec.recordedAt).toLocaleString() : '--'}</td>
+                </tr>
+              );
+            })}
+            {sessions.length === 0 && <tr><td colSpan={5} style={{ padding: 12, color: '#9DB09D' }}>No sessions available yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AttendanceRecordsPanel({ sessions, attendance, roster, onExport }) {
+  const records = attendance || [];
+  const bySession = sessions.filter(session => attendanceEligible(session) && sessionDateTime(session, 'start')).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.start || '').localeCompare(String(a.start || '')));
+  const count = (sessionId, status) => records.filter(entry => String(entry.sessionId) === String(sessionId) && entry.status === status).length;
+  const noRecord = session => Math.max(0, (roster || []).length - new Set(records.filter(entry => String(entry.sessionId) === String(session.id)).map(entry => String(entry.fellowId))).size);
+  const pct = session => { const total = (roster || []).length; return total ? Math.round(((roster || []).length - noRecord(session)) / total * 100) : 0; };
+  return (
+    <div style={{ maxWidth: 1000 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginRight: 'auto' }}>Attendance records</div>
+        <button onClick={onExport} className={btnSecondary}><Download size={14} /> Export attendance (XLSX)</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, maxWidth: 900, marginBottom: 18 }}>
+        <Metric label="Attendance records" value={records.length} />
+        <Metric label="On time" value={records.filter(entry => entry.status === 'on_time').length} />
+        <Metric label="Late" value={records.filter(entry => entry.status === 'late').length} />
+        <Metric label="Fellows recorded" value={new Set(records.map(entry => String(entry.fellowId))).size} />
+      </div>
+      <div style={{ marginBottom: 8, fontWeight: 700 }}>Attendance by session</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', marginBottom: 18 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Date', 'Session', 'On time', 'Late', 'No record', 'Attendance %'].map(h => <th key={h} style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {bySession.map(session => (
+              <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                <td style={{ padding: 9 }}>{session.date ? dateLabel(session.date) : '--'}</td>
+                <td style={{ padding: 9, fontWeight: 600 }}>{session.name || 'Session'} {session.start ? <span style={{ fontWeight: 400, color: '#9DB09D' }}>{' \u00B7 '}{session.start}</span> : null}</td>
+                <td style={{ padding: 9, color: '#2D7A4F', fontWeight: 700 }}>{count(session.id, 'on_time')}</td>
+                <td style={{ padding: 9, color: '#D0A023', fontWeight: 700 }}>{count(session.id, 'late')}</td>
+                <td style={{ padding: 9 }}>{noRecord(session)}</td>
+                <td style={{ padding: 9, fontWeight: 700 }}>{pct(session)}%</td>
+              </tr>
+            ))}
+            {bySession.length === 0 && <tr><td colSpan={6} style={{ padding: 12, color: '#9DB09D' }}>No eligible Sync, Workshop, or Clinic sessions yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <FellowAttendanceBreakdown sessions={sessions} attendance={records} fellows={(roster || [])} roster={roster} />
+    </div>
+  );
+}
+
+function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 10000);
+    return () => clearInterval(timer);
+  }, []);
   const upcoming = sessions.filter(session => sessionDateTime(session, 'end') > now).sort((a, b) => sessionDateTime(a, 'start') - sessionDateTime(b, 'start'));
   const current = upcoming.find(session => sessionDateTime(session, 'start') <= now && sessionDateTime(session, 'end') > now);
   const next = current ? upcoming.find(session => sessionDateTime(session, 'start') > now) : upcoming[0];
-  const [codeInputs, setCodeInputs] = useState({});
-  const checkIn = session => {
-    const existing = attendance.find(entry => entry.sessionId === session.id && entry.fellowId === auth.fellowId);
-    if (existing) return;
-    const code = (codeInputs[session.id] || '').trim();
-    if (!code) { window.alert('Enter one of the attendance codes shared for this session.'); return; }
-    const ok = onAttendanceCode ? onAttendanceCode(session, code) : false;
-    if (ok) setCodeInputs(prev => ({ ...prev, [session.id]: '' }));
+  const myRecord = session => (attendance || []).find(entry => String(entry.sessionId) === String(session.id) && String(entry.fellowId) === String(auth.fellowId));
+  const minsLeftTo = (session, boundary) => {
+    const start = sessionDateTime(session, 'start');
+    if (!start) return null;
+    const left = boundary - (now.getTime() - start.getTime()) / 60000;
+    return Math.max(0, Math.ceil(left));
   };
-  const codeStats = (session) => {
-    const list = (codes || []).filter(c => String(c.sessionId) === String(session.id));
-    if (!list.length) return session.attendanceCode ? 'Code required' : 'No codes generated yet';
-    const used = list.filter(c => c.used).length;
-    return used + ' of ' + list.length + ' codes used';
+  const control = session => {
+    const rec = myRecord(session);
+    if (rec) return <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: rec.status === 'on_time' ? '#2D7A4F' : '#D0A023' }}>{rec.status === 'on_time' ? 'Attendance recorded \u00B7 on time' : 'Attendance recorded \u00B7 late'}</div>;
+    if (!attendanceEligible(session)) return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>No attendance required for this session</div>;
+    const phase = attendancePhase(session, now);
+    if (phase === 'on_time') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnPrimary} style={{ fontWeight: 700 }}><CheckIcon size={14} /> Mark my attendance</button><span style={{ fontSize: 11.5, color: '#9DB09D' }}>{minsLeftTo(session, 5)} min to late window</span></div>;
+    if (phase === 'late') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnSecondary + ' text-[#D0A023]'} style={{ fontWeight: 700 }}>Mark late attendance</button><span style={{ fontSize: 11.5, color: '#D0A023' }}>{minsLeftTo(session, 15)} min left</span></div>;
+    if (phase === 'closed') return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance window closed (15 minutes from start)</div>;
+    return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance opens at {session.start}</div>;
   };
-  const card = (label, session) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, flex: 1, minWidth: 220 }}><div style={{ fontSize: 11.5, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>{label}</div>{session ? <><div style={{ fontWeight: 700, fontSize: 15 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{dateLabel(session.date)} · {session.start}–{session.end} · {fmtDur(durationMin(session))}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(room => room.name + ' · ' + (room.physicalLocation || room.meetingUrl || 'Location not set')).join(', ') || 'Location not assigned'}</div><div style={{ fontSize: 12, color: '#9DB09D', marginTop: 6 }}>{codeStats(session)}</div>{attendance.some(entry => entry.sessionId === session.id && entry.fellowId === auth.fellowId) ? <div style={{ marginTop: 8, fontSize: 12.5, color: '#D65641', fontWeight: 700 }}>Attendance recorded</div> : <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}><input value={codeInputs[session.id] || ''} onChange={e => setCodeInputs(prev => ({ ...prev, [session.id]: e.target.value }))} placeholder="Enter attendance code" className={inputStyle} style={{ maxWidth: 180 }} /><button onClick={() => checkIn(session)} className={btnSecondary}>Give attendance</button></div>}</> : <div style={{ fontSize: 13, color: '#9DB09D' }}>No session</div>}</div>;
+  const card = (label, session) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, flex: 1, minWidth: 220 }}><div style={{ fontSize: 11.5, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>{label}</div>{session ? <><div style={{ fontWeight: 700, fontSize: 15 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{dateLabel(session.date)}{' \u00B7 '}{session.start}{'\u2013'}{session.end}{' \u00B7 '}{fmtDur(durationMin(session))}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(room => room.name + ' \u00B7 ' + (room.physicalLocation || room.meetingUrl || 'Location not set')).join(', ') || 'Location not assigned'}</div>{control(session)}</> : <div style={{ fontSize: 13, color: '#9DB09D' }}>No session</div>}</div>;
   return <div style={{ marginBottom: 18 }}><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 10 }}>AFA group: <b>{auth.afaGroup || 'Not assigned'}</b></div><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>{card('Current session', current)}{card('Upcoming session', next)}</div></div>;
 }
-
 function LegacyFellowAssessments({ assessments, questions, attempts, auth, sessions, onAttemptsChange }) {
   const [activeAttempt, setActiveAttempt] = useState(null);
   const fellowAssessments = assessments.filter(assessment => {
@@ -1798,7 +1929,6 @@ function FellowAssessments({ assessments, questions, attempts, auth, sessions, r
     clearAttemptDraft(next.id);
     setActiveAttempt(null); setView(auto ? 'grades' : 'list');
   };
-  const myHistory = attempts.filter(item => String(item.fellowId) === String(auth.fellowId)).sort((a, b) => String(b.submittedAt || b.startedAt || '').localeCompare(String(a.submittedAt || a.startedAt || '')));
   if (view === 'grades' || (!activeAttempt && view === 'grades')) {
     return <FellowGradesPanel attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={() => setView('list')} />;
   }
@@ -1825,10 +1955,31 @@ function FellowAssessments({ assessments, questions, attempts, auth, sessions, r
       return <div key={assessment.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, maxWidth: 680, marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}><div><b>{assessment.title}</b><div style={{ fontSize: 12, color: '#D5E0D5', marginTop: 4 }}>{sessions.find(item => String(item.id) === String(assessment.sessionId))?.name}{assessment.durationMinutes ? ' · ' + assessment.durationMinutes + ' min' : ''}{inProgress ? ' · In progress' : ''}{submitted ? (released ? ' · Graded: ' + score + '%' : ' · Submitted, awaiting grade release') : ''}</div></div><div style={{ display: 'flex', gap: 8 }}>{submitted && released ? <button onClick={() => setView('grades')} className={btnSecondary}>View grade</button> : <button onClick={() => setInstructionFor(assessment.id)} className={btnPrimary}>{inProgress ? 'Resume' : 'Instructions'}</button>}</div></div>;
     })}
     {!available.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No active assessments.</div>}
-    <div style={{ fontSize: 13, fontWeight: 700, margin: '14px 0 8px' }}>My recent attempts</div>
-    {!myHistory.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No attempts yet.</div>}
-    {myHistory.slice(0, 5).map(item => { const a = assessments.find(x => String(x.id) === String(item.assessmentId)); const st = attemptGradeStatus(item, a); return <div key={item.id} style={{ fontSize: 12.5, background: '#003223', border: '1px solid #1F4A3C', borderRadius: 8, padding: '8px 12px', marginBottom: 6, maxWidth: 680 }}>{a?.title || item.assessmentId} · {st.replace('_', ' ')} · {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : 'In progress'}</div>; })}
+    <FellowRecentAttempts attempts={attempts} assessments={assessments} auth={auth} />
   </div>;
+}
+
+function FellowRecentAttempts({ attempts, assessments, auth }) {
+  const myHistory = (attempts || []).filter(item => String(item.fellowId) === String(auth.fellowId)).sort((a, b) => String(b.submittedAt || b.startedAt || '').localeCompare(String(a.submittedAt || a.startedAt || '')));
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>My recent attempts</div>
+      {!myHistory.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No attempts yet.</div>}
+      {myHistory.slice(0, 5).map(item => { const a = assessments.find(x => String(x.id) === String(item.assessmentId)); const st = attemptGradeStatus(item, a); return <div key={item.id} style={{ fontSize: 12.5, background: '#003223', border: '1px solid #1F4A3C', borderRadius: 8, padding: '8px 12px', marginBottom: 6, maxWidth: 680 }}>{a?.title || item.assessmentId} · {st.replace('_', ' ')} · {item.submittedAt ? new Date(item.submittedAt).toLocaleString() : 'In progress'}</div>; })}
+    </div>
+  );
+}
+
+function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempts, roster }) {
+  return (
+    <div>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>My analytics</div>
+      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>Your attendance, grades, and recent assessment attempts.</div>
+      <MyAttendancePanel sessions={sessions} attendance={attendance} auth={auth} />
+      <FellowGradesPanel attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={null} />
+      <FellowRecentAttempts attempts={attempts} assessments={assessments} auth={auth} />
+    </div>
+  );
 }
 
 function AssessmentInstruction({ assessment, sessionName, onStart, onBack, resumed }) {
@@ -1921,7 +2072,7 @@ function FellowGradesPanelInner({ attempts, assessments, auth, roster, onBack })
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontSize: 14, fontWeight: 800 }}>My grades {totalPossible ? `· ${totalEarned}/${totalPossible} total` : ''}</div>
-        <button onClick={onBack} className={btnSecondary}>Back to assessments</button>
+        {onBack && <button onClick={onBack} className={btnSecondary}>Back to assessments</button>}
       </div>
       {!rows.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No submitted assessments yet.</div>}
       {rows.map(row => (
@@ -1936,35 +2087,6 @@ function FellowGradesPanelInner({ attempts, assessments, auth, roster, onBack })
           ))}
         </div>
       ))}
-    </div>
-  );
-}
-
-function AttendanceCodePanel({ sessions, codes, attendance, roster, onGenerate, onDeleteSessionCodes, onExport }) {
-  const [sessionId, setSessionId] = useState(sessions[0]?.id || '');
-  const [count, setCount] = useState(25);
-  const [length, setLength] = useState(6);
-  const session = sessions.find(s => String(s.id) === String(sessionId)) || sessions[0];
-  const list = (codes || []).filter(c => session && String(c.sessionId) === String(session.id));
-  const make = () => {
-    if (!session) return;
-    const fresh = generateAttendanceCodes(count, length).map(code => ({ id: 'code-' + Date.now() + '-' + code, sessionId: session.id, sessionName: session.name, date: session.date || '', code, used: false, usedBy: '', usedByName: '', usedAt: '', createdAt: new Date().toISOString() }));
-    onGenerate(session.id, fresh);
-  };
-  return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Unique attendance codes</div>
-      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 12 }}>Select a session, choose how many codes to generate, then export them. Fellows only enter a code; they never see the full list.</div>
-      <div className="wa14-grid-cards" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 12 }}>
-        <label style={{ fontSize: 12.5 }}>Session<br /><select value={sessionId} onChange={e => setSessionId(e.target.value)} className={selectStyle} style={{ maxWidth: '100%' }}>{sessions.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(s => <option key={s.id} value={s.id}>{s.date} · {s.name}</option>)}</select></label>
-        <label style={{ fontSize: 12.5 }}>Number of codes<br /><input type="number" min={1} max={500} value={count} onChange={e => setCount(Number(e.target.value) || 1)} className={inputStyle} /></label>
-        <label style={{ fontSize: 12.5 }}>Code length<br /><input type="number" min={4} max={10} value={length} onChange={e => setLength(Number(e.target.value) || 6)} className={inputStyle} /></label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap' }}><button onClick={make} className={btnPrimary}><KeyIcon size={14} /> Generate codes</button><button onClick={() => session && onExport(session.id)} className={btnSecondary}><Download size={14} /> Export this session</button><button onClick={() => onExport()} className={btnGhost}>Export all</button>{list.length > 0 && <button onClick={() => session && window.confirm('Delete all codes for this session?') && onDeleteSessionCodes(session.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete codes</button>}</div>
-      </div>
-      <div className="wa14-table-scroll"><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
-        <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Code', 'Used', 'Fellow', 'Used At'].map(h => <th key={h} style={{ padding: '9px 12px', color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
-        <tbody>{list.map(c => <tr key={c.id} style={{ borderBottom: '1px solid #1F4A3C' }}><td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 700 }}>{c.code}</td><td style={{ padding: '8px 12px' }}>{c.used ? 'Yes' : 'No'}</td><td style={{ padding: '8px 12px' }}>{c.usedByName || friendlyFellowName({ fellowId: c.usedBy }, roster)}</td><td style={{ padding: '8px 12px' }}>{c.usedAt ? new Date(c.usedAt).toLocaleString() : '--'}</td></tr>)}{!list.length && <tr><td colSpan={4} style={{ padding: 14, color: '#9DB09D' }}>No codes generated for this session yet.</td></tr>}</tbody>
-      </table></div>
     </div>
   );
 }
@@ -2096,6 +2218,14 @@ function DashboardPanel({ sessions, staff, modes, auth, isFullAdmin, rooms, onSe
       return superadminMatch ? String(person.id) === 'superadmin' : (f.staffName === person.name || f.staffName === person.email);
     })).length,
   })).sort((a, b) => b.count - a.count || (a.person.name || '').localeCompare(b.person.name || ''));
+  const me = allStaff.find(p => String(p.id) === String(auth.fellowId) || p.email === auth.email || p.name === (auth.name || ''));
+  const mySessions = me ? (sessions || []).filter(s => s.calendared && s.date && (s.facilitators || []).some(f => {
+    if (typeof f === 'string') return f === me.name || f === me.email;
+    const superadminMatch = f.staffName === SUPERADMIN_ACCOUNT.name || f.staffName === SUPERADMIN_ACCOUNT.email || (f.id && String(f.id) === 'superadmin');
+    return superadminMatch ? String(me.id) === 'superadmin' : (f.staffName === me.name || f.staffName === me.email);
+  })).filter(s => sessionDateTime(s, 'start')).sort((a, b) => sessionDateTime(a, 'start') - sessionDateTime(b, 'start')) : [];
+  const myUpcoming = mySessions.filter(s => sessionDateTime(s, 'start') >= now);
+  const myPastCount = mySessions.length - myUpcoming.length;
   const totals = modeTotals(sessions, modes);
   const modeNames = (modes || DEFAULT_MODES).map(m => m.name);
   const roomLabel = s => {
@@ -2122,20 +2252,7 @@ function DashboardPanel({ sessions, staff, modes, auth, isFullAdmin, rooms, onSe
         {upcoming.length === 0 ? <div style={{ padding: 14, fontSize: 12.5, color: '#D5E0D5' }}>No sessions in the next 24 hours.</div> : upcoming.map(row)}
       </div>
 
-      {!isFullAdmin && (
-        <>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#D5E0D5' }}>My sessions</div>
-          <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '14px 16px', marginBottom: 24, maxWidth: 480 }}>
-            {counts.filter(c => c.person.id === auth.fellowId || c.person.email === auth.email || c.person.name === (auth.name || '')).map(c => (
-              <div key={String(c.person.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontWeight: 600 }}>{c.person.name}</span>
-                <span style={{ fontSize: 20, fontWeight: 700 }}>{c.count} session{c.count === 1 ? '' : 's'}</span>
-              </div>
-            ))}
-            {counts.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No staff record matches your account.</div>}
-          </div>
-        </>
-      )}
+
 
       {isFullAdmin && (
         <>
@@ -2164,6 +2281,14 @@ function DashboardPanel({ sessions, staff, modes, auth, isFullAdmin, rooms, onSe
           </div>
         ))}
       </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: '#D5E0D5' }}>My sessions{me && mySessions.length ? ' (' + mySessions.length + ')' : ''}</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+        {!me ? <div style={{ padding: 14, fontSize: 12.5, color: '#9DB09D' }}>No staff record matches your account.</div>
+          : myUpcoming.length === 0 ? <div style={{ padding: 14, fontSize: 12.5, color: '#9DB09D' }}>No upcoming sessions assigned to you.</div>
+          : myUpcoming.map(row)}
+      </div>
+      {me && myPastCount > 0 && <div style={{ fontSize: 11.5, color: '#9DB09D', marginTop: 8 }}>{myPastCount} past assigned session{myPastCount === 1 ? '' : 's'} not shown.</div>}
     </div>
   );
 }
@@ -2178,7 +2303,7 @@ function LegendPanel({ sessionTypes, staff, cityCodes }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {types.map(t => (
             <div key={String(t.id) + (t.name || '')} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5 }}>
-              <span style={{ width: 14, height: 14, borderRadius: 3, background: getTypeColor(t.name, null), flexShrink: 0 }} />
+              <span style={{ width: 14, height: 14, borderRadius: 3, background: getTypeColor(t.name, types), flexShrink: 0 }} />
               <span style={{ color: '#D5E0D5' }}>{t.name}</span>
             </div>
           ))}
@@ -2214,21 +2339,30 @@ function LegendPanel({ sessionTypes, staff, cityCodes }) {
 
 function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter, onEdit, onDelete, onDuplicate, onView, rooms, weeks, sessionTypes, pillarTags, staff, startDate }) {
   const displayedWeek = (s) => (s.date && startDate) ? weekForDate(s.date, startDate) : (s.week != null ? s.week : null);
+  const roomNamesOf = s => [...new Set([...(s.rooms || []).map(rm => rm.name).filter(Boolean), ...(s.roomIds || []).map(id => (rooms || []).find(room => room.id === id)?.name).filter(Boolean)])];
+  const facilitatorOptions = [...new Set(sessions.flatMap(s => fmtFacilitators(s.facilitators, rooms, staff).split(', ')).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const roomOptions = [...new Set(sessions.flatMap(roomNamesOf))].filter(Boolean).sort((a, b) => a.localeCompare(b));
   const tableScrollRef = useRef(null);
   const fav = ok => <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>{ok ? <CheckIcon size={14} color="#5FA97E" weight="bold" /> : <X size={14} color="#D65641" weight="bold" />}</span>;
+  const [facilitatorFilter, setFacilitatorFilter] = useState('all');
+  const [roomFilter, setRoomFilter] = useState('all');
   const rows = useMemo(() => {
     let r = sessions.slice();
     const query = search.trim().toLowerCase();
-    if (query) r = r.filter(s => [s.name, s.date, s.type, s.mode, ...sessionPillarNames(s, pillarTags), ...fmtFacilitators(s.facilitators, rooms, staff).split(', '), ...(s.resources || []).flatMap(resource => [resource.label, resource.url]), ...(s.roomIds || []).map(id => rooms.find(room => room.id === id)?.name)].filter(Boolean).join(' ').toLowerCase().includes(query));
+    if (query) r = r.filter(s => String(s.name || '').toLowerCase().includes(query));
+    if (facilitatorFilter !== 'all') r = r.filter(s => fmtFacilitators(s.facilitators, rooms, staff).split(', ').includes(facilitatorFilter));
+    if (roomFilter !== 'all') r = r.filter(s => roomNamesOf(s).includes(roomFilter));
     if (weekFilter !== 'all') r = r.filter(s => weekFilter === 'unscheduled' ? displayedWeek(s) == null : (displayedWeek(s) != null && Number(displayedWeek(s)) === Number(weekFilter)));
     r.sort((a, b) => (a.date || 'zzzz').localeCompare(b.date || 'zzzz') || (toMin(a.start) || 9999) - (toMin(b.start) || 9999));
     return r;
-  }, [sessions, search, weekFilter, rooms, startDate]);
+  }, [sessions, search, weekFilter, rooms, startDate, facilitatorFilter, roomFilter, staff, pillarTags]);
 
   return (
     <div>
-      <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sessions, facilitators, rooms, resources" className={inputStyle + ' w-[300px]! max-w-full'} aria-label="Search sessions" />
+      <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sessions by name" className={inputStyle + ' w-[260px]! max-w-full'} aria-label="Search sessions by name" />
+        <select value={facilitatorFilter} onChange={e => setFacilitatorFilter(e.target.value)} className={selectStyle} aria-label="Filter by facilitator"><option value="all">All facilitators</option>{facilitatorOptions.map(name => <option key={name} value={name}>{name}</option>)}</select>
+        <select value={roomFilter} onChange={e => setRoomFilter(e.target.value)} className={selectStyle} aria-label="Filter by room"><option value="all">All rooms</option>{roomOptions.map(name => <option key={name} value={name}>{name}</option>)}</select>
         <span style={{ fontSize: 13, color: '#D5E0D5' }}>Week</span>
         <select value={weekFilter} onChange={e => setWeekFilter(e.target.value)} className={selectStyle}>
           <option value="all">All weeks</option>{(weeks || WEEKS).map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}<option value="unscheduled">Unscheduled</option>
@@ -2236,7 +2370,8 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
         <span style={{ fontSize: 12.5, color: '#9DB09D' }}>{rows.length} sessions</span>
       </div>
       <div className="wa14-table-scroll-wrap"><div ref={tableScrollRef} className="wa14-table-scroll wa14-floating-scroll" style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>
-        <table style={{ minWidth: 920, borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ width: '100%', minWidth: 1080, borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' }}>
+          <colgroup><col style={{ width: 76 }} /><col style={{ width: 110 }} /><col style={{ width: 110 }} /><col /><col style={{ width: 60 }} /><col style={{ width: 64 }} /><col style={{ width: 72 }} /><col style={{ width: 92 }} /><col style={{ width: 80 }} /><col style={{ width: 186 }} /></colgroup>
           <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Week', 'Date', 'Time', 'Session', 'Type', 'Mode', 'Pillars', 'Facilitators', 'Outcomes', ''].map(h => (<th key={h} style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B', textAlign: h === 'Type' || h === 'Mode' || h === 'Pillars' || h === 'Facilitators' || h === 'Outcomes' ? 'center' : 'left' }}>{h}</th>))}</tr></thead>
           <tbody>
             {rows.map(s => (
@@ -2244,7 +2379,7 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap', fontWeight: 600 }}>{displayedWeek(s) != null ? 'Week ' + String(displayedWeek(s)).padStart(2, '0') : '--'}</td>
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.date ? dateLabel(s.date) : '--'}</td>
                 <td style={{ padding: '8px 12px', color: '#D5E0D5', whiteSpace: 'nowrap' }}>{s.start ? s.start + ' - ' + s.end : '--'}</td>
-                <td style={{ padding: '8px 12px', fontWeight: 500, maxWidth: 220 }}>{s.name || '(untitled)'}</td>
+                <td style={{ padding: '8px 12px', fontWeight: 500 }}>{s.name || '(untitled)'}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav(Boolean(s.type))}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav(Boolean(s.mode))}</td>
                 <td style={{ padding: '8px 12px', textAlign: 'center' }}>{fav(sessionPillarNames(s, pillarTags).length > 0)}</td>
@@ -2385,7 +2520,54 @@ function ExpandedAnalyticsPanel({ sessions, attendance, attempts, assessments, r
   }).filter(value => Number.isFinite(value));
   const average = scoreValues.length ? Math.round(scoreValues.reduce((sum, value) => sum + value, 0) / scoreValues.length) : 0;
   const submission = roster.length ? Math.round(filteredAttempts.filter(attempt => attempt.status === 'submitted').length / Math.max(1, fellows.length) * 100) : 0;
-  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={() => setView('attendance')} className={view === 'attendance' ? btnPrimary : btnSecondary}>Attendance</button><button onClick={() => setView('assessment')} className={view === 'assessment' ? btnPrimary : btnSecondary}>Assessments</button><button onClick={onSeedDemo} className={btnGhost}>Create demo data</button><button onClick={onDeleteDemo} className={btnGhost + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}><select className={selectStyle} value={track} onChange={event => setTrack(event.target.value)}><option value="all">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><select className={selectStyle} value={city} onChange={event => setCity(event.target.value)}><option value="all">All placement cities</option>{[...new Set(roster.map(fellow => fellow.placementCity).filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><select className={selectStyle} value={afa} onChange={event => setAfa(event.target.value)}><option value="all">All AFA groups</option>{[...new Set([...(afaGroups || []), ...roster.map(fellow => fellow.afaGroup)].filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><span style={{ fontSize: 12.5, color: '#D5E0D5', alignSelf: 'center' }}>{fellows.length} Fellows matched</span></div>{view === 'attendance' ? <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Attendance records" value={filteredAttendance.length} /><Metric label="On-time" value={filteredAttendance.filter(entry => entry.status === 'on_time').length} /><Metric label="Attendance %" value={`${fellows.length ? Math.round(filteredAttendance.length / Math.max(1, fellows.length) * 100) : 0}%`} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Attendance by session</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{attendanceBySession.map(row => <div key={row.label} title={`${row.label}: ${row.value}`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, row.value / max * 100)}%`, background: '#D65641', borderRadius: '4px 4px 0 0' }} />)}</div></> : <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Submission %" value={`${submission}%`} /><Metric label="Average score %" value={`${average}%`} /><Metric label="Submitted attempts" value={filteredAttempts.filter(attempt => attempt.status === 'submitted').length} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Assessment score trend</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{assessments.map(assessment => { const values = filteredAttempts.filter(attempt => attempt.assessmentId === assessment.id).map(attempt => computeAttemptPercentage(attempt, assessment)); const value = values.length ? values.reduce((sum, item) => sum + item, 0) / values.length : 0; return <div key={assessment.id} title={`${assessment.title}: ${Math.round(value)}%`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, value)}%`, background: '#D97355', borderRadius: '4px 4px 0 0' }} /> })}</div><SessionAssessmentBreakdown fellows={fellows} sessions={sessions} assessments={assessments} attempts={filteredAttempts} roster={roster} /></>}</div>;
+  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={() => setView('attendance')} className={view === 'attendance' ? btnPrimary : btnSecondary}>Attendance</button><button onClick={() => setView('assessment')} className={view === 'assessment' ? btnPrimary : btnSecondary}>Assessments</button><button onClick={onSeedDemo} className={btnGhost}>Create demo data</button><button onClick={onDeleteDemo} className={btnGhost + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}><select className={selectStyle} value={track} onChange={event => setTrack(event.target.value)}><option value="all">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><select className={selectStyle} value={city} onChange={event => setCity(event.target.value)}><option value="all">All placement cities</option>{[...new Set(roster.map(fellow => fellow.placementCity).filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><select className={selectStyle} value={afa} onChange={event => setAfa(event.target.value)}><option value="all">All AFA groups</option>{[...new Set([...(afaGroups || []), ...roster.map(fellow => fellow.afaGroup)].filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><span style={{ fontSize: 12.5, color: '#D5E0D5', alignSelf: 'center' }}>{fellows.length} Fellows matched</span></div>{view === 'attendance' ? <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Attendance records" value={filteredAttendance.length} /><Metric label="On-time" value={filteredAttendance.filter(entry => entry.status === 'on_time').length} /><Metric label="Attendance %" value={`${fellows.length ? Math.round(filteredAttendance.length / Math.max(1, fellows.length) * 100) : 0}%`} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Attendance by session</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{attendanceBySession.map(row => <div key={row.label} title={`${row.label}: ${row.value}`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, row.value / max * 100)}%`, background: '#D65641', borderRadius: '4px 4px 0 0' }} />)}</div><FellowAttendanceBreakdown sessions={sessions} attendance={filteredAttendance} fellows={fellows} roster={roster} /></> : <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Submission %" value={`${submission}%`} /><Metric label="Average score %" value={`${average}%`} /><Metric label="Submitted attempts" value={filteredAttempts.filter(attempt => attempt.status === 'submitted').length} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Assessment score trend</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{assessments.map(assessment => { const values = filteredAttempts.filter(attempt => attempt.assessmentId === assessment.id).map(attempt => computeAttemptPercentage(attempt, assessment)); const value = values.length ? values.reduce((sum, item) => sum + item, 0) / values.length : 0; return <div key={assessment.id} title={`${assessment.title}: ${Math.round(value)}%`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, value)}%`, background: '#D97355', borderRadius: '4px 4px 0 0' }} /> })}</div><SessionAssessmentBreakdown fellows={fellows} sessions={sessions} assessments={assessments} attempts={filteredAttempts} roster={roster} /></>}</div>;
+}
+
+
+function FellowAttendanceBreakdown({ sessions, attendance, fellows, roster }) {
+  const statusColor = st => st === 'on_time' ? '#2D7A4F' : st === 'late' ? '#D0A023' : '#9DB09D';
+  const statusLabel = st => st === 'on_time' ? 'On time' : st === 'late' ? 'Late' : 'No record';
+  const hasRecords = sessions.some(session => (attendance || []).some(entry => String(entry.sessionId) === String(session.id)));
+  return <div style={{ marginTop: 24 }}>
+    <div style={{ fontWeight: 700 }}>Fellow-wise attendance</div>
+    {sessions.map(session => {
+      const records = (attendance || []).filter(entry => String(entry.sessionId) === String(session.id));
+      if (!records.length) return null;
+      const onTime = records.filter(entry => entry.status === 'on_time').length;
+      const late = records.filter(entry => entry.status === 'late').length;
+      const present = new Set(records.map(entry => String(entry.fellowId))).size;
+      return (
+        <div key={session.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 14, maxWidth: 960, overflowX: 'auto' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{session.name || 'Session'} <span style={{ fontWeight: 400, color: '#9DB09D', fontSize: 12 }}>{session.date ? '· ' + dateLabel(session.date) : '· unscheduled'}</span></div>
+          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 10 }}>{present} fellow{present === 1 ? '' : 's'} attended · {onTime} on time · {late} late · {Math.max(0, fellows.length - present)} without record</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: '#00402E', textAlign: 'left' }}>
+                <th style={{ padding: 8 }}>Fellow</th>
+                <th style={{ padding: 8 }}>Status</th>
+                <th style={{ padding: 8 }}>Recorded at</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fellows.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(f => {
+                const entry = records.filter(r => String(r.fellowId) === String(f.id)).sort((x, y) => String(y.recordedAt || '').localeCompare(String(x.recordedAt || '')))[0];
+                const st = entry ? entry.status : null;
+                return (
+                  <tr key={f.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                    <td style={{ padding: 8, fontWeight: 600 }}>{f.name || friendlyFellowName({ fellowId: f.id }, roster)}</td>
+                    <td style={{ padding: 8, color: statusColor(st), fontWeight: 600 }}>{statusLabel(st)}</td>
+                    <td style={{ padding: 8, color: '#D5E0D5' }}>{entry && entry.recordedAt ? new Date(entry.recordedAt).toLocaleString() : '--'}</td>
+                  </tr>
+                );
+              })}
+              {fellows.length === 0 && <tr><td colSpan={3} style={{ padding: 10, color: '#9DB09D' }}>No fellows match the current filters.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      );
+    })}
+    {!hasRecords && <div style={{ fontSize: 12.5, color: '#9DB09D', marginTop: 8 }}>No attendance records yet. Fellows mark their own attendance when a Sync, Workshop, or Clinic session starts; check-ins will appear here fellow by fellow.</div>}
+  </div>;
 }
 
 function SessionAssessmentBreakdown({ sessions, assessments, attempts, roster, fellows }) {
@@ -3106,7 +3288,7 @@ function QuestionEditor({ question, onSave, onClose }) {
 }
 
 function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessionTypes, pillarTags, modes, rooms, staff, weeks, startDate }) {
-  const [form, setForm] = useState({ ...session, type: session.type || session.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(session.pillarIds) ? session.pillarIds : [], facilitators: (session.facilitators || []).map(f => typeof f === 'string' ? { id: newResId(), staffName: f, roomId: '' } : { id: f.id || newResId(), staffName: f.staffName || f.name || '', roomId: f.roomId || '', group: f.group || '' }), resources: session.resources ? session.resources.map(r => ({ ...r })) : [], outcomes: (session.outcomes || []).filter(Boolean).map(text => ({ id: newResId(), text })), notes: session.notes || '', fellowNotes: session.fellowNotes || '', attendanceCode: session.attendanceCode || '' });
+  const [form, setForm] = useState({ ...session, type: session.type || session.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(session.pillarIds) ? session.pillarIds : [], facilitators: (session.facilitators || []).map(f => typeof f === 'string' ? { id: newResId(), staffName: f, roomId: '' } : { id: f.id || newResId(), staffName: f.staffName || f.name || '', roomId: f.roomId || '', group: f.group || '' }), resources: session.resources ? session.resources.map(r => ({ ...r })) : [], outcomes: (session.outcomes || []).filter(Boolean).map(text => ({ id: newResId(), text })), notes: session.notes || '', fellowNotes: session.fellowNotes || '' });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const addResource = () => set('resources', [...form.resources, { id: newResId(), label: RESOURCE_KINDS[0], url: '' }]);
   const updateResource = (id, key, val) => set('resources', form.resources.map(r => r.id === id ? { ...r, [key]: val } : r));
@@ -3142,7 +3324,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
       roomIds: form.roomIds || [],
       resources: form.resources.filter(r => r.url.trim()),
       outcomes: form.outcomes.map(o => (o.text || '').trim()).filter(Boolean),
-      notes: form.notes.trim(), fellowNotes: form.fellowNotes.trim(), afaGroup: form.afaGroup.trim(), attendanceCode: form.attendanceCode.trim(),
+      notes: form.notes.trim(), fellowNotes: form.fellowNotes.trim(), afaGroup: form.afaGroup.trim(),
       calendared: !!form.date && !!form.start && !!form.end,
     });
   };
@@ -3194,7 +3376,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
           <button disabled={!canEditSchedule} onClick={addFacilitator} className={btnGhost + ' mt-2 px-1 py-1.5'}><Plus size={13} /> Add facilitator</button>
           <div style={{ fontSize: 11, color: '#9DB09D', marginTop: 6 }}>Session rooms and AFA rooms are managed in the Rooms tab.</div>
         </Field>
-        <Field label="Attendance code"><input disabled={!canEditSchedule} className={inputStyle + (canEditSchedule ? '' : ' opacity-60')} value={form.attendanceCode || ''} onChange={e => set('attendanceCode', e.target.value)} placeholder="Code Fellows enter for attendance" /></Field>
+        
 
         <Field label="Planner notes (internal)"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Internal planning notes" /></Field>
         <Field label="Fellow-visible notes"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.fellowNotes} onChange={e => set('fellowNotes', e.target.value)} placeholder="Notes Fellows should see" /></Field>
@@ -3236,4 +3418,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'w-full px-2.5 py-2 rounded-md border border-[#C9CDD2] text-[13px] bg-white text-[#252625] box-border';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowOverview, AttendanceCodePanel, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, generateAttendanceCodes, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween };

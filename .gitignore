@@ -2,3 +2,7 @@ node_modules/
 dist/
 .kilo/
 Updating the system/
+*.log
+firebase-debug.log*
+vite.config.js.timestamp*
+.DS_Store

@@ -10,7 +10,6 @@ export const ASSESSMENT_KEYS = {
   questions: 'wa14-assessment-questions',
   attempts: 'wa14-assessment-attempts',
   attendance: 'wa14-attendance',
-  attendanceCodes: 'wa14-attendance-codes',
   incidents: 'wa14-assessment-incidents',
   deviceRequests: 'wa14-device-change-requests',
   analytics: 'wa14-assessment-analytics',

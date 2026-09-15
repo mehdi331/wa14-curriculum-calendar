@@ -52,6 +52,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .proctored { user-select: none; -webkit-user-select: none; }
 .proctored input, .proctored textarea { user-select: text; -webkit-user-select: text; }
 
+/* Modern UI enhancements & transitions */
+.wa14-sidebar {
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width, transform;
+}
+
+.wa14-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.wa14-card:hover {
+  border-color: #387A64;
+}
+
+.wa14-nav-item {
+  transition: all 0.15s ease-in-out;
+}
+
 @media (max-width: 1024px) {
   .wa14-content-inner { padding: 16px 14px 32px; }
   .wa14-hide-tablet { display: none !important; }
@@ -66,4 +84,5 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   input, select, textarea { font-size: 16px; }
   .wa14-cal-scroll { margin: 0 -10px; padding: 0 10px; }
 }
+
 

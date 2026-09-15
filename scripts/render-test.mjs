@@ -42,9 +42,18 @@ else { console.log('FAIL  computeAttemptScore got ' + JSON.stringify(sc) + ' pct
 
 // attendance code + grade helpers
 try {
-  const codes = mod2.__panels.generateAttendanceCodes(12, 6);
-  if (codes.length === 12 && new Set(codes).size === 12 && codes.every(c => /^[A-Z2-9]{6}$/.test(c))) console.log('OK    generateAttendanceCodes 12 unique codes');
-  else { console.log('FAIL  generateAttendanceCodes got ' + JSON.stringify(codes)); failed++; }
+  const phase = mod2.__panels.attendancePhase;
+  const elig = mod2.__panels.attendanceEligible;
+  const syncSession = { mode: 'Sync', date: '2026-10-25', start: '09:00', end: '10:00' };
+  const phaseChecks = [
+    ['upcoming', phase(syncSession, new Date('2026-10-25T02:59:00Z'))],
+    ['on_time', phase(syncSession, new Date('2026-10-25T03:04:59Z'))],
+    ['late', phase(syncSession, new Date('2026-10-25T03:05:00Z'))],
+    ['closed', phase(syncSession, new Date('2026-10-25T03:15:00Z'))],
+  ];
+  const asyncNull = phase({ mode: 'Async', date: '2026-10-25', start: '09:00', end: '10:00' }, new Date('2026-10-25T03:04:59Z')) === null;
+  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && elig(syncSession) === true && elig({ mode: 'Async' }) === false) console.log('OK    attendancePhase window boundaries');
+  else { console.log('FAIL  attendancePhase got ' + JSON.stringify(phaseChecks) + ' asyncNull=' + asyncNull); failed++; }
   const released = mod2.__panels.isGradeReleased({ gradesReleased: true });
   const hidden = mod2.__panels.isGradeReleased({ gradesReleased: false });
   const submittedUngraded = mod2.__panels.attemptGradeStatus({ status: 'submitted', questionOrder: ['q1'], answers: { q1: 'x' }, reviews: {} }, mockAssessment);
