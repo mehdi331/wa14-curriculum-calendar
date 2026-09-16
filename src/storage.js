@@ -13,6 +13,13 @@ export const ASSESSMENT_KEYS = {
   incidents: 'wa14-assessment-incidents',
   deviceRequests: 'wa14-device-change-requests',
   analytics: 'wa14-assessment-analytics',
+  academyOverview: 'wa14-academy-overview',
+  historicalAcademies: 'wa-historical-academies',
+};
+
+export const ACADEMY_KEYS = {
+  academyOverview: 'wa14-academy-overview',
+  historicalAcademies: 'wa-historical-academies',
 };
 
 export function parseStoredArray(record) {

@@ -63,6 +63,25 @@ try {
   else { console.log('FAIL  grade/device helpers got ' + JSON.stringify({ released, hidden, submittedUngraded, submittedGraded, fp })); failed++; }
 } catch (err) { console.log('FAIL  grade/device helpers: ' + err.message); failed++; }
 
+// normalizeHashTab routing rules
+try {
+  const nht = mod2.__panels.normalizeHashTab;
+  const nhtChecks = [
+    ['', false, false, false, true, 'overview'],
+    ['fellowAnalytics', false, false, false, true, 'fellowAnalytics'],
+    ['dashboard', false, false, false, true, 'overview'],
+    ['academyArchives', false, false, false, true, 'overview'],
+    ['', true, true, true, false, 'dashboard'],
+    ['academyArchives', true, true, true, false, 'academyArchives'],
+    ['overview', true, true, true, false, 'overview'],
+    ['bogus', true, false, false, false, 'dashboard'],
+    ['bogus', false, false, false, true, 'overview'],
+    ['bogus', false, false, false, false, 'calendar'],
+  ];
+  const nhtBad = nhtChecks.filter(([h, a, f, s, fl, want]) => nht(h, a, f, s, fl) !== want);
+  if (!nhtBad.length) console.log('OK    normalizeHashTab routing rules');
+  else { console.log('FAIL  normalizeHashTab got ' + JSON.stringify(nhtBad)); failed++; }
+} catch (err) { console.log('FAIL  normalizeHashTab: ' + err.message); failed++; }
 // weekForDate: 2026-10-25 is a Sunday → dates map to correct week indexes
 // Week 00 is the full week before (Oct 18-24), Week 01 is Oct 25-31, etc.
 const wf = mod2.__panels.weekForDate;
