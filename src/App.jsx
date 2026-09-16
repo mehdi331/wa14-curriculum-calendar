@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, Copy as CopyIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon, NotePencil as Edit, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as RotateCcw, Users, Clock, Calendar as CalendarIcon, Table as TableIcon, ChartBar as BarChart3, Link as LinkIcon, Copy as CopyIcon, SignOut as LogOut, UserPlus, Trash as Trash2, ShieldCheck, ChatCircle as MessageSquare, PaperPlaneTilt as Send, DoorOpen, ClipboardText, Key as KeyIcon, GraduationCap as GradCapIcon, Bell as BellIcon, Monitor as MonitorIcon, Warning as WarnIcon, CheckCircle as CheckIcon, NotePencil as Edit, CaretLeft, CaretRight, Compass, SquaresFour, TrendUp, ListDashes, UserCheck, Timer, UsersThree, Buildings, Tag, Columns, SlidersHorizontal, Tray, Archive, FileText, Briefcase, IdentificationBadge, LockKey } from '@phosphor-icons/react';
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, GoogleAuthProvider } from 'firebase/auth';
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
@@ -1368,30 +1368,30 @@ function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
 function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, openRequests }) {
   const [open, setOpen] = useState(false);
   const tabs = [
-    { id: 'overview', label: 'Vision, Goals & Pillars', icon: GradCapIcon },
-    ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: BarChart3 }] : []),
+    { id: 'overview', label: 'Vision, Goals & Pillars', icon: Compass },
+    ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: SquaresFour }] : []),
     { id: 'calendar', label: 'Winter Academy Calendar', icon: CalendarIcon },
-    ...(isFellow ? [{ id: 'fellowAnalytics', label: 'Analytics', icon: BarChart3 }] : []),
-    { id: 'legend', label: 'Legend', icon: ListIcon },
+    ...(isFellow ? [{ id: 'fellowAnalytics', label: 'Analytics', icon: TrendUp }] : []),
+    { id: 'legend', label: 'Legend', icon: ListDashes },
     ...(isAdmin ? [{ id: 'sessions', label: 'Sessions', icon: TableIcon }] : []),
-    ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance records', icon: KeyIcon }] : []),
+    ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance records', icon: UserCheck }] : []),
     ...(isFullAdmin ? [
-      { id: 'summary', label: 'Time Summary', icon: BarChart3 },
-      { id: 'fellows', label: 'Fellows', icon: UserPlus },
-      { id: 'rooms', label: 'Rooms', icon: DoorOpen },
-      { id: 'sessionTypes', label: 'Session Types', icon: ShieldCheck },
-      { id: 'pillarTags', label: 'Pillars', icon: ShieldCheck },
-      { id: 'modes', label: 'Work Modes', icon: Clock },
-      { id: 'requests', label: 'Requests' + (openRequests ? ' (' + openRequests + ')' : ''), icon: MessageSquare },
-      { id: 'academyArchives', label: 'Historical Academies', icon: Clock },
+      { id: 'summary', label: 'Time Summary', icon: Timer },
+      { id: 'fellows', label: 'Fellows', icon: UsersThree },
+      { id: 'rooms', label: 'Rooms', icon: Buildings },
+      { id: 'sessionTypes', label: 'Session Types', icon: Tag },
+      { id: 'pillarTags', label: 'Pillars', icon: Columns },
+      { id: 'modes', label: 'Work Modes', icon: SlidersHorizontal },
+      { id: 'requests', label: 'Requests' + (openRequests ? ' (' + openRequests + ')' : ''), icon: Tray },
+      { id: 'academyArchives', label: 'Historical Academies', icon: Archive },
     ] : []),
     ...(isAdmin ? [{ id: 'assessments', label: 'Assessments', icon: ClipboardText }] : []),
-    ...(isAdmin ? [{ id: 'review', label: 'Review', icon: GradCapIcon }] : []),
+    ...(isAdmin ? [{ id: 'review', label: 'Review', icon: FileText }] : []),
     ...(isAdmin ? [{ id: 'analytics', label: 'Analytics', icon: BarChart3 }] : []),
     ...(isFullAdmin ? [{ id: 'incidents', label: 'Incidents', icon: WarnIcon }] : []),
     ...(isFullAdmin ? [{ id: 'devices', label: 'Devices', icon: MonitorIcon }] : []),
-    ...(isAdmin ? [{ id: 'staffCalendar', label: 'Staff calendar', icon: ClipboardText }] : []),
-    ...(isSuperadmin ? [{ id: 'planners', label: 'WA Staff', icon: ShieldCheck }, { id: 'roles', label: 'Roles & Codes', icon: ShieldCheck }] : []),
+    ...(isAdmin ? [{ id: 'staffCalendar', label: 'Staff calendar', icon: Briefcase }] : []),
+    ...(isSuperadmin ? [{ id: 'planners', label: 'WA Staff', icon: IdentificationBadge }, { id: 'roles', label: 'Roles & Codes', icon: LockKey }] : []),
   ];
   const go = (id) => (e) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
