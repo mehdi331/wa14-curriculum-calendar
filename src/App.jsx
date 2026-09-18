@@ -476,15 +476,15 @@ async function resolveRole(user) {
 
 function LoginGate({ onLogin, onLocalLogin, onRedirectLogin, error, busy }) {
   return (
-    <div className="wa14-app" style={{ fontFamily: FONT, minHeight: '480px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#252625' }}>
-      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 10, padding: 32, width: 340, maxWidth: '88vw' }}>
-        <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 2 }}>Training and Design</div>
-        <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 4 }}>Teach For Bangladesh</div>
-        <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 20 }}>Sign in with your Teach For Bangladesh Google account.</div>
-        {error && <div style={{ color: '#D0A023', fontSize: 12, marginBottom: 10, lineHeight: 1.4 }}>{error}</div>}
-        <button type="button" onClick={onLogin} disabled={busy} className={btnPrimary + ' w-full justify-center py-2.5 mt-1.5'} style={{ opacity: busy ? 0.65 : 1 }}>{busy ? 'Opening Google…' : 'Continue with Google'}</button>
-        {error && <button type="button" onClick={onRedirectLogin} disabled={busy} className={btnGhost + ' w-full justify-center mt-2'}>Use redirect sign-in</button>}
-        {import.meta.env.DEV && <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid #1F4A3C' }}><div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 8 }}>Local testing only. These buttons are disabled in production.</div><div style={{ display: 'flex', gap: 8 }}><button type="button" onClick={() => onLocalLogin('superadmin')} className={btnSecondary + ' flex-1 justify-center'}>Test superuser</button><button type="button" onClick={() => onLocalLogin('fellow')} className={btnSecondary + ' flex-1 justify-center'}>Test Fellow</button></div></div>}
+    <div className="wa14-app min-h-[480px] flex items-center justify-center bg-wa-bg" style={{ fontFamily: FONT }}>
+      <div className="wa-card p-8 w-[340px] max-w-[88vw]">
+        <div className="font-extrabold text-xl mb-[2px]">Training and Design</div>
+        <div className="text-xs text-wa-muted mb-1">Teach For Bangladesh</div>
+        <div className="text-[12.5px] text-wa-muted mb-5">Sign in with your Teach For Bangladesh Google account.</div>
+        {error && <div className="text-wa-warn text-xs mb-[10px] leading-[1.4]">{error}</div>}
+        <button type="button" onClick={onLogin} disabled={busy} className="btn-primary w-full justify-center py-2.5 mt-1.5" style={{ opacity: busy ? 0.65 : 1 }}>{busy ? 'Opening Google…' : 'Continue with Google'}</button>
+        {error && <button type="button" onClick={onRedirectLogin} disabled={busy} className="btn-ghost w-full justify-center mt-2">Use redirect sign-in</button>}
+        {import.meta.env.DEV && <div className="mt-[22px] pt-4 border-t border-wa-borderdeep"><div className="text-[11.5px] text-wa-muted mb-2">Local testing only. These buttons are disabled in production.</div><div className="flex gap-2"><button type="button" onClick={() => onLocalLogin('superadmin')} className="btn-secondary flex-1 justify-center">Test superuser</button><button type="button" onClick={() => onLocalLogin('fellow')} className="btn-secondary flex-1 justify-center">Test Fellow</button></div></div>}
       </div>
     </div>
   );
@@ -1155,7 +1155,7 @@ function blankStaffTask() {
   return { id: 'st-' + Date.now(), kind: 'staff-task', name: '', date: '', weekday: '', start: '', end: '', week: 0, notes: '', owner: '', status: 'todo' };
 }
 
-const toastStyle = 'fixed top-4 right-6 bg-[#005B3F] text-white px-4 py-2.5 rounded-md text-[13px] z-[200] shadow-lg';
+const toastStyle = 'fixed top-4 right-6 bg-wa-menu text-white px-4 py-2.5 rounded-md text-[13px] z-[200] shadow-lg';
 
 function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, setActiveWeek, hiddenDays, setHiddenDays, isFullAdmin, onSelect, onEditStaff, onAddStaff }) {
   const [showStaff, setShowStaff] = useState(true);
@@ -1226,20 +1226,20 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
         </div>
       )}
       <div className="wa14-cal-scroll-wrap">
-      <div ref={staffScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
-          <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
-            <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
+      <div ref={staffScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-wa-line2" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+          <div className="w-14 shrink-0 border-r border-wa-linelight box-border">
+            <div className="h-[46px] border-b border-wa-linelight bg-wa-panellight"></div>
             <div className="relative" style={{ height: totalHeight }}>
-              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
+              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-wa-ink" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
             </div>
           </div>
           {visibleDays.map(([d, wd]) => {
             const dayStaff = layoutOverlapping(staffWeekTasks.filter(s => s.date === d).sort((a, b) => toMin(a.start) - toMin(b.start)));
             const dayMain = layoutOverlapping(mainWeekTasks.filter(s => s.date === d).sort((a, b) => toMin(a.start) - toMin(b.start)));
             return (
-              <div key={d} className="flex-1 min-w-[150px] border-r border-[#EEF0F2] box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
-                <div className="h-[46px] box-border border-b border-[#EEF0F2] bg-[#F7F8F9] text-[12.5px] font-semibold text-center pt-[5px] text-[#003223]">
-                  {wd}<div className="font-normal text-[#003223] text-[11px] leading-tight">{dateLabel(d)}</div>
+              <div key={d} className="flex-1 min-w-[150px] border-r border-wa-linelight box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
+                <div className="h-[46px] box-border border-b border-wa-linelight bg-wa-panellight text-[12.5px] font-semibold text-center pt-[5px] text-wa-ink">
+                  {wd}<div className="font-normal text-wa-ink text-[11px] leading-tight">{dateLabel(d)}</div>
                 </div>
                 <div className="relative" style={{ height: totalHeight }} onClick={e => {
                   if (!isFullAdmin || e.target !== e.currentTarget) return;
@@ -1333,32 +1333,32 @@ function StaffTaskEditor({ task, isFullAdmin, onSave, onDelete, onClose }) {
     });
   };
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(27,39,51,0.4)', display: 'flex', justifyContent: 'flex-end', zIndex: 100 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 400, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22, boxShadow: '-8px 0 24px rgba(0,0,0,.12)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{task ? 'Edit staff task' : 'New staff task'}</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9DB09D' }}><X size={18} /></button>
+    <div className="fixed inset-0 flex justify-end z-[100] bg-[rgba(27,39,51,0.4)]" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="w-[400px] max-w-[92vw] bg-wa-container h-full overflow-y-auto p-[22px] shadow-[-8px_0_24px_rgba(0,0,0,0.12)]">
+        <div className="flex justify-between items-center mb-[18px]">
+          <div className="font-bold text-[15px]">{task ? 'Edit staff task' : 'New staff task'}</div>
+          <button onClick={onClose} className="bg-none border-none cursor-pointer text-wa-muted p-0"><X size={18} /></button>
         </div>
-        <Field label="Task name"><input className={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Prep slides for IT Skills" /></Field>
-        <Field label="Owner / assignee"><input className={inputStyle} value={form.owner || ''} onChange={e => set('owner', e.target.value)} placeholder="Staff name" /></Field>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Field label="Date" style={{ flex: 1 }}><input type="date" className={inputStyle} value={form.date || ''} onChange={e => set('date', e.target.value)} /></Field>
-          <Field label="Week" style={{ width: 110 }}><select className={inputStyle} value={form.week ?? 0} onChange={e => set('week', Number(e.target.value))}>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}</select></Field>
+        <Field label="Task name"><input className="field-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Prep slides for IT Skills" /></Field>
+        <Field label="Owner / assignee"><input className="field-input" value={form.owner || ''} onChange={e => set('owner', e.target.value)} placeholder="Staff name" /></Field>
+        <div className="flex gap-[10px]">
+          <Field label="Date" style={{ flex: 1 }}><input type="date" className="field-input" value={form.date || ''} onChange={e => set('date', e.target.value)} /></Field>
+          <Field label="Week" style={{ width: 110 }}><select className="field-input" value={form.week ?? 0} onChange={e => set('week', Number(e.target.value))}>{WEEKS.map(w => <option key={w} value={w}>Week {String(w).padStart(2, '0')}</option>)}</select></Field>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Field label="Start time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.start || ''} onChange={e => onStaffStart(e.target.value)} /></Field>
-          <Field label="End time" style={{ flex: 1 }}><input type="time" className={inputStyle} value={form.end || ''} onChange={e => onStaffEnd(e.target.value)} /></Field>
+        <div className="flex gap-[10px]">
+          <Field label="Start time" style={{ flex: 1 }}><input type="time" className="field-input" value={form.start || ''} onChange={e => onStaffStart(e.target.value)} /></Field>
+          <Field label="End time" style={{ flex: 1 }}><input type="time" className="field-input" value={form.end || ''} onChange={e => onStaffEnd(e.target.value)} /></Field>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Field label="Duration (min)" style={{ flex: 1 }}><select className={inputStyle} value={staffCustomMode || !DURATION_PRESETS.includes(Number(staffTaskDuration)) ? 'custom' : Number(staffTaskDuration)} onChange={e => onStaffDurationPreset(e.target.value)}>{DURATION_PRESETS.map(d => <option key={d} value={d}>{d}m</option>)}<option value="custom">Custom…</option></select></Field>
-          <Field label="Duration" style={{ flex: 1 }}><div className={inputStyle} style={{ background: '#EEF0F2', color: '#003223', fontWeight: 600 }}>{form.start ? fmtDur(staffTaskDuration) : '--'}</div></Field>
+        <div className="flex gap-[10px]">
+          <Field label="Duration (min)" style={{ flex: 1 }}><select className="field-input" value={staffCustomMode || !DURATION_PRESETS.includes(Number(staffTaskDuration)) ? 'custom' : Number(staffTaskDuration)} onChange={e => onStaffDurationPreset(e.target.value)}>{DURATION_PRESETS.map(d => <option key={d} value={d}>{d}m</option>)}<option value="custom">Custom…</option></select></Field>
+          <Field label="Duration" style={{ flex: 1 }}><div className="field-input bg-wa-linelight text-wa-ink font-semibold">{form.start ? fmtDur(staffTaskDuration) : '--'}</div></Field>
         </div>
-        {(staffCustomMode || !DURATION_PRESETS.includes(Number(staffTaskDuration))) && <Field label="Custom duration (minutes)"><input type="number" min="1" max="1439" className={inputStyle} value={staffTaskDuration} onChange={e => onStaffCustomDuration(e.target.value)} placeholder="e.g. 75" /></Field>}
-        <Field label="Status"><select className={inputStyle} value={form.status || 'todo'} onChange={e => set('status', e.target.value)}>{STAFF_STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></Field>
-        <Field label="Notes"><textarea className={inputStyle + ' resize-y'} rows={3} value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="Planning notes (staff only)" /></Field>
-        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-          <button onClick={handleSave} className={btnPrimary + ' flex-1 justify-center py-2.5'}>Save task</button>
-          {onDelete && <button onClick={() => { if (window.confirm('Delete this staff task?')) onDelete(form.id); }} className={btnSecondary + ' text-[#D0A023] border-[#E3B8B8]'}>Delete</button>}
+        {(staffCustomMode || !DURATION_PRESETS.includes(Number(staffTaskDuration))) && <Field label="Custom duration (minutes)"><input type="number" min="1" max="1439" className="field-input" value={staffTaskDuration} onChange={e => onStaffCustomDuration(e.target.value)} placeholder="e.g. 75" /></Field>}
+        <Field label="Status"><select className="field-input" value={form.status || 'todo'} onChange={e => set('status', e.target.value)}>{STAFF_STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}</select></Field>
+        <Field label="Notes"><textarea className="field-input resize-y" rows={3} value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="Planning notes (staff only)" /></Field>
+        <div className="flex gap-2 mt-5">
+          <button onClick={handleSave} className="btn-primary flex-1 justify-center py-2.5">Save task</button>
+          {onDelete && <button onClick={() => { if (window.confirm('Delete this staff task?')) onDelete(form.id); }} className="btn-secondary text-wa-warn border-wa-dangerline">Delete</button>}
         </div>
       </div>
     </div>
@@ -1402,15 +1402,15 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
   };
   return (
     <>
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3 py-2 bg-[#005B3F] border-b border-[#2A5C4B]">
-        <button onClick={() => setOpen(v => !v)} className={btnSecondary} aria-label="Toggle navigation"><ListIcon size={16} /> Menu {openRequests > 0 && <span className="ml-1 text-xs font-bold text-[#D65641]">({openRequests})</span>}</button>
-        <div className="text-[13px] font-bold text-[#D5E0D5]">{tabs.find(t => t.id === tab)?.label || 'Winter Academy Calendar'}</div>
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-2 px-3 py-2 bg-wa-menu border-b border-wa-border">
+        <button onClick={() => setOpen(v => !v)} className={btnSecondary} aria-label="Toggle navigation"><ListIcon size={16} /> Menu {openRequests > 0 && <span className="ml-1 text-xs font-bold text-wa-button">({openRequests})</span>}</button>
+        <div className="text-[13px] font-bold text-wa-text">{tabs.find(t => t.id === tab)?.label || 'Winter Academy Calendar'}</div>
       </div>
       {open && <button aria-label="Close navigation" onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,32,0.35)', border: 0, zIndex: 40 }} />}
-      <nav className={`wa14-sidebar relative z-[45] shrink-0 bg-[#005B3F] text-[#D5E0D5] flex flex-col sticky top-0 self-stretch overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${open ? 'w-[220px] open' : 'w-[56px]'} max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-[45] max-lg:w-[220px] ${open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-[110%]'}`}>
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#2A5C4B]/60 shrink-0">
-          {open && <span className="text-[11px] font-bold tracking-wider uppercase text-[#D5E0D5]/70 pl-1">Menu</span>}
-          <button onClick={() => setOpen(o => !o)} title={open ? 'Collapse menu' : 'Expand menu'} className="bg-transparent border-none text-[#FFFFFF] cursor-pointer p-1.5 rounded-md hover:bg-[#00402E] transition-colors flex items-center justify-center mx-auto">
+      <nav className={`wa14-sidebar relative z-[45] shrink-0 bg-wa-menu text-wa-text flex flex-col sticky top-0 self-stretch overflow-y-auto overflow-x-hidden transition-all duration-200 ease-out ${open ? 'w-[220px] open' : 'w-[56px]'} max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:z-[45] max-lg:w-[220px] ${open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-[110%]'}`}>
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-wa-border/60 shrink-0">
+          {open && <span className="text-[11px] font-bold tracking-wider uppercase text-wa-text/70 pl-1">Menu</span>}
+          <button onClick={() => setOpen(o => !o)} title={open ? 'Collapse menu' : 'Expand menu'} className="bg-transparent border-none text-white cursor-pointer p-1.5 rounded-md hover:bg-wa-container2 transition-colors flex items-center justify-center mx-auto">
             {open ? <CaretLeft size={16} weight="bold" /> : <CaretRight size={16} weight="bold" />}
           </button>
         </div>
@@ -1425,8 +1425,8 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
                 title={t.label}
                 className={`wa14-nav-item flex items-center gap-2.5 px-2.5 py-2 mx-1.5 rounded-lg text-[13px] whitespace-nowrap no-underline ${
                   active
-                    ? 'bg-[#D65641] text-white font-semibold shadow-xs'
-                    : 'text-[#D5E0D5] hover:bg-[#00402E] hover:text-white font-medium'
+                    ? 'bg-wa-button text-white font-semibold shadow-xs'
+                    : 'text-wa-text hover:bg-wa-container2 hover:text-white font-medium'
                 }`}
               >
                 <div className="w-7 h-7 flex items-center justify-center shrink-0 rounded-md">
@@ -1444,10 +1444,10 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
 
 function TopBar({ tab, isFullAdmin, auth, onLogout, onAdd, roles }) {
   return (
-    <div className="bg-[#003223]/95 backdrop-blur-md border-b border-[#2A5C4B] px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 sticky top-0 z-20 shadow-xs">
+    <div className="bg-wa-container/95 backdrop-blur-md border-b border-wa-border px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 sticky top-0 z-20 shadow-xs">
       <div className="py-2.5 min-w-[170px]">
         <div className="font-extrabold text-lg sm:text-xl leading-tight text-white tracking-tight">Fellow Training System</div>
-        <div className="text-[11.5px] text-[#9DB09D] mt-[2px] font-medium wa14-hide-mobile">Teach For Bangladesh</div>
+        <div className="text-[11.5px] text-wa-muted mt-[2px] font-medium wa14-hide-mobile">Teach For Bangladesh</div>
       </div>
       <div className="flex items-center gap-3 py-2.5 flex-wrap">
         {isFullAdmin && (
@@ -1459,11 +1459,11 @@ function TopBar({ tab, isFullAdmin, auth, onLogout, onAdd, roles }) {
             )}
           </div>
         )}
-        <div className="flex items-center gap-2.5 text-xs text-[#9DB09D] border-l border-[#1F4A3C] pl-3.5 min-w-0">
-          <span className="truncate max-w-[180px] sm:max-w-none bg-[#00402E] px-2.5 py-1 rounded-md text-[#D5E0D5] font-medium border border-[#2A5C4B]/60">
-            {auth.email} · <span className="text-[#D65641] font-semibold">{getRoleLabel(auth.role, roles)}</span>
+        <div className="flex items-center gap-2.5 text-xs text-wa-muted border-l border-wa-borderdeep pl-3.5 min-w-0">
+          <span className="truncate max-w-[180px] sm:max-w-none bg-wa-container2 px-2.5 py-1 rounded-md text-wa-text font-medium border border-wa-border/60">
+            {auth.email} · <span className="text-wa-button font-semibold">{getRoleLabel(auth.role, roles)}</span>
           </span>
-          <button onClick={onLogout} title="Sign out / Switch user" className="bg-transparent border-none cursor-pointer text-[#9DB09D] hover:text-[#D65641] transition-colors flex p-1.5 rounded-md hover:bg-[#00402E]">
+          <button onClick={onLogout} title="Sign out / Switch user" className="bg-transparent border-none cursor-pointer text-wa-muted hover:text-wa-button transition-colors flex p-1.5 rounded-md hover:bg-wa-container2">
             <LogOut size={16} />
           </button>
         </div>
@@ -1472,36 +1472,38 @@ function TopBar({ tab, isFullAdmin, auth, onLogout, onAdd, roles }) {
   );
 }
 
-const btnBase = 'inline-flex items-center gap-1.5 text-[13px] font-semibold rounded-lg px-3 py-2 cursor-pointer border border-transparent transition-all duration-150 active:scale-[0.98]';
-const btnPrimary = btnBase + ' bg-[#D65641] text-white hover:bg-[#c04b37] shadow-xs';
-const btnSecondary = btnBase + ' bg-[#003223] text-[#D5E0D5] border-[#2A5C4B] hover:bg-[#00402E] hover:text-white';
-const btnGhost = btnBase + ' bg-transparent text-[#D5E0D5] hover:bg-[#00402E]/60 hover:text-white';
-const selectStyle = 'px-2.5 py-1.5 rounded-lg border border-[#2A5C4B] text-[13px] bg-white text-[#252625] shadow-xs';
+// Shared UnoCSS shortcuts (see uno.config.js). btnBase is kept as an alias so
+// existing `btnGhost + ' ...'` concatenations keep working in the full refactor.
+const btnBase = 'btn';
+const btnPrimary = 'btn-primary';
+const btnSecondary = 'btn-secondary';
+const btnGhost = 'btn-ghost';
+const selectStyle = 'field-select';
 
 function FilterBar({ typeFilter, setTypeFilter, pillarTagFilter, setPillarTagFilter, modeFilter, setModeFilter, sessionTypes, pillarTags, modes }) {
   const anyFilter = typeFilter !== 'all' || modeFilter !== 'all' || pillarTagFilter !== 'all';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 12.5, color: '#D5E0D5' }}>Type</span>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className={selectStyle}>
+    <div className="flex items-center gap-4 mb-4 flex-wrap">
+      <div className="flex items-center gap-2">
+        <span className="text-[12.5px] text-wa-text">Type</span>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="field-select">
           <option value="all">All types</option>{(sessionTypes || DEFAULT_SESSION_TYPES).map(p => <option key={p.id || p.name} value={p.name}>{p.name}</option>)}
         </select>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 12.5, color: '#D5E0D5' }}>Pillars</span>
-        <select value={pillarTagFilter} onChange={e => setPillarTagFilter(e.target.value)} className={selectStyle}>
+      <div className="flex items-center gap-2">
+        <span className="text-[12.5px] text-wa-text">Pillars</span>
+        <select value={pillarTagFilter} onChange={e => setPillarTagFilter(e.target.value)} className="field-select">
           <option value="all">All pillars</option>{(pillarTags || DEFAULT_PILLAR_TAGS).map(p => <option key={p.id || p.name} value={p.id || p.name}>{p.name}</option>)}
         </select>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 12.5, color: '#D5E0D5' }}>Mode</span>
-        <select value={modeFilter} onChange={e => setModeFilter(e.target.value)} className={selectStyle}>
+      <div className="flex items-center gap-2">
+        <span className="text-[12.5px] text-wa-text">Mode</span>
+        <select value={modeFilter} onChange={e => setModeFilter(e.target.value)} className="field-select">
           <option value="all">All modes</option>{(modes || DEFAULT_MODES).map(m => <option key={m.id || m.name} value={m.name}>{m.name}</option>)}
         </select>
       </div>
       {anyFilter && (
-        <button onClick={() => { setTypeFilter('all'); setModeFilter('all'); setPillarTagFilter('all'); }} className={btnGhost + ' px-2 py-1 text-xs'}>Clear filters</button>
+        <button onClick={() => { setTypeFilter('all'); setModeFilter('all'); setPillarTagFilter('all'); }} className="btn-ghost px-2 py-1 text-xs">Clear filters</button>
       )}
     </div>
   );
@@ -1577,11 +1579,11 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
         </div>
       )}
       <div className="wa14-cal-scroll-wrap">
-      <div ref={calScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-[#DDE2E6]" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
-          <div className="w-14 shrink-0 border-r border-[#EEF0F2] box-border">
-            <div className="h-[46px] border-b border-[#EEF0F2] bg-[#F7F8F9]"></div>
+      <div ref={calScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-wa-line2" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
+          <div className="w-14 shrink-0 border-r border-wa-linelight box-border">
+            <div className="h-[46px] border-b border-wa-linelight bg-wa-panellight"></div>
             <div className="relative" style={{ height: totalHeight }}>
-              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-[#003223]" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
+              {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-wa-ink" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
             </div>
           </div>
           {visibleDays.map(([d, wd]) => {
@@ -1590,9 +1592,9 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
             const daySessions = weekSessions.filter(s => s.date === d).sort((a, b) => toMin(a.start) - toMin(b.start));
             const carryOver = prevDay ? weekSessions.filter(s => s.date === prevDay && wrapsMidnight(s)) : [];
             return (
-              <div key={d} className="flex-1 min-w-[150px] border-r border-[#EEF0F2] box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
-                <div className="h-[46px] box-border border-b border-[#EEF0F2] bg-[#F7F8F9] text-[12.5px] font-semibold text-center pt-[5px] text-[#003223]">
-                  {wd}<div className="font-normal text-[#003223] text-[11px] leading-tight">{dateLabel(d)}</div>
+              <div key={d} className="flex-1 min-w-[150px] border-r border-wa-linelight box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
+                <div className="h-[46px] box-border border-b border-wa-linelight bg-wa-panellight text-[12.5px] font-semibold text-center pt-[5px] text-wa-ink">
+                  {wd}<div className="font-normal text-wa-ink text-[11px] leading-tight">{dateLabel(d)}</div>
                 </div>
                 <div className="relative" style={{ height: totalHeight }} onClick={e => { if (!onPlace || e.target !== e.currentTarget) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = bandScale.minutesAt(e.clientY - rect.top); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onPlace(null, d, start); }} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const id = Number(e.dataTransfer.getData('sessionId')); const session = sessions.find(item => item.id === id); if (!session || !onDrop) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = bandScale.minutesAt(e.clientY - rect.top); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onDrop(session, d, start); }}>
                   {hours.map(m => (<div key={m} style={{ position: 'absolute', top: bandScale.offsets[(m - GRID_START) / 60], left: 0, right: 0, borderTop: '1px solid #F2F3F4' }} />))}
@@ -1884,7 +1886,7 @@ function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn }) {
     if (!attendanceEligible(session)) return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>No attendance required for this session</div>;
     const phase = attendancePhase(session, now);
     if (phase === 'on_time') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnPrimary} style={{ fontWeight: 700 }}><CheckIcon size={14} /> Mark my attendance</button><span style={{ fontSize: 11.5, color: '#9DB09D' }}>{minsLeftTo(session, 5)} min to late window</span></div>;
-    if (phase === 'late') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnSecondary + ' text-[#D0A023]'} style={{ fontWeight: 700 }}>Mark late attendance</button><span style={{ fontSize: 11.5, color: '#D0A023' }}>{minsLeftTo(session, 15)} min left</span></div>;
+    if (phase === 'late') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnSecondary + ' text-wa-warn'} style={{ fontWeight: 700 }}>Mark late attendance</button><span style={{ fontSize: 11.5, color: '#D0A023' }}>{minsLeftTo(session, 15)} min left</span></div>;
     if (phase === 'closed') return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance window closed (15 minutes from start)</div>;
     return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance opens at {session.start}</div>;
   };
@@ -2649,7 +2651,7 @@ function SessionsTable({ sessions, search, setSearch, weekFilter, setWeekFilter,
   return (
     <div>
       <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sessions by name" className={inputStyle + ' w-[260px]! max-w-full'} aria-label="Search sessions by name" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search sessions by name" className="field-input !w-[260px] max-w-full" aria-label="Search sessions by name" />
         <select value={facilitatorFilter} onChange={e => setFacilitatorFilter(e.target.value)} className={selectStyle} aria-label="Filter by facilitator"><option value="all">All facilitators</option>{facilitatorOptions.map(name => <option key={name} value={name}>{name}</option>)}</select>
         <select value={roomFilter} onChange={e => setRoomFilter(e.target.value)} className={selectStyle} aria-label="Filter by room"><option value="all">All rooms</option>{roomOptions.map(name => <option key={name} value={name}>{name}</option>)}</select>
         <span style={{ fontSize: 13, color: '#D5E0D5' }}>Week</span>
@@ -2809,7 +2811,7 @@ function ExpandedAnalyticsPanel({ sessions, attendance, attempts, assessments, r
   }).filter(value => Number.isFinite(value));
   const average = scoreValues.length ? Math.round(scoreValues.reduce((sum, value) => sum + value, 0) / scoreValues.length) : 0;
   const submission = roster.length ? Math.round(filteredAttempts.filter(attempt => attempt.status === 'submitted').length / Math.max(1, fellows.length) * 100) : 0;
-  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={() => setView('attendance')} className={view === 'attendance' ? btnPrimary : btnSecondary}>Attendance</button><button onClick={() => setView('assessment')} className={view === 'assessment' ? btnPrimary : btnSecondary}>Assessments</button><button onClick={onSeedDemo} className={btnGhost}>Create demo data</button><button onClick={onDeleteDemo} className={btnGhost + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}><select className={selectStyle} value={track} onChange={event => setTrack(event.target.value)}><option value="all">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><select className={selectStyle} value={city} onChange={event => setCity(event.target.value)}><option value="all">All placement cities</option>{[...new Set(roster.map(fellow => fellow.placementCity).filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><select className={selectStyle} value={afa} onChange={event => setAfa(event.target.value)}><option value="all">All AFA groups</option>{[...new Set([...(afaGroups || []), ...roster.map(fellow => fellow.afaGroup)].filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><span style={{ fontSize: 12.5, color: '#D5E0D5', alignSelf: 'center' }}>{fellows.length} Fellows matched</span></div>{view === 'attendance' ? <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Attendance records" value={filteredAttendance.length} /><Metric label="On-time" value={filteredAttendance.filter(entry => entry.status === 'on_time').length} /><Metric label="Attendance %" value={`${fellows.length ? Math.round(filteredAttendance.length / Math.max(1, fellows.length) * 100) : 0}%`} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Attendance by session</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{attendanceBySession.map(row => <div key={row.label} title={`${row.label}: ${row.value}`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, row.value / max * 100)}%`, background: '#D65641', borderRadius: '4px 4px 0 0' }} />)}</div><FellowAttendanceBreakdown sessions={sessions} attendance={filteredAttendance} fellows={fellows} roster={roster} /></> : <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Submission %" value={`${submission}%`} /><Metric label="Average score %" value={`${average}%`} /><Metric label="Submitted attempts" value={filteredAttempts.filter(attempt => attempt.status === 'submitted').length} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Assessment score trend</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{assessments.map(assessment => { const values = filteredAttempts.filter(attempt => attempt.assessmentId === assessment.id).map(attempt => computeAttemptPercentage(attempt, assessment)); const value = values.length ? values.reduce((sum, item) => sum + item, 0) / values.length : 0; return <div key={assessment.id} title={`${assessment.title}: ${Math.round(value)}%`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, value)}%`, background: '#D97355', borderRadius: '4px 4px 0 0' }} /> })}</div><SessionAssessmentBreakdown fellows={fellows} sessions={sessions} assessments={assessments} attempts={filteredAttempts} roster={roster} /></>}</div>;
+  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={() => setView('attendance')} className={view === 'attendance' ? btnPrimary : btnSecondary}>Attendance</button><button onClick={() => setView('assessment')} className={view === 'assessment' ? btnPrimary : btnSecondary}>Assessments</button><button onClick={onSeedDemo} className={btnGhost}>Create demo data</button><button onClick={onDeleteDemo} className={btnGhost + ' text-wa-warn'}>Delete demo data</button></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}><select className={selectStyle} value={track} onChange={event => setTrack(event.target.value)}><option value="all">All tracks</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select><select className={selectStyle} value={city} onChange={event => setCity(event.target.value)}><option value="all">All placement cities</option>{[...new Set(roster.map(fellow => fellow.placementCity).filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><select className={selectStyle} value={afa} onChange={event => setAfa(event.target.value)}><option value="all">All AFA groups</option>{[...new Set([...(afaGroups || []), ...roster.map(fellow => fellow.afaGroup)].filter(Boolean))].map(value => <option key={value} value={value}>{value}</option>)}</select><span style={{ fontSize: 12.5, color: '#D5E0D5', alignSelf: 'center' }}>{fellows.length} Fellows matched</span></div>{view === 'attendance' ? <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Attendance records" value={filteredAttendance.length} /><Metric label="On-time" value={filteredAttendance.filter(entry => entry.status === 'on_time').length} /><Metric label="Attendance %" value={`${fellows.length ? Math.round(filteredAttendance.length / Math.max(1, fellows.length) * 100) : 0}%`} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Attendance by session</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{attendanceBySession.map(row => <div key={row.label} title={`${row.label}: ${row.value}`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, row.value / max * 100)}%`, background: '#D65641', borderRadius: '4px 4px 0 0' }} />)}</div><FellowAttendanceBreakdown sessions={sessions} attendance={filteredAttendance} fellows={fellows} roster={roster} /></> : <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><Metric label="Submission %" value={`${submission}%`} /><Metric label="Average score %" value={`${average}%`} /><Metric label="Submitted attempts" value={filteredAttempts.filter(attempt => attempt.status === 'submitted').length} /></div><div style={{ marginTop: 24, fontWeight: 700 }}>Assessment score trend</div><div style={{ display: 'flex', alignItems: 'end', gap: 8, height: 180, maxWidth: 780, marginTop: 12, padding: '12px 8px', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8 }}>{assessments.map(assessment => { const values = filteredAttempts.filter(attempt => attempt.assessmentId === assessment.id).map(attempt => computeAttemptPercentage(attempt, assessment)); const value = values.length ? values.reduce((sum, item) => sum + item, 0) / values.length : 0; return <div key={assessment.id} title={`${assessment.title}: ${Math.round(value)}%`} style={{ flex: 1, minWidth: 18, height: `${Math.max(8, value)}%`, background: '#D97355', borderRadius: '4px 4px 0 0' }} /> })}</div><SessionAssessmentBreakdown fellows={fellows} sessions={sessions} assessments={assessments} attempts={filteredAttempts} roster={roster} /></>}</div>;
 }
 
 
@@ -3053,7 +3055,7 @@ function AnalyticsPanel({ sessions, attendance, attempts, onSeedDemo, onDeleteDe
   const onTime = attendance.filter(entry => entry.status === 'on_time').length;
   const late = attendance.filter(entry => entry.status === 'late').length;
   const completed = attempts.filter(attempt => attempt.status === 'submitted').length;
-  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary + ' text-[#D0A023]'}>Delete demo data</button></div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Attendance and assessment overview for Staff.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>On-time attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{onTime}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Late attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{late}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Completed assessments</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{completed}</div></div></div><div style={{ marginTop: 24, fontSize: 13, fontWeight: 700 }}>Session attendance</div><div style={{ marginTop: 8, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 780 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: 9 }}>Session</th><th style={{ padding: 9 }}>On time</th><th style={{ padding: 9 }}>Late</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}><td style={{ padding: 9 }}>{session.name}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length}</td></tr>)}</tbody></table></div></div>;
+  return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary + ' text-wa-warn'}>Delete demo data</button></div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Attendance and assessment overview for Staff.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>On-time attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{onTime}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Late attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{late}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Completed assessments</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{completed}</div></div></div><div style={{ marginTop: 24, fontSize: 13, fontWeight: 700 }}>Session attendance</div><div style={{ marginTop: 8, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 780 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: 9 }}>Session</th><th style={{ padding: 9 }}>On time</th><th style={{ padding: 9 }}>Late</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}><td style={{ padding: 9 }}>{session.name}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length}</td></tr>)}</tbody></table></div></div>;
 }
 
 function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit, onDuplicate, onRemove, onDelete }) {
@@ -3086,10 +3088,10 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         <DetailRow label="Facilitators">{fmtFacilitators(session.facilitators, rooms, staff) || '--'}</DetailRow>
         <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(r => r.name + ' · ' + (r.facilitator || 'Facilitator not set')).join(', ') || '--'}</DetailRow>
         {auth.role !== 'fellow' && <button onClick={onAssign} className={btnSecondary + ' w-full justify-center mt-1'}>Assign rooms</button>}
-        {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#9DB09D]'}><Edit size={12} /> Edit session</button>}
-        {auth.role !== 'fellow' && onDuplicate && <button onClick={() => { onClose(); onDuplicate(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#D0A023]'}><CopyIcon size={12} /> Duplicate session</button>}
-        {auth.role !== 'fellow' && onRemove && <button onClick={() => { if (!window.confirm('Remove this session from the calendar? It will move to the unscheduled list.')) return; onClose(); onRemove(session); }} className={btnGhost + ' w-full justify-center mt-1 text-[#D65641]'}><Trash2 size={12} /> Remove from calendar</button>}
-        {auth.role !== 'fellow' && onDelete && <button onClick={() => { if (!window.confirm('Delete this session?')) return; onClose(); onDelete(session.id); }} className={btnSecondary + ' text-[#D0A023] border-[#E3B8B8] w-full justify-center mt-1'}>Delete session</button>}
+        {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-muted'}><Edit size={12} /> Edit session</button>}
+        {auth.role !== 'fellow' && onDuplicate && <button onClick={() => { onClose(); onDuplicate(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-warn'}><CopyIcon size={12} /> Duplicate session</button>}
+        {auth.role !== 'fellow' && onRemove && <button onClick={() => { if (!window.confirm('Remove this session from the calendar? It will move to the unscheduled list.')) return; onClose(); onRemove(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-button'}><Trash2 size={12} /> Remove from calendar</button>}
+        {auth.role !== 'fellow' && onDelete && <button onClick={() => { if (!window.confirm('Delete this session?')) return; onClose(); onDelete(session.id); }} className={btnSecondary + ' text-wa-warn border-wa-dangerline w-full justify-center mt-1'}>Delete session</button>}
 
         {auth.role !== 'fellow' && session.resources && session.resources.length > 0 && (
           <div style={{ marginTop: 18 }}>
@@ -3427,7 +3429,7 @@ function RolesPanel({ roles, cityCodes, onRolesChange, onCityCodesChange, showTo
             <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', border: '1px solid #1F4A3C', borderRadius: 6, padding: '8px 10px' }}>
               <span style={callSignChipStyle}>{c.code}</span>
               <input className={inputStyle} value={c.city} onChange={e => updateCity(c.id, 'city', e.target.value)} />
-              <input className={inputStyle + ' w-[80px]!'} value={c.code} onChange={e => updateCity(c.id, 'code', e.target.value.toUpperCase())} maxLength={4} style={{ textTransform: 'uppercase' }} />
+              <input className="field-input !w-[80px]" value={c.code} onChange={e => updateCity(c.id, 'code', e.target.value.toUpperCase())} maxLength={4} style={{ textTransform: 'uppercase' }} />
               <button onClick={() => removeCity(c.id)} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button>
             </div>
           ))}
@@ -3673,7 +3675,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {form.resources.map(r => (
               <div key={r.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <select className={inputStyle + ' w-[120px]! shrink-0'} value={r.label} onChange={e => updateResource(r.id, 'label', e.target.value)}>{RESOURCE_KINDS.map(k => <option key={k} value={k}>{k}</option>)}</select>
+                <select className="field-input !w-[120px] shrink-0" value={r.label} onChange={e => updateResource(r.id, 'label', e.target.value)}>{RESOURCE_KINDS.map(k => <option key={k} value={k}>{k}</option>)}</select>
                 <input className={inputStyle} placeholder="https://…" value={r.url} onChange={e => updateResource(r.id, 'url', e.target.value)} />
                 <button onClick={() => removeResource(r.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', flexShrink: 0 }}><X size={15} /></button>
               </div>
@@ -3694,7 +3696,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
         </Field>
         <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
           <button onClick={handleSave} className={btnPrimary + ' flex-1 justify-center py-2.5'}>Save session</button>
-          {onDelete && <button onClick={() => { if (window.confirm('Delete this session?')) onDelete(session.id); }} className={btnSecondary + ' text-[#D0A023] border-[#E3B8B8]'}>Delete</button>}
+          {onDelete && <button onClick={() => { if (window.confirm('Delete this session?')) onDelete(session.id); }} className={btnSecondary + ' text-wa-warn border-wa-dangerline'}>Delete</button>}
         </div>
       </div>
     </div>
@@ -3704,7 +3706,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
 function Field({ label, children, style }) {
   return (<div style={{ marginBottom: 14, ...style }}><div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 5 }}>{label}</div>{children}</div>);
 }
-const inputStyle = 'w-full px-2.5 py-2 rounded-md border border-[#C9CDD2] text-[13px] bg-white text-[#252625] box-border';
+const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
 export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, AcademyOverviewPanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween };

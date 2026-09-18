@@ -1,4 +1,5 @@
-@import "tailwindcss";
+/* UnoCSS provides utilities via virtual:uno.css (see src/main.jsx).
+   This file keeps WA14 theme variables, base styles, and app layout classes. */
 
 :root {
   color-scheme: dark;
