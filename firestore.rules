@@ -25,14 +25,28 @@ service cloud.firestore {
             && request.auth.token.role == 'superadmin'));
     }
 
+    // [CITY] Fellow roster management. Fellows are added from the Admin panel by
+    // AFA, Coach and Admin (full-access) roles as well as the Superadmin.
+    function isFellowManager() {
+      return isTfbUser()
+        && (isSuperadmin()
+          || (request.auth.token.keys().hasAny(['role'])
+            && request.auth.token.role in ['planner', 'resource_planner', 'academy_lead', 'afa_lead',
+              'curriculum_specialist', 'placement_ops', 'afa', 'coach', 'city_lead']));
+    }
+
     match /wa14/{docId} {
       allow read: if isTfbUser();
       allow create, update, delete: if isPlanner()
-        && docId in ['wa14-sessions', 'wa14-rooms', 'wa14-pillars', 'wa14-requests', 'wa14-settings', 'wa14-assessments', 'wa14-assessment-questions', 'wa14-assessment-analytics', 'wa14-staff-tasks'];
+        && docId in ['wa14-sessions', 'wa14-rooms', 'wa14-pillars', 'wa14-requests', 'wa14-settings', 'wa14-assessments', 'wa14-assessment-questions', 'wa14-assessment-analytics', 'wa14-staff-tasks',
+          // [CITY] City system documents (year-round fellowship calendar).
+          'wa14-city-sessions', 'wa14-city-staff-tasks', 'wa14-city-settings', 'wa14-city-types', 'wa14-city-modes'];
+      allow create, update, delete: if isFellowManager()
+        && docId == 'wa14-roster';
       allow create, update, delete: if isTfbUser()
         && docId in ['wa14-assessment-attempts', 'wa14-attendance'];
       allow create, update, delete: if isSuperadmin()
-        && docId in ['wa14-accounts', 'wa14-planners', 'wa14-roster'];
+        && docId in ['wa14-accounts', 'wa14-planners'];
     }
   }
 }

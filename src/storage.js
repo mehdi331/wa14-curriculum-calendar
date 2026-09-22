@@ -22,6 +22,17 @@ export const ACADEMY_KEYS = {
   historicalAcademies: 'wa-historical-academies',
 };
 
+// [CITY] keys for the City system (year-round fellowship calendar). These docs
+// live beside the existing wa14-* docs; firestore.rules must list them under
+// the planner-writable docId list.
+export const CITY_KEYS = {
+  citySessions: 'wa14-city-sessions',
+  cityStaffTasks: 'wa14-city-staff-tasks',
+  citySettings: 'wa14-city-settings',
+  cityTypes: 'wa14-city-types',
+  cityModes: 'wa14-city-modes',
+};
+
 export function parseStoredArray(record) {
   if (!record?.value) return [];
   try {

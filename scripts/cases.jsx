@@ -1,6 +1,19 @@
 // Panel render test cases (loaded through Vite so JSX is transformed).
 import React from 'react';
-import { __panels as P } from '../src/App.jsx';
+import MainAppShell, { __panels as P } from '../src/App.jsx';
+import SystemGate from '../src/city/SystemGate.jsx';
+import CityCalendarView from '../src/city/CityCalendarView.jsx';
+import CityFellowHome from '../src/city/CityFellowHome.jsx';
+import CitySpacesReport from '../src/city/CitySpacesReport.jsx';
+import CitySessionsTable from '../src/city/CitySessionsTable.jsx';
+import CityStaffCalendar from '../src/city/CityStaffCalendar.jsx';
+import AdminPanel from '../src/city/AdminPanel.jsx';
+import CityItemEditorFull from '../src/city/CityItemEditorFull.jsx';
+import { StaffTaskEditor } from '../src/city/CityStaffTaskEditor.jsx';
+import CityTypesModes from '../src/city/CityTypesModes.jsx';
+
+// --- city/cohort helpers (loaded from the src/city barrel) ---
+import * as city from '../src/city/index.js';
 
 const auth = { email: 'test@user.dev', role: 'superadmin', access: 'full' };
 const rooms = [
@@ -88,6 +101,46 @@ export const cases = [
   ['ParagraphReviewPanel-pending', () => <P.ParagraphReviewPanel attempts={attempts} assessments={assessments} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={noop} showToast={noop} />],
   ['ParagraphReviewPanel-reviewed-hidden', () => <P.ParagraphReviewPanel attempts={reviewedAttempts} assessments={assessments} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={noop} showToast={noop} />],
   ['ParagraphReviewPanel-reviewed-all', () => <P.ParagraphReviewPanel attempts={reviewedAttempts} assessments={assessments} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={noop} showToast={noop} />],
+  ['CityCalendarView-staff', () => <CityCalendarView items={cityItems} settings={citySettings} onSettingsChange={noop} canEditSchedule auth={cityStaffAuth} cohort={null} onAdd={noop} onEdit={noop} onDelete={noop} types={cityTypes} modes={cityModes} />],
+  ['CityCalendarView-fellow', () => <CityCalendarView items={cityItems} settings={citySettings} onSettingsChange={null} canEditSchedule={false} auth={cityFellowAuth} cohort={2026} onAdd={null} onEdit={null} onDelete={null} types={cityTypes} modes={cityModes} />],
+  ['CityFellowHome', () => <CityFellowHome auth={cityFellowAuth} items={cityItems} fullItems={cityItems} roster={cityRoster} settings={citySettings} types={cityTypes} goCalendar={noop} />],
+  ['CitySpacesReport', () => <CitySpacesReport items={cityItems} roster={cityRoster} settings={citySettings} types={cityTypes} modes={cityModes} />],
+  ['CitySessionsTable', () => <CitySessionsTable items={cityItems} settings={citySettings} types={cityTypes} modes={cityModes} canEdit onAdd={noop} onEdit={noop} onDelete={noop} />],
+  ['CityStaffCalendar', () => <CityStaffCalendar items={cityItems} staffTasks={[{ id: 'sbt1', kind: 'task', name: 'Prep deck', date: '2026-09-19', start: '14:00', end: '15:00', type: 'PD Session', mode: 'Sync', owner: 'City Lead', status: 'todo' }]} setStaffTasks={noop} settings={citySettings} canEdit types={cityTypes} modes={cityModes} />],
+  ['CityTypesModes', () => <CityTypesModes types={cityTypes} setTypes={noop} modes={cityModes} setModes={noop} />],
+  ['AdminPanel-full', () => <AdminPanel auth={cityStaffAuth} roster={cityRoster} setRoster={noop} planners={planners} setPlanners={noop} settings={citySettings} />],
+  ['AdminPanel-afa', () => <AdminPanel auth={{ ...cityStaffAuth, role: 'afa', roleLabel: 'AFA', access: 'resources' }} roster={cityRoster} setRoster={noop} planners={planners} setPlanners={noop} settings={citySettings} />],
+  ['CityItemEditorFull', () => <CityItemEditorFull item={null} settings={citySettings} planners={planners} types={cityTypes} modes={cityModes} onSave={noop} onDelete={null} onClose={noop} />],
+  ['StaffTaskEditor', () => <StaffTaskEditor task={null} onSave={noop} onDelete={null} onClose={noop} types={cityTypes} modes={cityModes} />],
+  ['SystemGate', () => <SystemGate auth={cityStaffAuth} onPick={noop} onLeave={noop} />],
+  ['AppShell-injected-auth', () => <MainAppShell injectedAuth={{ ...auth, name: 'Injected Superadmin', uid: 'sb-inject' }} onInjectedLogout={noop} onLogout={noop} />],
+];
+
+const cityStaffAuth = { email: 'citylead@teachforbangladesh.org', name: 'City Lead', role: 'city_lead', roleLabel: 'City Lead', access: 'full', systems: ['city'], adminPanel: true };
+const cityFellowAuth = { email: 'year1.fellow@teachforbangladesh.org', name: 'Year 1 Fellow', role: 'fellow', roleLabel: 'Fellow', fellowId: 'sb-fellow-y1', cohort: 2026, cohortRole: 'year1' };
+const cityTypes = [
+  { id: 'ct0', name: 'PD Session', color: '#3E8FA0' },
+  { id: 'ct1', name: 'Learning Circle', color: '#8A78C2' },
+  { id: 'ct2', name: 'Workshop', color: '#D97355' },
+  { id: 'ct3', name: 'Clinic', color: '#5FA97E' },
+];
+const cityModes = [
+  { id: 'cm0', name: 'Sync', color: '#D65641' },
+  { id: 'cm1', name: 'Async', color: '#B8863B' },
+  { id: 'cm2', name: 'Coaching', color: '#6B5CA5' },
+];
+const cityItems = [
+  { id: 'c1', kind: 'space', name: 'City PD Session', date: '2026-09-18', start: '10:00', end: '12:00', type: 'PD Session', mode: 'Sync', cohorts: [2026, 2025], calendared: true, visibleToFellows: true },
+  { id: 'c2', kind: 'space', name: 'Year 1 Workshop', date: '2026-09-19', start: '10:00', end: '12:00', type: 'Workshop', mode: 'Sync', cohorts: [2026], calendared: true, visibleToFellows: true },
+  { id: 'c3', kind: 'space', name: 'Year 1 Clinic Circle', date: '2026-09-20', start: '15:00', end: '16:00', type: 'Clinic', mode: 'Coaching', cohorts: [2026], calendared: true, visibleToFellows: true },
+  { id: 'c4', kind: 'deadline', name: 'Term plan deadline', date: '2026-09-21', start: '17:00', end: '17:00', type: 'PD Session', mode: 'Sync', cohorts: [2026], calendared: true, visibleToFellows: true },
+  { id: 'c5', kind: 'space', name: 'Year 2 Workshop', date: '2026-09-19', start: '10:00', end: '12:00', type: 'Workshop', mode: 'Sync', cohorts: [2025], calendared: true, visibleToFellows: true },
+  { id: 'c6', kind: 'space', name: 'Staff-only planning space', date: '2026-09-22', start: '09:00', end: '10:00', type: 'PD Session', mode: 'Sync', cohorts: [2026, 2025], calendared: true, visibleToFellows: false },
+];
+const citySettings = { year: 2026, startDate: '2026-01-01', endDate: '2026-12-31', fellowMonths: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] };
+const cityRoster = [
+  { id: 'sb-fellow-y1', name: 'Year 1 Fellow', email: 'year1.fellow@teachforbangladesh.org', cohort: 2026, afaGroup: 'AFA 1', placementCity: 'Dhaka', grade: '3', track: 'primary', coachId: 'sb-coach', coachName: 'Sandbox Coach' },
+  { id: 'sb-fellow-y2', name: 'Year 2 Fellow', email: 'year2.fellow@teachforbangladesh.org', cohort: 2025, afaGroup: 'AFA 1', placementCity: 'Dhaka' },
 ];
 
 const reviewAssessment = { id: 'a1', title: 'Exit Ticket', sessionId: 1, status: 'published', assignmentGroups: [{ id: 'g1', fellowIds: ['fe1'] }], questions: [

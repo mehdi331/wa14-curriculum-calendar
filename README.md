@@ -33,6 +33,41 @@ Staff can use the **Review** tab to score paragraph responses, add feedback, and
 
 The initial assessment persistence uses aggregate documents for compatibility with the existing app. It is suitable for local/demo testing, but production assessment use still requires stricter per-Fellow Firestore rules, server-authoritative grading/timing, protected answer keys, and per-record response storage.
 
+## City system (year-round fellowship calendar)
+
+The app hosts two Training Systems: **Winter Academy** (the 6–7 week academy calendar, sessions and assessments) and **City** (the year-round fellowship calendar of programming spaces, tasks and deadlines). Staff whose Training Systems include both get the picker automatically after sign-in; single-system staff go straight in. Staff systems come from the `systems` field on the staff record (see the City **Admin panel → City staff** tab) or the role defaults in `src/city/cohort.js`.
+
+### Cohort model
+
+A Fellow's cohort year (`cohort` on the roster record) decides everything, relative to the current year **Y** (`src/city/cohort.js`):
+
+| Cohort | Meaning | Calendar |
+| --- | --- | --- |
+| `Y + 1` | In the Winter Academy now | Winter Academy only |
+| `Y` | Year 1 Fellow | City, own cohort only |
+| `Y - 1` | Year 2 Fellow | City, own cohort only |
+| `Y - 2` or earlier | Alumni | No calendar access; the record is kept |
+
+Fellowship access ends on **31 December of cohort + 1** (the end of the 2nd Fellowship year) and is revoked automatically; sign-in then explains that Fellowship access has ended. Year 1 and Year 2 see separate City calendars, and one space, task or deadline can target Year 1, Year 2 or both (`cohorts`).
+
+### City data
+
+All City documents sit beside the existing `wa14-*` documents:
+
+- `wa14-city-sessions` — programming spaces, tasks and deadlines
+- `wa14-city-staff-tasks` — staff-only planning tasks
+- `wa14-city-settings` — the City year and the Fellow-visible months (`fellowMonths`)
+- `wa14-city-types` — the editable **types** (calendar colours and the Spaces report's rows)
+- `wa14-city-modes` — the editable **modes** (the report's breakdown columns)
+
+Types, modes and Fellow visibility are staff-controlled: an individual item can be hidden from Fellows, and whole months can be hidden from the Fellow calendars (staff always see them). The **Spaces report** counts PD spaces and breaks them down by type × mode and by month, per cohort, year to date.
+
+### Admin panel
+
+The **Admin panel** (`#admin`) is a separate access point that Fellows can never reach. Its **Fellows** tab is open to AFA, Coach, Admin and Superadmin accounts and manages the full Fellow profile (cohort, grade, track, placement city, coach, AFA group); a Winter Academy AFA's new Fellows are pre-assigned next year's cohort. The **City staff** tab manages staff roles and Training Systems and requires full access.
+
+Run `npm run test:render` to render every panel (Winter Academy **and** City) and to assert the cohort, visibility and reporting helpers.
+
 ## Deployment
 
 GitHub Actions builds and deploys the Vite output to GitHub Pages on pushes to `main`. The generated `dist/` directory is intentionally ignored and should not be committed.

@@ -6,3 +6,7 @@ Updating the system/
 firebase-debug.log*
 vite.config.js.timestamp*
 .DS_Store
+# Local-only DEV test logins (local-test-accounts.json at repo root). Never pushed:
+# this machine keeps the fixtures; fresh clones/CI run without them.
+local-test-accounts.json
+
