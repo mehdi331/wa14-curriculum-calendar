@@ -24,6 +24,26 @@ const roster = [
   { id: 'fe1', name: 'Fellow One', email: 'f1@x.dev', track: 'Secondary', afaGroup: 'AFA 1', placementCity: 'Dhaka', roomIds: ['r1'] },
   { id: 'fe2', name: 'Fellow Two', email: 'f2@x.dev', track: 'Primary', afaGroup: '', placementCity: '', roomIds: [] },
 ];
+// Practice-teaching fixtures: a 2-Fellow secondary collab with a deliberately
+// lopsided rotation (no 4/4/4 balance enforced), and its grade+subject+day
+// learning outcomes.
+const buildRotation = () => {
+  const rotation = {};
+  for (let day = 1; day <= 4; day++) rotation[String(day)] = { fe1: 'Bangla', fe2: 'English' };
+  for (let day = 5; day <= 6; day++) rotation[String(day)] = { fe1: 'Math', fe2: 'Math' };
+  return rotation;
+};
+const collab = {
+  id: 'col-test-1', code: 'S1', band: 'secondary', grade: 'Grade 9',
+  school: 'Dhaka Collegiate School', days: 6, fellowIds: ['fe1', 'fe2'],
+  rotation: buildRotation(),
+};
+const learningOutcomes = [
+  { id: 'lo1', grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['SECRET_BANGLA_DAY1'], 2: ['SECRET_BANGLA_DAY2'] } },
+  { id: 'lo2', grade: 'Grade 9', subject: 'English', outcomesByDay: { 1: ['SECRET_ENGLISH_DAY1'] } },
+  { id: 'lo3', grade: 'Grade 5', subject: 'Math', outcomesByDay: { 1: ['OTHER_GRADE_OUTCOME'] } },
+];
+
 const planners = [
   { id: 'p1', name: 'Nusrat Jahan', email: 'n@x.dev', role: 'afa', group: 'AFA 1', access: 'full' },
   { id: 'p2', name: 'Mehdi Hasan', email: 'm@x.dev', role: 'academy_lead', group: '', access: 'full' },
@@ -91,8 +111,22 @@ export const cases = [
   ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} onExport={noop} />],
   ['FellowOverview', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} />],
   ['FellowAnalyticsPanel', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} />],
-  ['AcademyOverviewPanel', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: 'Foundations', vision: 'Every child receives an excellent education.', goals: ['Goal one', 'Goal two'], outcomes: ['Outcome one'], pillars: ['Pillar A', 'Pillar B'] }} onChange={noop} canEdit={false} />],
-  ['AcademyOverviewPanel-edit', () => <P.AcademyOverviewPanel overview={null} onChange={noop} canEdit />],
+  ['AcademyOverviewPanel', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: 'Foundations', vision: 'Every child receives an excellent education.', goals: ['Goal one', 'Goal two'], outcomes: ['Outcome one'], pillars: ['Pillar A', 'Pillar B'] }} onChange={noop} canEdit={false} pillarTags={[{ id: 'ptag0', name: 'Leadership' }, { id: 'ptag1', name: 'Equity & Inclusion' }]} />],
+  // Fellows pass canEdit={false}: they must see the vision + pillars but never the goals.
+  ['AcademyOverviewPanel-fellow', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: '', vision: 'Every child receives an excellent education.', goals: [{ id: 'g1', pillarId: 'ptag0', serial: 1, text: 'SECRET GOAL TEXT' }], outcomes: [], pillars: [] }} onChange={noop} canEdit={false} pillarTags={[{ id: 'ptag0', name: 'Leadership' }]} />],
+  ['AcademyOverviewPanel-edit', () => <P.AcademyOverviewPanel overview={null} onChange={noop} canEdit pillarTags={[{ id: 'ptag0', name: 'Leadership' }]} />],
+  // Staff view of structured, pillar-linked goals with admin-supplied serial numbers.
+  ['AcademyOverviewPanel-goals', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: '', vision: 'V', goals: [{ id: 'g1', pillarId: 'ptag0', serial: 2, text: 'Goal under Leadership' }, { id: 'g2', pillarId: 'ptag0', serial: 1, text: 'First Leadership goal' }], outcomes: ['Outcome one'], pillars: [] }} onChange={noop} canEdit pillarTags={[{ id: 'ptag0', name: 'Leadership' }]} />],
+  // Legacy free-text goals are normalized into records instead of being dropped.
+  ['AcademyOverviewPanel-legacy', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: '', vision: 'V', goals: ['Legacy goal one'], outcomes: [], pillars: ['Pillar A'] }} onChange={noop} canEdit />],
+  ['PracticeTeachingPanel-empty', () => <P.PracticeTeachingPanel roster={roster} collaborations={[]} onChange={noop} onRosterChange={noop} showToast={noop} />],
+  ['PracticeTeachingPanel-assigned', () => <P.PracticeTeachingPanel roster={roster} collaborations={[collab]} onChange={noop} onRosterChange={noop} showToast={noop} />],
+  ['CollabEditor', () => <P.CollabEditor draft={collab} setDraft={noop} people={roster} list={[collab]} onCancel={noop} onSave={noop} />],
+  ['LearningOutcomesPanel', () => <P.LearningOutcomesPanel learningOutcomes={learningOutcomes} onChange={noop} showToast={noop} />],
+  // Fellows see grade/school/partners/schedule/outcomes once assigned...
+  ['FellowPracticePanel', () => <P.FellowPracticePanel roster={roster} collaborations={[collab]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
+  // ...and only a gated message when unassigned (no outcome text may leak).
+  ['FellowPracticePanel-unassigned', () => <P.FellowPracticePanel roster={roster} collaborations={[]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
   ['HistoricalAcademiesPanel-empty', () => <P.HistoricalAcademiesPanel current={{ academyName: 'Winter Academy 14', sessions: [], attendance: [], assessments: [], questions: [], attempts: [], rooms: [], staff: [], roster: [] }} onImportSessions={noop} showToast={noop} />],
   ['ReuseSessionsModal', () => <P.ReuseSessionsModal archive={{ academyName: 'Winter Academy 13', sessions: [{ id: 1, name: 'Old session', week: 1, date: '2025-11-02', start: '09:00', end: '10:30', facilitators: [{ staffName: 'Nusrat' }], resources: [{ id: 'r1', label: 'Deck', url: 'https://x.dev' }] }] }} onClose={noop} onImport={noop} />],
   ['IncidentLogPanel', () => <P.IncidentLogPanel incidents={[{ id:'i1', createdAt:new Date().toISOString(), fellowId:'fe1', assessmentId:'a1', type:'tab_hidden', deviceId:'dev-abc', details:'Tab hidden' }]} attempts={attempts} assessments={assessments} roster={roster} sessions={sessions} />],

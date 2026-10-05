@@ -44,7 +44,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .wa14-main { display: flex; flex: 1; min-height: 100vh; min-width: 0; }
 .wa14-content { flex: 1; min-width: 0; overflow-x: visible; }
 .wa14-content-inner { padding: 20px 24px 40px; }
-.wa14-cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.wa14-cal-scroll { overflow: auto; -webkit-overflow-scrolling: touch; max-height: 78vh; min-height: 320px; }
+/* Date row stays pinned while only the time rows scroll beneath it. */
+.wa14-cal-head { position: sticky; top: 0; z-index: 5; }
 .wa14-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .wa14-floating-scroll { scrollbar-width: none; -ms-overflow-style: none; }
 .wa14-floating-scroll::-webkit-scrollbar { display: none; }

@@ -31,8 +31,114 @@ for (const [name, factory] of cases) {
     console.log('   ' + String(err.stack || '').split('\n').slice(1, 4).join('\n   '));
   }
 }
+// Goals visibility: fellows (canEdit=false) must never receive goal text;
+// staff (canEdit=true) must see goals grouped under their pillar with serials.
+const renderHtml = name => { const c = cases.find(x => x[0] === name); return c ? renderToString(c[1]()) : ''; };
+const fellowHtml = renderHtml('AcademyOverviewPanel-fellow');
+const staffHtml = renderHtml('AcademyOverviewPanel-goals');
+const editHtml = renderHtml('AcademyOverviewPanel-edit');
+const legacyHtml = renderHtml('AcademyOverviewPanel-legacy');
+const fellowChecks = [
+  ['fellow sees vision', fellowHtml.includes('Every child receives an excellent education.')],
+  ['fellow sees pillar name', fellowHtml.includes('Leadership')],
+  ['fellow does NOT see goal text', !fellowHtml.includes('SECRET GOAL TEXT')],
+  ['fellow does NOT see Goals heading', !fellowHtml.includes('>Goals<')],
+  ['staff sees goal text', staffHtml.includes('First Leadership goal')],
+  ['staff sees serial numbers', staffHtml.includes('1.') && staffHtml.includes('2.')],
+  ['staff sees pillar grouping', staffHtml.includes('Leadership')],
+  ['staff view exposes Edit overview', editHtml.includes('Edit overview')],
+  ['legacy string goal survives normalization', legacyHtml.includes('Legacy goal one')],
+];
+const badVis = fellowChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (badVis.length === 0) console.log('OK    goals hidden from fellows, grouped for staff');
+else { console.log('FAIL  goals visibility: ' + badVis.join('; ')); failed++; }
+
+// Practice teaching: rotation math, S/P code derivation, unassigned rule, and
+// the Fellow-facing gating (grade/school/partners/outcomes by assignment only).
+const assignedHtml = renderHtml('FellowPracticePanel');
+const unassignedHtml = renderHtml('FellowPracticePanel-unassigned');
+const adminHtml = renderHtml('PracticeTeachingPanel-assigned');
+const ptChecks = [
+  ['admin panel shows S1 + school', adminHtml.includes('S1') && adminHtml.includes('Dhaka Collegiate School')],
+  ['admin panel shows unassigned section', adminHtml.includes('Unassigned Fellows')],
+  ['fellow sees school', assignedHtml.includes('Dhaka Collegiate School')],
+  ['fellow sees partner name', assignedHtml.includes('Fellow Two')],
+  ['fellow sees grade', assignedHtml.includes('Grade 9')],
+  ['fellow sees own day-1 outcome', assignedHtml.includes('SECRET_BANGLA_DAY1')],
+  ['fellow sees distinct day-2 outcome', assignedHtml.includes('SECRET_BANGLA_DAY2')],
+  ['fellow does not see another subject same-day outcome', !assignedHtml.includes('SECRET_ENGLISH_DAY1')],
+  ['fellow does not see another grade\'s outcomes', !assignedHtml.includes('OTHER_GRADE_OUTCOME')],
+  ['unassigned fellow sees gate message', unassignedHtml.includes('once your practice teaching assignment is set')],
+  ['unassigned fellow sees NO outcomes', !unassignedHtml.includes('SECRET_BANGLA_DAY1') && !unassignedHtml.includes('SECRET_ENGLISH_DAY1')],
+  ['unassigned fellow sees NO school', !unassignedHtml.includes('Dhaka Collegiate School')],
+];
+const badPt = ptChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (badPt.length === 0) console.log('OK    practice teaching panel + fellow gating');
+else { console.log('FAIL  practice teaching: ' + badPt.join('; ')); failed++; }
+
 // Score math check: paragraph review (3/4) + correct single answer (2/2) = 5/6
 const mod2 = await vite.ssrLoadModule('/src/App.jsx');
+
+// Practice teaching helpers: S/P code derivation, free-form rotation tallies,
+// the unassigned rule (needs collab AND accountability) and per-day outcome gating.
+try {
+  const { normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, normalizeOutcomeRecord, outcomesForDay, isFellowAssigned, unassignedFellows, learningOutcomesFor } = mod2.__panels;
+  // Deliberately lopsided rotation still counts as-is: no fixed 4/4/4 gate.
+  const rot = {};
+  for (let day = 1; day <= 7; day++) rot[String(day)] = { a: 'Bangla', b: 'English' };
+  rot['8'] = { a: 'Math', b: 'Math' };
+  const t = rotationTallies({ fellowIds: ['a', 'b'], rotation: rot });
+  const codesOk = nextCollabCode([{ code: 'S1', band: 'secondary' }], 'secondary') === 'S2'
+    && nextCollabCode([{ code: 'S1', band: 'secondary' }], 'primary') === 'P1'
+    && nextCollabCode([], 'secondary') === 'S1';
+  const tallyOk = t.a.Bangla === 7 && t.a.Math === 1 && t.b.English === 7 && t.b.Math === 1
+    && scheduledDays({ rotation: rot }) === 8;
+  const rosterMixed = [{ id: 'a', accountabilityIds: ['b'] }, { id: 'b', accountabilityIds: [] }, { id: 'c', accountabilityIds: ['a'] }];
+  const collabs = [{ id: 'x', fellowIds: ['a'] }];
+  const assignOk = isFellowAssigned(rosterMixed[0], collabs) === true
+    && isFellowAssigned(rosterMixed[1], collabs) === false
+    && isFellowAssigned(rosterMixed[2], collabs) === false
+    && unassignedFellows(rosterMixed, collabs).map(f => f.id).join(',') === 'b,c';
+  const loLib = [
+    { grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['day1'], 2: ['day2'] } },
+    { grade: 'Grade 9', subject: 'English', outcomesByDay: { 1: ['eng1'] } },
+    { grade: 'Grade 5', subject: 'Bangla', outcomesByDay: { 1: ['other'] } },
+  ];
+  const loOk = learningOutcomesFor(loLib, 'grade 9 ', ['Bangla']).length === 1
+    && learningOutcomesFor(loLib, 'Grade 9', ['English']).length === 1
+    && learningOutcomesFor(loLib, 'Grade 5', ['Bangla']).length === 1
+    && learningOutcomesFor(loLib, 'Grade 4', ['Bangla']).length === 0
+    && JSON.stringify(outcomesForDay(loLib, 'Grade 9', 'Bangla', 1)) === '["day1"]'
+    && JSON.stringify(outcomesForDay(loLib, 'Grade 9', 'Bangla', 2)) === '["day2"]'
+    && outcomesForDay(loLib, 'Grade 9', 'Bangla', 9).length === 0
+    && outcomesForDay(loLib, 'Grade 9', 'English', 1).length === 1
+    && outcomesForDay(loLib, 'Grade 9', 'Math', 1).length === 0
+    && JSON.stringify(outcomesForDay(loLib, 'Grade 5', 'Bangla', 1)) === '["other"]';
+  const legacyNorm = normalizeOutcomeRecord({ grade: 'Grade 9', subject: 'Bangla', outcomes: ['flat'] });
+  const legacyOk = legacyNorm.outcomesByDay['*']
+    && JSON.stringify(outcomesForDay([legacyNorm], 'Grade 9', 'Bangla', 4)) === '["flat"]';
+  const norm = normalizeCollab({ code: 'S3', band: 'primary', fellowIds: [1, 2], rotation: { 1: { 1: 'Bangla', 9: 'Math' }, 2: { 1: 'Paint' } }, days: 0 });
+  const normOk = norm.band === 'primary' && JSON.stringify(norm.fellowIds) === '["1","2"]' && !norm.rotation[2] && norm.days === 12;
+  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk)
+    console.log('OK    collab codes + free rotation + unassigned rule + per-day outcomes');
+  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk })); failed++; }
+} catch (err) { console.log('FAIL  practice helpers: ' + err.message); failed++; }
+// Goal records: legacy strings convert, serial ordering is honoured, blanks dropped.
+try {
+  const ng = mod2.__panels.normalizeGoals;
+  const legacy = ng(['first legacy', 'second legacy']);
+  const ordered = ng([
+    { id: 'b', pillarId: 'p1', serial: 2, text: 'second' },
+    { id: 'a', pillarId: 'p1', serial: 1, text: 'first' },
+    { id: 'z', pillarId: 'p1', serial: 3, text: '   ' }
+  ]);
+  const ok = legacy.length === 2 && legacy[0].text === 'first legacy' && legacy[0].pillarId === ''
+    && legacy[0].serial === 1
+    && ordered.length === 2 && ordered[0].text === 'first' && ordered[1].text === 'second'
+    && ordered[0].pillarId === 'p1' && ng(null).length === 0;
+  if (ok) console.log('OK    normalizeGoals legacy + serial ordering');
+  else { console.log('FAIL  normalizeGoals got ' + JSON.stringify({ legacy, ordered })); failed++; }
+} catch (err) { console.log('FAIL  normalizeGoals: ' + err.message); failed++; }
 const mockAssessment = { id: 'a1', questions: [{ id: 'q1', type: 'paragraph', points: 4 }, { id: 'q2', type: 'single', points: 2, correct: ['a'] }] };
 const mockAttempt = { questionOrder: ['q1', 'q2'], answers: { q2: 'a' }, reviews: { q1: { status: 'reviewed', score: 3, questionId: 'q1' } } };
 const sc = mod2.__panels.computeAttemptScore(mockAttempt, mockAssessment);

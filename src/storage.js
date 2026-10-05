@@ -20,6 +20,11 @@ export const ASSESSMENT_KEYS = {
 export const ACADEMY_KEYS = {
   academyOverview: 'wa14-academy-overview',
   historicalAcademies: 'wa-historical-academies',
+  // Practice teaching: collaborations (S1/P1 groups + rotation) and the
+  // grade+subject learning-outcome library. Both must be listed in
+  // firestore.rules or their writes are rejected silently.
+  collaborations: 'wa14-collaborations',
+  learningOutcomes: 'wa14-learning-outcomes',
 };
 
 // [CITY] keys for the City system (year-round fellowship calendar). These docs

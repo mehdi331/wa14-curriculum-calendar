@@ -566,7 +566,7 @@ function LoginGate({ onLogin, onLocalLogin, onRedirectLogin, error, busy, localT
   );
 }
 
-const HASH_TABS = ['dashboard', 'calendar', 'sessions', 'attendance', 'summary', 'fellows', 'rooms', 'sessionTypes', 'pillarTags', 'modes', 'requests', 'assessments', 'review', 'analytics', 'incidents', 'devices', 'planners', 'roles', 'staffCalendar', 'legend', 'overview', 'fellowAnalytics', 'academyArchives'];
+const HASH_TABS = ['dashboard', 'calendar', 'sessions', 'attendance', 'summary', 'fellows', 'rooms', 'sessionTypes', 'pillarTags', 'modes', 'requests', 'assessments', 'review', 'analytics', 'incidents', 'devices', 'planners', 'roles', 'staffCalendar', 'legend', 'overview', 'fellowAnalytics', 'academyArchives', 'practiceTeaching', 'fellowPractice'];
 
 function normalizeHashTab(hash, isAdmin, isFullAdmin, isSuperadmin, isFellow) {
   const home = isAdmin ? 'dashboard' : (isFellow ? 'overview' : 'calendar');
@@ -575,6 +575,10 @@ function normalizeHashTab(hash, isAdmin, isFullAdmin, isSuperadmin, isFellow) {
   if (base === 'calendar') return 'calendar';
   if (base === 'overview') return 'overview';
   if (base === 'fellowAnalytics' && isFellow) return 'fellowAnalytics';
+  // Practice teaching: the admin panel is full-admin only; the fellow-facing
+  // collab + learning outcomes view is for Fellows only.
+  if (base === 'practiceTeaching' && isFullAdmin && !isFellow) return 'practiceTeaching';
+  if (base === 'fellowPractice' && isFellow) return 'fellowPractice';
   if (base === 'dashboard') return isAdmin ? 'dashboard' : home;
   if (base === 'legend') return 'legend';
   if (base === 'sessions' && isAdmin) return 'sessions';
@@ -620,6 +624,8 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   const [assessmentIncidents, setAssessmentIncidents] = useState(null);
   const [deviceRequests, setDeviceRequests] = useState(null);
   const [staffTasks, setStaffTasks] = useState(null);
+  const [collaborations, setCollaborations] = useState(null);   // practice-teaching collabs (S1/P1 + rotation)
+  const [learningOutcomes, setLearningOutcomes] = useState(null); // grade + subject outcome library
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState(() => normalizeHashTab(window.location.hash.slice(1), isAdmin, isFullAdmin, isSuperadmin, isFellow));
   const [activeWeek, setActiveWeek] = useState(0);
@@ -658,6 +664,8 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   const assessmentsSaveTimer = useRef(null);
   const questionsSaveTimer = useRef(null);
   const attemptsSaveTimer = useRef(null);
+  const collabSaveTimer = useRef(null);
+  const outcomeSaveTimer = useRef(null);
   const attendanceSaveTimer = useRef(null);
   
   const incidentsSaveTimer = useRef(null);
@@ -743,6 +751,18 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
         setStaffTasks(Array.isArray(raw) ? raw : []);
       }
       catch (e) { setStaffTasks([]); }
+      try {
+        const r = await storage.get(ACADEMY_KEYS.collaborations);
+        const raw = r && r.value ? JSON.parse(r.value) : [];
+        setCollaborations(Array.isArray(raw) ? raw : []);
+      }
+      catch (e) { setCollaborations([]); }
+      try {
+        const r = await storage.get(ACADEMY_KEYS.learningOutcomes);
+        const raw = r && r.value ? JSON.parse(r.value) : [];
+        setLearningOutcomes(Array.isArray(raw) ? raw : []);
+      }
+      catch (e) { setLearningOutcomes([]); }
       setLoaded(true);
     })();
   }, []);
@@ -795,6 +815,8 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   const persistCityCodes = debouncedPersist(setCityCodes, cityCodesSaveTimer, 'wa14-city-codes');
   const persistSettings = debouncedPersist(setAcademySettings, settingsSaveTimer, 'wa14-settings');
   const persistAcademyOverview = debouncedPersist(setAcademyOverview, overviewSaveTimer, ACADEMY_KEYS.academyOverview);
+  const persistCollaborations = debouncedPersist(setCollaborations, collabSaveTimer, ACADEMY_KEYS.collaborations);
+  const persistLearningOutcomes = debouncedPersist(setLearningOutcomes, outcomeSaveTimer, ACADEMY_KEYS.learningOutcomes);
   const persistAssessments = debouncedPersist(setAssessments, assessmentsSaveTimer, ASSESSMENT_KEYS.assessments);
   const persistAssessmentQuestions = debouncedPersist(setAssessmentQuestions, questionsSaveTimer, ASSESSMENT_KEYS.questions);
   const persistAssessmentAttempts = debouncedPersist(setAssessmentAttempts, attemptsSaveTimer, ASSESSMENT_KEYS.attempts, err => { if (err) showToast('Save failed: ' + (err.code || err.message) + ' -- check that you are signed in with a Teach For Bangladesh account.'); });
@@ -1055,6 +1077,12 @@ const pageExporters = {
   devices: () => exportSheetFile('Fellow_Training_System_Devices.xlsx', [{ name: 'Devices', rows: deviceRequests.map(r => ({ RequestedAt: r.requestedAt || '', FellowId: r.fellowId || '', AssessmentId: r.assessmentId || '', OldDeviceId: r.oldDeviceId || '', NewDeviceId: r.newDeviceId || '', Status: r.status || '', ResolvedAt: r.resolvedAt || '' })) }]),
   planners: () => exportSheetFile('Fellow_Training_System_WA_Staff.xlsx', [{ name: 'WA Staff', rows: planners.map(p => ({ Name: p.name, Email: p.email || '', Role: p.role || '', CallSign: p.callSign || '', Group: p.group || '' })) }]),
   roles: () => exportSheetFile('Fellow_Training_System_Roles.xlsx', [{ name: 'Roles', rows: roles.map(r => ({ Id: r.id, Label: r.label || '' })) }, { name: 'City codes', rows: (cityCodes || []).map(c => ({ City: c.city, Code: c.code })) }]),
+  practiceTeaching: () => exportSheetFile('Fellow_Training_System_Practice_Teaching.xlsx', [
+    { name: 'Collaborations', rows: (collaborations || []).map(c => ({ Code: c.code, Band: c.band, Grade: c.grade, School: c.school, Days: c.days, Fellows: c.fellowIds.map(id => (fellowById(roster, id) || {}).name || id).join(', '), DaysScheduled: scheduledDays(c) + ' of ' + c.days })) },
+    { name: 'Rotation', rows: (collaborations || []).flatMap(c => Object.entries(c.rotation || {}).flatMap(([day, byFellow]) => Object.entries(byFellow).map(([fid, subject]) => ({ Code: c.code, Day: day, Fellow: (fellowById(roster, fid) || {}).name || fid, Subject: subject })))) },
+    { name: 'Learning outcomes', rows: (learningOutcomes || []).flatMap(o => Object.entries((o && o.outcomesByDay) || {}).filter(([d]) => d !== ALL_DAYS_KEY).flatMap(([d, rows]) => (rows || []).map(text => ({ Grade: o.grade, Subject: o.subject, Day: d, Outcome: text })))) },
+    { name: 'Unassigned', rows: unassignedFellows(roster, collaborations || []).map(f => ({ Name: f.name, Email: f.email, Missing: [collabForFellow(collaborations || [], f.id) ? null : 'collaboration', (f.accountabilityIds || []).length ? null : 'accountability partner'].filter(Boolean).join(' + ') })) },
+  ]),
 };
 const pageExportFor = (t) => pageExporters[t] || null;
 
@@ -1124,7 +1152,7 @@ const calendarSessions = auth.role === 'fellow' ? filtered.filter(session => fel
 
 const openRequests = (requests || []).filter(r => !r.resolved).length;
 
-if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !academyOverview || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !assessmentIncidents || !deviceRequests || !staffTasks) {
+if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !academyOverview || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !assessmentIncidents || !deviceRequests || !staffTasks || !collaborations || !learningOutcomes) {
   return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading schedule...</div>;
 }
 
@@ -1175,7 +1203,16 @@ return (
             <FellowAnalyticsPanel sessions={sessions} attendance={attendance} auth={auth} assessments={assessments} attempts={assessmentAttempts} roster={roster} />
           )}
           {tab === 'overview' && (
-            <AcademyOverviewPanel overview={academyOverview} onChange={persistAcademyOverview} canEdit={isAdmin} />
+            <AcademyOverviewPanel overview={academyOverview} onChange={persistAcademyOverview} canEdit={isAdmin && !isFellow} pillarTags={pillarTags} />
+          )}
+          {tab === 'practiceTeaching' && isFullAdmin && (
+            <>
+              <PracticeTeachingPanel roster={roster} collaborations={collaborations} onChange={persistCollaborations} onRosterChange={persistRoster} showToast={showToast} />
+              <LearningOutcomesPanel learningOutcomes={learningOutcomes} onChange={persistLearningOutcomes} showToast={showToast} />
+            </>
+          )}
+          {tab === 'fellowPractice' && auth.role === 'fellow' && (
+            <FellowPracticePanel roster={roster} collaborations={collaborations} learningOutcomes={learningOutcomes} auth={auth} />
           )}
           {tab === 'academyArchives' && isFullAdmin && (
             <HistoricalAcademiesPanel
@@ -1315,7 +1352,7 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
       <div className="wa14-cal-scroll-wrap">
       <div ref={staffScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-wa-line2" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
           <div className="w-14 shrink-0 border-r border-wa-linelight box-border">
-            <div className="h-[46px] border-b border-wa-linelight bg-wa-panellight"></div>
+            <div className="wa14-cal-head h-[46px] border-b border-wa-linelight bg-wa-panellight"></div>
             <div className="relative" style={{ height: totalHeight }}>
               {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-wa-ink" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
             </div>
@@ -1325,7 +1362,7 @@ function StaffCalendar({ staffTasks, sessions, weeks, startDate, activeWeek, set
             const dayMain = layoutOverlapping(mainWeekTasks.filter(s => s.date === d).sort((a, b) => toMin(a.start) - toMin(b.start)));
             return (
               <div key={d} className="flex-1 min-w-[150px] border-r border-wa-linelight box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
-                <div className="h-[46px] box-border border-b border-wa-linelight bg-wa-panellight text-[12.5px] font-semibold text-center pt-[5px] text-wa-ink">
+                <div className="wa14-cal-head h-[46px] box-border border-b border-wa-linelight bg-wa-panellight text-[12.5px] font-semibold text-center pt-[5px] text-wa-ink">
                   {wd}<div className="font-normal text-wa-ink text-[11px] leading-tight">{dateLabel(d)}</div>
                 </div>
                 <div className="relative" style={{ height: totalHeight }} onClick={e => {
@@ -1459,6 +1496,7 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
     ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: SquaresFour }] : []),
     { id: 'calendar', label: 'Winter Academy Calendar', icon: CalendarIcon },
     ...(isFellow ? [{ id: 'fellowAnalytics', label: 'Analytics', icon: TrendUp }] : []),
+    ...(isFellow ? [{ id: 'fellowPractice', label: 'Practice Teaching', icon: GradCapIcon }] : []),
     { id: 'legend', label: 'Legend', icon: ListDashes },
     ...(isAdmin ? [{ id: 'sessions', label: 'Sessions', icon: TableIcon }] : []),
     ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance records', icon: UserCheck }] : []),
@@ -1471,6 +1509,7 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
       { id: 'modes', label: 'Work Modes', icon: SlidersHorizontal },
       { id: 'requests', label: 'Requests' + (openRequests ? ' (' + openRequests + ')' : ''), icon: Tray },
       { id: 'academyArchives', label: 'Historical Academies', icon: Archive },
+      { id: 'practiceTeaching', label: 'Practice Teaching', icon: GradCapIcon },
     ] : []),
     ...(isAdmin ? [{ id: 'assessments', label: 'Assessments', icon: ClipboardText }] : []),
     ...(isAdmin ? [{ id: 'review', label: 'Review', icon: FileText }] : []),
@@ -1677,7 +1716,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
       <div className="wa14-cal-scroll-wrap">
       <div ref={calScrollRef} className="wa14-cal-scroll wa14-floating-scroll"><div className="bg-white rounded-lg border border-wa-line2" style={{ display: 'flex', width: '100%', minWidth: 'fit-content' }}>
           <div className="w-14 shrink-0 border-r border-wa-linelight box-border">
-            <div className="h-[46px] border-b border-wa-linelight bg-wa-panellight"></div>
+            <div className="wa14-cal-head h-[46px] border-b border-wa-linelight bg-wa-panellight"></div>
             <div className="relative" style={{ height: totalHeight }}>
               {hours.map(m => (<div key={m} className="absolute right-2 text-[10.5px] text-wa-ink" style={{ top: bandScale.offsets[(m - GRID_START) / 60] - 6 }}>{String(Math.floor(m / 60)).padStart(2, '0')}:00</div>))}
             </div>
@@ -1689,7 +1728,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
             const carryOver = prevDay ? weekSessions.filter(s => s.date === prevDay && wrapsMidnight(s)) : [];
             return (
               <div key={d} className="flex-1 min-w-[150px] border-r border-wa-linelight box-border" style={{ flexShrink: 1, flexGrow: 1, flexBasis: 150 }}>
-                <div className="h-[46px] box-border border-b border-wa-linelight bg-wa-panellight text-[12.5px] font-semibold text-center pt-[5px] text-wa-ink">
+                <div className="wa14-cal-head h-[46px] box-border border-b border-wa-linelight bg-wa-panellight text-[12.5px] font-semibold text-center pt-[5px] text-wa-ink">
                   {wd}<div className="font-normal text-wa-ink text-[11px] leading-tight">{dateLabel(d)}</div>
                 </div>
                 <div className="relative" style={{ height: totalHeight }} onClick={e => { if (!onPlace || e.target !== e.currentTarget) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = bandScale.minutesAt(e.clientY - rect.top); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onPlace(null, d, start); }} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const id = Number(e.dataTransfer.getData('sessionId')); const session = sessions.find(item => item.id === id); if (!session || !onDrop) return; const rect = e.currentTarget.getBoundingClientRect(); const minutes = bandScale.minutesAt(e.clientY - rect.top); const start = String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0'); onDrop(session, d, start); }}>
@@ -2107,35 +2146,259 @@ function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempt
   );
 }
 
+// ---- Practice teaching ---------------------------------------------------
+// A collaboration is 2-3+ Fellows placed in one school for the practice
+// teaching week, numbered S1.. (secondary / high school) or P1.. (primary).
+// The day-by-day rotation is NOT enforced to any particular balance -- the
+// admin decides who teaches which subject on which day. Learning outcomes are
+// stored per grade + subject + day and stay invisible to a Fellow until they
+// are placed in a collaboration.
+const PRACTICE_SUBJECTS = ['Bangla', 'English', 'Math'];
+const PRACTICE_GRADES = ['Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9'];
+const PRACTICE_DAYS_DEFAULT = 12;
+// Reserved outcomesByDay key: a legacy flat outcome list that applies to every
+// day rather than one specific day.
+const ALL_DAYS_KEY = '*';
+
+function normalizeCollab(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const band = raw.band === 'primary' ? 'primary' : 'secondary';
+  const fellowIds = (Array.isArray(raw.fellowIds) ? raw.fellowIds : []).map(String);
+  const days = Math.max(1, Number(raw.days) || PRACTICE_DAYS_DEFAULT);
+  const rotation = {};
+  Object.entries(raw.rotation || {}).forEach(([day, byFellow]) => {
+    const clean = {};
+    Object.entries(byFellow || {}).forEach(([fid, subject]) => {
+      if (fellowIds.includes(String(fid)) && PRACTICE_SUBJECTS.includes(subject)) clean[String(fid)] = subject;
+    });
+    if (Object.keys(clean).length) rotation[String(day)] = clean;
+  });
+  return { id: raw.id || 'col-' + Date.now(), code: raw.code || '', band, grade: raw.grade || '', school: raw.school || '', days, fellowIds, rotation };
+}
+
+// Codes are derived, never typed: next free S# / P# for that band.
+function nextCollabCode(list, band) {
+  const prefix = band === 'primary' ? 'P' : 'S';
+  let max = 0;
+  (list || []).forEach(c => {
+    if (c.band !== band) return;
+    const m = String(c.code || '').match(new RegExp('^' + prefix + '(\\d+)$'));
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return prefix + (max + 1);
+}
+
+// Per-Fellow subject totals across every day of the rotation.
+function rotationTallies(collab) {
+  const tally = {};
+  ((collab && collab.fellowIds) || []).forEach(fid => { tally[fid] = { Bangla: 0, English: 0, Math: 0 }; });
+  Object.values((collab && collab.rotation) || {}).forEach(byFellow => {
+    Object.entries(byFellow || {}).forEach(([fid, subject]) => {
+      if (tally[fid] && tally[fid][subject] != null) tally[fid][subject]++;
+    });
+  });
+  return tally;
+}
+
+// Days of the rotation that have at least one subject assigned.
+function scheduledDays(collab) {
+  return Object.values((collab && collab.rotation) || {}).filter(byFellow => Object.keys(byFellow || {}).length > 0).length;
+}
+
+function fellowById(roster, id) {
+  const sid = String(id);
+  return (roster || []).find(f => String(f.id) === sid) || null;
+}
+
+function collabForFellow(collaborations, fellowId) {
+  const sid = String(fellowId);
+  return (collaborations || []).find(c => (c.fellowIds || []).some(id => String(id) === sid)) || null;
+}
+
+// Derived, never stored -- a Fellow drops off the unassigned list as soon as
+// both a collaboration and an accountability partner exist.
+function isFellowAssigned(fellow, collaborations) {
+  const inCollab = collabForFellow(collaborations, fellow.id) != null;
+  const hasAccountability = (fellow.accountabilityIds || []).length > 0;
+  return inCollab && hasAccountability;
+}
+
+function unassignedFellows(roster, collaborations) {
+  return (roster || []).filter(f => !isFellowAssigned(f, collaborations));
+}
+
+// Learning outcomes are stored one record per grade + subject, with outcomes
+// keyed by day: { outcomesByDay: { '1': [...], '2': [...] } }. A legacy record
+// that used a flat `outcomes` array is treated as applying to every day, so
+// nothing already typed is lost.
+function normalizeOutcomeRecord(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const byDay = {};
+  const write = (day, rows) => {
+    const clean = (Array.isArray(rows) ? rows : []).map(x => String(x).trim()).filter(Boolean);
+    if (clean.length) byDay[String(day)] = clean;
+  };
+  Object.entries(raw.outcomesByDay || {}).forEach(([day, rows]) => write(day, rows));
+  write(ALL_DAYS_KEY, raw.outcomes);
+  return { id: raw.id || 'lo-' + Date.now(), grade: raw.grade || '', subject: raw.subject || '', outcomesByDay: byDay };
+}
+
+// Outcomes for one grade + subject on one day (falls back to the all-days list
+// only when that day has nothing of its own).
+function outcomesForDay(list, grade, subject, day) {
+  const g = String(grade || '').trim().toLowerCase();
+  if (!g || !subject) return [];
+  const rec = (list || []).find(o => String(o.grade || '').trim().toLowerCase() === g && o.subject === subject);
+  if (!rec) return [];
+  const byDay = rec.outcomesByDay || {};
+  const exact = byDay[String(day)];
+  if (exact && exact.length) return exact;
+  const legacy = byDay[ALL_DAYS_KEY];
+  return legacy && legacy.length ? legacy : [];
+}
+
+// Records for a grade narrowed to the given subjects (grade + subject pairs,
+// day-independent) -- used for the admin list and the empty-state check.
+function learningOutcomesFor(list, grade, subjects) {
+  const g = String(grade || '').trim().toLowerCase();
+  if (!g) return [];
+  const want = (Array.isArray(subjects) ? subjects : PRACTICE_SUBJECTS).filter(Boolean);
+  return (list || [])
+    .filter(o => String(o.grade || '').trim().toLowerCase() === g && want.includes(o.subject))
+    .map(o => normalizeOutcomeRecord(o))
+    .filter(Boolean)
+    .filter(o => Object.values(o.outcomesByDay).some(rows => rows.length))
+    .sort((a, b) => want.indexOf(a.subject) - want.indexOf(b.subject));
+}
+
 const OVERVIEW_DEFAULTS = { academyName: 'Winter Academy 14', theme: '', vision: '', goals: [], outcomes: [], pillars: [] };
 
-function AcademyOverviewPanel({ overview, onChange, canEdit }) {
+// Goals are structured records linked to a pillar (created in the Pillars tab):
+// the admin writes them per pillar and supplies the serial number that orders
+// and labels them. Older records were plain strings -- normalize those to an
+// unassigned goal so nothing is lost the next time the overview is saved.
+function normalizeGoals(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((g, i) => typeof g === 'string'
+      ? { id: 'goal-' + i, pillarId: '', serial: i + 1, text: g }
+      : {
+          id: g.id || 'goal-' + i,
+          pillarId: g.pillarId == null ? '' : String(g.pillarId),
+          serial: Number.isFinite(Number(g.serial)) ? Number(g.serial) : i + 1,
+          text: typeof g.text === 'string' ? g.text : ''
+        })
+    .filter(g => g.text && g.text.trim())
+    .sort((a, b) => a.serial - b.serial);
+}
+
+// Goals are grouped under their pillar; fellows never receive them (they see
+// only the vision and the pillars of the academy).
+function AcademyOverviewPanel({ overview, onChange, canEdit, pillarTags }) {
   const data = { ...OVERVIEW_DEFAULTS, ...(overview || {}) };
+  // Pillars come from the Pillars tab. Fall back to the legacy free-text list
+  // only when that tab has no pillars yet, so nothing silently disappears.
+  const pillars = (pillarTags && pillarTags.length)
+    ? pillarTags
+    : (data.pillars || []).map((p, i) => ({ id: 'legacy-' + i, name: p }));
+  const goals = normalizeGoals(data.goals);
   const [form, setForm] = useState(null);
-  const startEdit = () => setForm({ academyName: data.academyName || '', theme: data.theme || '', vision: data.vision || '', goals: (data.goals || []).join('\n'), outcomes: (data.outcomes || []).join('\n'), pillars: (data.pillars || []).join('\n') });
+  const startEdit = () => setForm({
+    academyName: data.academyName || '',
+    theme: data.theme || '',
+    vision: data.vision || '',
+    outcomes: (data.outcomes || []).join('\n'),
+    goals: goals.map(g => ({ ...g }))
+  });
+  const setGoal = (i, patch) => setForm(f => ({ ...f, goals: f.goals.map((g, idx) => idx === i ? { ...g, ...patch } : g) }));
+  const addGoal = pillarId => setForm(f => {
+    const nextSerial = f.goals.reduce((max, g) => g.pillarId === pillarId ? Math.max(max, Number(g.serial) || 0) : max, 0) + 1;
+    return { ...f, goals: [...f.goals, { id: 'goal-' + Date.now(), pillarId, serial: nextSerial, text: '' }] };
+  });
+  const removeGoal = i => setForm(f => ({ ...f, goals: f.goals.filter((_, idx) => idx !== i) }));
   const save = () => {
-    onChange({ ...data, academyName: form.academyName.trim() || data.academyName, theme: form.theme.trim(), vision: form.vision.trim(), goals: form.goals.split('\n').map(x => x.trim()).filter(Boolean), outcomes: form.outcomes.split('\n').map(x => x.trim()).filter(Boolean), pillars: form.pillars.split('\n').map(x => x.trim()).filter(Boolean) });
+    onChange({
+      ...data,
+      academyName: form.academyName.trim() || data.academyName,
+      theme: form.theme.trim(),
+      vision: form.vision.trim(),
+      goals: normalizeGoals(form.goals),
+      outcomes: form.outcomes.split('\n').map(x => x.trim()).filter(Boolean)
+    });
     setForm(null);
   };
   const numbered = list => (list || []).map((item, i) => <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 13 }}><span style={{ color: '#D65641', fontWeight: 700 }}>{i + 1}.</span><span>{item}</span></div>);
   const section = (title, body) => <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{title}</div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 16 }}>{body}</div></>;
+  const pillarChip = (name, key) => <span key={key} style={{ fontSize: 12.5, padding: '5px 12px', borderRadius: 12, background: '#1F4A3C', border: '1px solid #2A5C4B', fontWeight: 600 }}>{name}</span>;
   if (form) {
+    const goalRow = (g, i, withAssign) => (
+      <div key={g.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+        <input type="number" min="1" step="1" aria-label="Serial number" className={inputStyle} style={{ width: 64, flex: '0 0 64px', textAlign: 'center' }}
+          value={g.serial} onChange={e => setGoal(i, { serial: Math.max(1, parseInt(e.target.value, 10) || 1) })} />
+        {withAssign && (
+          <select aria-label="Pillar" className={inputStyle} style={{ width: 180, flex: '0 0 180px' }} value={g.pillarId} onChange={e => setGoal(i, { pillarId: e.target.value })}>
+            <option value="">Unassigned</option>
+            {pillars.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        )}
+        <input className={inputStyle} style={{ flex: 1, minWidth: 0 }} value={g.text} placeholder="Goal statement" onChange={e => setGoal(i, { text: e.target.value })} />
+        <button type="button" onClick={() => removeGoal(i)} style={{ ...linkBtn, flex: '0 0 auto' }}>Delete</button>
+      </div>
+    );
+    const unassigned = form.goals.reduce((acc, g, i) => (g.pillarId ? acc : [...acc, { g, i }]), []);
     return (
       <div style={{ maxWidth: 720 }}>
         <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 12 }}>Edit academy overview</div>
         <Field label="Academy name"><input className={inputStyle} value={form.academyName} onChange={e => setForm({ ...form, academyName: e.target.value })} /></Field>
         <Field label="Theme"><input className={inputStyle} value={form.theme} onChange={e => setForm({ ...form, theme: e.target.value })} placeholder="e.g. Foundations of equitable teaching" /></Field>
         <Field label="Vision"><textarea rows={3} className={inputStyle + ' resize-y'} value={form.vision} onChange={e => setForm({ ...form, vision: e.target.value })} /></Field>
-        <Field label="Goals (one per line)"><textarea rows={4} className={inputStyle + ' resize-y'} value={form.goals} onChange={e => setForm({ ...form, goals: e.target.value })} /></Field>
         <Field label="Academy outcomes (one per line - different from session outcomes)"><textarea rows={4} className={inputStyle + ' resize-y'} value={form.outcomes} onChange={e => setForm({ ...form, outcomes: e.target.value })} /></Field>
-        <Field label="Pillars (one per line)"><textarea rows={3} className={inputStyle + ' resize-y'} value={form.pillars} onChange={e => setForm({ ...form, pillars: e.target.value })} /></Field>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, margin: '14px 0 6px' }}>Goals by pillar</div>
+        <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 10 }}>
+          Pillars are managed in the <b>Pillars</b> tab. Add the goals for each pillar below, each with its serial number.
+        </div>
+        {pillars.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 12 }}>No pillars yet. Add them first in the Pillars tab.</div>}
+        {pillars.map(p => (
+          <div key={p.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap' }}>
+              {pillarChip(p.name, p.id)}
+              <button type="button" onClick={() => addGoal(p.id)} className={btnSecondary} style={{ fontSize: 12, padding: '4px 10px' }}><Plus size={13} /> Add goal</button>
+            </div>
+            {form.goals.map((g, i) => (g.pillarId === p.id ? goalRow(g, i, false) : null))}
+            {!form.goals.some(g => g.pillarId === p.id) && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No goals yet.</div>}
+          </div>
+        ))}
+        {unassigned.length > 0 && (
+          <div style={{ background: '#003223', border: '1px dashed #2A5C4B', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontSize: 12.5, color: '#D0A023', fontWeight: 700, marginBottom: 10 }}>Unassigned goals (choose a pillar)</div>
+            {unassigned.map(({ g, i }) => goalRow(g, i, true))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button onClick={save} className={btnPrimary}>Save overview</button>
           <button onClick={() => setForm(null)} className={btnSecondary}>Cancel</button>
         </div>
       </div>
     );
   }
+  const goalsByPillar = id => goals.filter(g => g.pillarId === id);
+  const unassignedGoals = goals.filter(g => !g.pillarId);
+  const goalLine = g => <div key={g.id} style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 13 }}><span style={{ color: '#D65641', fontWeight: 700 }}>{g.serial}.</span><span>{g.text}</span></div>;
+  const goalsBody = pillars.map(p => {
+    const list = goalsByPillar(p.id);
+    if (!list.length) return null;
+    return (
+      <div key={p.id} style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#D0A023', marginBottom: 6 }}>{p.name}</div>
+        {list.map(goalLine)}
+      </div>
+    );
+  }).filter(Boolean).concat(unassignedGoals.length ? [
+    <div key="__unassigned" style={{ marginBottom: 6 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: '#D0A023', marginBottom: 6 }}>Unassigned</div>
+      {unassignedGoals.map(goalLine)}
+    </div>
+  ] : []);
   return (
     <div style={{ maxWidth: 860 }}>
       <div style={{ marginBottom: 18 }}>
@@ -2144,13 +2407,419 @@ function AcademyOverviewPanel({ overview, onChange, canEdit }) {
         {canEdit && <button onClick={startEdit} className={btnSecondary + ' mt-3'}><Edit size={14} /> Edit overview</button>}
       </div>
       {data.vision ? section('Vision', <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{data.vision}</div>) : null}
-      {(data.goals || []).length > 0 ? section('Goals', numbered(data.goals)) : null}
-      {(data.outcomes || []).length > 0 ? section('Academy outcomes', numbered(data.outcomes)) : null}
-      {(data.pillars || []).length > 0 ? <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Pillars</div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>{data.pillars.map((p, i) => <span key={i} style={{ fontSize: 12.5, padding: '5px 12px', borderRadius: 12, background: '#1F4A3C', border: '1px solid #2A5C4B', fontWeight: 600 }}>{p}</span>)}</div></> : null}
-      {!data.vision && !(data.goals || []).length && !(data.pillars || []).length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No academy overview yet{canEdit ? ' - click Edit overview to add the vision, goals, and pillars.' : '.'}</div>}
+      {pillars.length > 0 ? <><div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Pillars</div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>{pillars.map(p => pillarChip(p.name, p.id))}</div></> : null}
+      {/* Goals are staff-only: fellows see the vision and pillars above, nothing else. */}
+      {canEdit && goalsBody.length > 0 ? section('Goals', goalsBody) : null}
+      {canEdit && (data.outcomes || []).length > 0 ? section('Academy outcomes', numbered(data.outcomes)) : null}
+      {!data.vision && !pillars.length && !goals.length && !(canEdit && (data.outcomes || []).length) && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No academy overview yet{canEdit ? ' - click Edit overview to add the vision and outcomes.' : '.'}</div>}
     </div>
   );
 }
+
+function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChange, showToast }) {
+  const list = collaborations || [];
+  const people = roster || [];
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const unassigned = unassignedFellows(people, list);
+
+  const startNew = band => {
+    const base = { id: 'col-' + Date.now(), code: nextCollabCode(list, band), band, grade: '', school: '', days: PRACTICE_DAYS_DEFAULT, fellowIds: [], rotation: {} };
+    setDraft(base); setEditingId(base.id);
+  };
+  const startEdit = c => { setDraft(normalizeCollab({ ...c })); setEditingId(c.id); };
+  const saveDraft = () => {
+    if (!draft.school.trim()) { showToast('Enter the school name'); return; }
+    if (!draft.grade.trim()) { showToast('Enter the grade name'); return; }
+    if (draft.fellowIds.length < 2) { showToast('Pick at least two Fellows'); return; }
+    const next = list.some(c => String(c.id) === String(draft.id))
+      ? list.map(c => (String(c.id) === String(draft.id) ? draft : c))
+      : [...list, draft];
+    onChange(next.map(normalizeCollab));
+    setDraft(null); setEditingId(null);
+    showToast(draft.code + ' saved');
+  };
+  const remove = id => {
+    const target = list.find(c => String(c.id) === String(id));
+    if (!window.confirm('Remove collaboration ' + (target ? target.code : '') + '? Fellows go back to the unassigned list.')) return;
+    onChange(list.filter(c => String(c.id) !== String(id)));
+    showToast('Collaboration removed');
+  };
+  const memberNames = c => c.fellowIds.map(id => (fellowById(people, id) || {}).name || 'Unknown').join(', ');
+
+  if (draft) return <CollabEditor draft={draft} setDraft={setDraft} people={people} list={list} onCancel={() => { setDraft(null); setEditingId(null); }} onSave={saveDraft} />;
+  return (
+    <div>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Practice teaching</div>
+      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>
+        Collaborations are 2-3+ Fellows in one school for the practice teaching week. S codes are secondary, P codes are primary. You decide who teaches which subject on each day.
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
+        <button onClick={() => startNew('secondary')} className={btnPrimary}><Plus size={14} /> New secondary collab</button>
+        <button onClick={() => startNew('primary')} className={btnSecondary}><Plus size={14} /> New primary collab</button>
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Collaborations ({list.length})</div>
+      {list.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 20 }}>No collaborations yet.</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+        {list.map(c => (
+          <div key={c.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 800, background: c.band === 'primary' ? '#1F4A3C' : '#1F6F78', padding: '4px 12px', borderRadius: 12 }}>{c.code}</span>
+            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{c.grade} · {c.school}</div>
+              <div style={{ fontSize: 12, color: '#9DB09D' }}>{memberNames(c)}</div>
+            </div>
+            <span style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 10, fontWeight: 700, background: '#1F4A3C', color: '#9FD9BE' }}>
+              {scheduledDays(c)} of {c.days} days scheduled
+            </span>
+            <button onClick={() => startEdit(c)} style={linkBtn}>Edit</button>
+            <button onClick={() => remove(c.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', display: 'inline-flex' }}><Trash2 size={14} /></button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Accountability partners</div>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Each Fellow gets one or two accountability partners. A Fellow only leaves the unassigned list below once they have both a collab and at least one partner.</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 640, marginBottom: 26 }}>
+        {people.map(f => {
+          const ids = (f.accountabilityIds || []).map(String);
+          return (
+            <div key={f.id} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 8 }}>
+              <span style={{ flex: '1 1 150px', fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+              {[0, 1].map(slot => (
+                <select key={slot} aria-label={'Accountability partner ' + (slot + 1) + ' for ' + f.name} className={inputStyle} style={{ flex: '1 1 150px', fontSize: 12 }}
+                  value={ids[slot] || ''}
+                  onChange={e => {
+                    const next = [...ids];
+                    if (e.target.value) next[slot] = e.target.value; else next.splice(slot, 1);
+                    const cleaned = next.filter((id, i) => id && next.indexOf(id) === i && id !== String(f.id)).slice(0, 2);
+                    onRosterChange(people.map(p => (String(p.id) === String(f.id) ? { ...p, accountabilityIds: cleaned } : p)));
+                  }}>
+                  <option value="">{slot === 0 ? 'Choose partner…' : 'Add another…'}</option>
+                  {people.filter(o => String(o.id) !== String(f.id)).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              ))}
+            </div>
+          );
+        })}
+        {people.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No Fellows on the roster yet.</div>}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Unassigned Fellows ({unassigned.length})</div>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>A Fellow leaves this list once they have both a collaboration and an accountability partner.</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 640 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>
+            <th style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid #2A5C4B' }}>Fellow</th>
+            <th style={{ padding: '9px 12px', fontWeight: 600, borderBottom: '1px solid #2A5C4B' }}>Missing</th>
+          </tr></thead>
+          <tbody>
+            {unassigned.map(f => {
+              const noCollab = !collabForFellow(list, f.id);
+              const noAcc = !(f.accountabilityIds || []).length;
+              const why = [noCollab ? 'collaboration' : null, noAcc ? 'accountability partner' : null].filter(Boolean).join(' + ');
+              return <tr key={f.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                <td style={{ padding: '8px 12px' }}>{f.name}</td>
+                <td style={{ padding: '8px 12px', color: '#D0A023' }}>{why}</td>
+              </tr>;
+            })}
+            {unassigned.length === 0 && <tr><td colSpan={2} style={{ padding: 16, textAlign: 'center', color: '#9DB09D' }}>Everyone is assigned.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CollabEditor({ draft, setDraft, people, list, onCancel, onSave }) {
+  const set = (key, value) => setDraft(d => ({ ...d, [key]: value }));
+  const toggleFellow = id => setDraft(d => {
+    const sid = String(id);
+    const has = d.fellowIds.includes(sid);
+    // Dropping a Fellow must clear their rotation cells too, otherwise their
+    // tallies keep counting classes they no longer teach.
+    const rotation = {};
+    Object.entries(d.rotation || {}).forEach(([day, byFellow]) => {
+      const clean = { ...byFellow };
+      if (has) delete clean[sid];
+      if (Object.keys(clean).length) rotation[day] = clean;
+    });
+    return { ...d, fellowIds: has ? d.fellowIds.filter(x => x !== sid) : [...d.fellowIds, sid], rotation };
+  });
+  const setCell = (day, fid, subject) => setDraft(d => {
+    const key = String(day);
+    const byFellow = { ...(d.rotation[key] || {}) };
+    if (subject) byFellow[String(fid)] = subject; else delete byFellow[String(fid)];
+    const rotation = { ...d.rotation };
+    if (Object.keys(byFellow).length) rotation[key] = byFellow; else delete rotation[key];
+    return { ...d, rotation };
+  });
+  const days = Array.from({ length: draft.days }, (_, i) => i + 1);
+  const tally = rotationTallies(draft);
+  const members = draft.fellowIds.map(id => fellowById(people, id)).filter(Boolean);
+  const taken = id => list.some(c => String(c.id) !== String(draft.id) && (c.fellowIds || []).some(x => String(x) === String(id)));
+
+  return (
+    <div style={{ maxWidth: 900 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>{draft.code}</div>
+        <span style={{ fontSize: 12, padding: '3px 10px', borderRadius: 12, background: '#1F4A3C', color: '#D5E0D5', fontWeight: 600 }}>{draft.band === 'primary' ? 'Primary' : 'Secondary'}</span>
+        <span style={{ fontSize: 12, color: '#9DB09D' }}>Code is assigned automatically from the band.</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        <Field label="School name" style={{ flex: '1 1 240px' }}><input className={inputStyle} value={draft.school} onChange={e => set('school', e.target.value)} placeholder="e.g. Dhaka Collegiate School" /></Field>
+        <Field label="Grade name" style={{ flex: '1 1 180px' }}><input className={inputStyle} value={draft.grade} onChange={e => set('grade', e.target.value)} placeholder="e.g. Grade 9" /></Field>
+        <Field label="Practice days" style={{ flex: '0 1 130px' }}><input type="number" min="1" max="30" className={inputStyle} value={draft.days} onChange={e => set('days', Math.max(1, Math.min(30, parseInt(e.target.value, 10) || PRACTICE_DAYS_DEFAULT)))} /></Field>
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Collaboration members</div>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Pick 2-3 (or more) Fellows.</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+        {people.map(f => {
+          const on = draft.fellowIds.includes(String(f.id));
+          const locked = !on && taken(f.id);
+          return <button key={f.id} type="button" disabled={locked} onClick={() => toggleFellow(f.id)}
+            className={on ? btnPrimary : btnSecondary}
+            style={{ fontSize: 12, padding: '5px 11px', opacity: locked ? 0.45 : 1 }}
+            title={locked ? 'Already in another collaboration' : ''}>{f.name}</button>;
+        })}
+        {people.length === 0 && <span style={{ fontSize: 12.5, color: '#9DB09D' }}>No Fellows on the roster yet.</span>}
+      </div>
+
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Subject rotation</div>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>
+        Set who teaches which subject on each day. The rotation is yours to design -- there is no fixed balance to hit.
+      </div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'auto', marginBottom: 10 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 460 }}>
+          <thead><tr style={{ background: '#00402E' }}>
+            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #2A5C4B' }}>Day</th>
+            {members.map(f => <th key={f.id} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #2A5C4B' }}>{f.name}</th>)}
+          </tr></thead>
+          <tbody>
+            {days.map(day => (
+              <tr key={day} style={{ borderBottom: '1px solid #1F4A3C' }}>
+                <td style={{ padding: '6px 10px', fontWeight: 700, whiteSpace: 'nowrap' }}>{day}</td>
+                {members.map(f => (
+                  <td key={f.id} style={{ padding: '5px 6px' }}>
+                    <select className={inputStyle} style={{ fontSize: 12, padding: '4px 6px' }} value={(draft.rotation[String(day)] || {})[String(f.id)] || ''}
+                      onChange={e => setCell(day, f.id, e.target.value)}>
+                      <option value="">--</option>
+                      {PRACTICE_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        {members.map(f => {
+          const t = tally[String(f.id)] || { Bangla: 0, English: 0, Math: 0 };
+          return <span key={f.id} style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: '#00402E', border: '1px solid #2A5C4B', fontWeight: 600, color: '#D5E0D5' }}>
+            {f.name}: Bangla {t.Bangla} · English {t.English} · Math {t.Math}
+          </span>;
+        })}
+        {members.length === 0 && <span style={{ fontSize: 12, color: '#9DB09D' }}>Pick Fellows to build the rotation.</span>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={onSave} className={btnPrimary}>Save collaboration</button>
+        <button onClick={onCancel} className={btnSecondary}>Cancel</button>
+      </div>
+      <div style={{ fontSize: 11.5, color: '#9DB09D', marginTop: 8 }}>Scheduled: {scheduledDays(draft)} of {draft.days} days.</div>
+    </div>
+  );
+}
+
+function LearningOutcomesPanel({ learningOutcomes, onChange, showToast }) {
+  const list = learningOutcomes || [];
+  const [grade, setGrade] = useState('');
+  const [subject, setSubject] = useState(PRACTICE_SUBJECTS[0]);
+  const [days, setDays] = useState(PRACTICE_DAYS_DEFAULT);
+  // One textarea per day: { '1': 'outcome\noutcome', ... }
+  const [rows, setRows] = useState({});
+  const key = g => (g || '').trim().toLowerCase();
+  const existing = list.find(o => key(o.grade) === key(grade) && o.subject === subject);
+  const gradeOptions = [...new Set([...PRACTICE_GRADES, ...list.map(o => o.grade)])];
+  const loadRecord = (g, s) => {
+    const hit = list.find(o => key(o.grade) === key(g) && o.subject === s);
+    const next = {};
+    const byDay = (hit && hit.outcomesByDay) || {};
+    Object.keys(byDay).forEach(d => { if (d !== ALL_DAYS_KEY) next[d] = byDay[d].join('\n'); });
+    // A legacy flat list lands in the day-1 box rather than silently vanishing.
+    if (!Object.keys(next).length && hit && (hit.outcomes || []).length) next['1'] = hit.outcomes.join('\n');
+    setRows(next);
+  };
+  const setDay = (day, value) => setRows(r => ({ ...r, [String(day)]: value }));
+  const dayNumbers = Array.from({ length: days }, (_, i) => String(i + 1));
+  const filled = dayNumbers.filter(d => (rows[d] || '').trim()).length;
+  const save = () => {
+    if (!grade.trim()) { showToast('Pick a grade'); return; }
+    const outcomesByDay = {};
+    dayNumbers.forEach(d => {
+      const clean = (rows[d] || '').split('\n').map(x => x.trim()).filter(Boolean);
+      if (clean.length) outcomesByDay[d] = clean;
+    });
+    if (!Object.keys(outcomesByDay).length) { showToast('Add at least one outcome'); return; }
+    const entry = { id: existing ? existing.id : 'lo-' + Date.now(), grade: grade.trim(), subject, outcomesByDay };
+    const next = existing ? list.map(o => (o.id === existing.id ? entry : o)) : [...list, entry];
+    onChange(next);
+    showToast(entry.grade + ' · ' + subject + ' saved (' + Object.keys(outcomesByDay).length + ' of ' + days + ' days set)');
+  };
+  const totalDays = entry => Object.keys((entry && entry.outcomesByDay) || {}).filter(d => d !== ALL_DAYS_KEY).length;
+  return (
+    <div style={{ maxWidth: 780, marginTop: 30 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Learning outcomes (grade · subject · day)</div>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 12 }}>
+        Set the outcomes for each day, for each grade (3-9) and subject. A Fellow only sees these once placed in a collaboration, and only for their own grade, subject and day.
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <Field label="Grade" style={{ flex: '1 1 160px' }}>
+          <select className={inputStyle} value={grade} onChange={e => { setGrade(e.target.value); loadRecord(e.target.value, subject); }}>
+            <option value="">Choose a grade…</option>
+            {gradeOptions.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </Field>
+        <Field label="Subject" style={{ flex: '0 1 150px' }}>
+          <select className={inputStyle} value={subject} onChange={e => { setSubject(e.target.value); loadRecord(grade, e.target.value); }}>
+            {PRACTICE_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Days" style={{ flex: '0 1 110px' }}>
+          <input type="number" min="1" max="30" className={inputStyle} value={days}
+            onChange={e => setDays(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || PRACTICE_DAYS_DEFAULT)))} />
+        </Field>
+      </div>
+
+      {grade ? (
+        <div>
+          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Outcomes set for {filled} of {days} days.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            {dayNumbers.map(d => (
+              <div key={d} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <span style={{ flex: '0 0 54px', fontSize: 12, fontWeight: 700, paddingTop: 9, color: (rows[d] || '').trim() ? '#9FD9BE' : '#9DB09D' }}>Day {d}</span>
+                <textarea rows={2} className={inputStyle + ' resize-y'} style={{ flex: 1, minWidth: 0 }}
+                  value={rows[d] || ''} onChange={e => setDay(d, e.target.value)}
+                  placeholder="One learning outcome per line" />
+              </div>
+            ))}
+          </div>
+          <button onClick={save} className={btnPrimary}>{existing ? 'Update outcomes' : 'Add outcomes'}</button>
+        </div>
+      ) : <div style={{ fontSize: 12.5, color: '#9DB09D' }}>Choose a grade to start entering outcomes.</div>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 22 }}>
+        {list.map(o => (
+          <div key={o.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, background: '#1F4A3C', padding: '3px 10px', borderRadius: 12 }}>{o.grade}</span>
+              <span style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600 }}>{o.subject}</span>
+              <span style={{ fontSize: 11.5, color: '#9DB09D' }}>{totalDays(o)} of {days} days set</span>
+              <button onClick={() => { setGrade(o.grade); setSubject(o.subject); loadRecord(o.grade, o.subject); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ ...linkBtn, marginLeft: 'auto' }}>Edit</button>
+              <button onClick={() => { if (window.confirm('Delete ' + o.grade + ' · ' + o.subject + '?')) onChange(list.filter(x => x.id !== o.id)); }} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button>
+            </div>
+            <div style={{ fontSize: 12.5, color: '#D5E0D5', lineHeight: 1.5 }}>
+              {Object.keys(o.outcomesByDay || {}).filter(d => d !== ALL_DAYS_KEY).sort((a, b) => Number(a) - Number(b)).slice(0, 3).map(d => 'Day ' + d + ': ' + ((o.outcomesByDay[d] || [])[0] || '')).join(' · ')}
+              {Object.keys(o.outcomesByDay || {}).filter(d => d !== ALL_DAYS_KEY).length > 3 ? ' …' : ''}
+            </div>
+          </div>
+        ))}
+        {list.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No learning outcomes added yet.</div>}
+      </div>
+    </div>
+  );
+}
+
+function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth }) {
+  const me = fellowById(roster, auth.fellowId) || {};
+  const collab = collabForFellow(collaborations, auth.fellowId);
+  const accountabilityIds = (me.accountabilityIds || []).map(id => fellowById(roster, id)).filter(Boolean);
+  const section = (title, body) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 14, maxWidth: 720 }}>
+    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{title}</div>{body}
+  </div>;
+  const chip = name => <span key={name} style={{ fontSize: 12.5, padding: '5px 12px', borderRadius: 12, background: '#1F4A3C', border: '1px solid #2A5C4B', fontWeight: 600 }}>{name}</span>;
+
+  if (!collab) {
+    return (
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Practice teaching</div>
+        <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>Your collaboration and learning outcomes will appear here.</div>
+        {section('Not yet assigned',
+          <div style={{ fontSize: 12.5, color: '#9DB09D' }}>
+            You will see your grade, school, collaboration partners, subject schedule and learning outcomes once your practice teaching assignment is set by the academy team.
+          </div>)}
+        {section('Accountability partner', accountabilityIds.length
+          ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{accountabilityIds.map(f => chip(f.name))}</div>
+          : <div style={{ fontSize: 12.5, color: '#9DB09D' }}>Not yet assigned.</div>)}
+      </div>
+    );
+  }
+
+  const partners = collab.fellowIds.filter(id => String(id) !== String(auth.fellowId)).map(id => fellowById(roster, id) || { name: 'Unknown' });
+  const days = Array.from({ length: collab.days }, (_, i) => i + 1);
+  const mySubjects = [...new Set(days.map(d => (collab.rotation[String(d)] || {})[String(auth.fellowId)]).filter(Boolean))];
+  // Each scheduled day becomes one card: day + subject + that day's outcome.
+  // A Fellow only ever sees outcomes for the subject they teach that day.
+  const mySchedule = days
+    .map(d => {
+      const subject = (collab.rotation[String(d)] || {})[String(auth.fellowId)];
+      if (!subject) return null;
+      return { day: d, subject, outcomes: outcomesForDay(learningOutcomes, collab.grade, subject, d) };
+    })
+    .filter(Boolean);
+  const anyOutcomes = mySchedule.some(row => row.outcomes.length > 0);
+
+  return (
+    <div>
+      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Practice teaching</div>
+      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>Your collaboration, schedule and learning outcomes for the practice teaching week.</div>
+
+      {section('Collaboration', (
+        <div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, background: collab.band === 'primary' ? '#1F4A3C' : '#1F6F78', padding: '4px 14px', borderRadius: 12 }}>{collab.code}</span>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{collab.grade}</span>
+          </div>
+          <div style={{ fontSize: 13, marginBottom: 4 }}><b>School:</b> {collab.school}</div>
+          <div style={{ fontSize: 13, marginBottom: 8 }}><b>My subjects:</b> {mySubjects.length ? mySubjects.join(', ') : 'Not scheduled yet'}</div>
+          <div style={{ fontSize: 12, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>Collaboration partners</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{partners.map(f => chip(f.name))}</div>
+        </div>
+      ))}
+
+      {section('Accountability partner', accountabilityIds.length
+        ? <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{accountabilityIds.map(f => chip(f.name))}</div>
+        : <div style={{ fontSize: 12.5, color: '#9DB09D' }}>Not yet assigned.</div>)}
+
+      {mySchedule.length > 0 && section('My classes (' + mySchedule.length + ')', (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {mySchedule.map(row => (
+            <div key={row.day} style={{ border: '1px solid #2A5C4B', borderRadius: 6, padding: '10px 12px', background: '#00402E' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: row.outcomes.length ? 6 : 0 }}>
+                <span style={{ fontSize: 11, color: '#9DB09D', fontWeight: 700 }}>Day {row.day}</span>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{row.subject}</span>
+              </div>
+              {row.outcomes.length > 0 ? row.outcomes.map((text, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 8, fontSize: 13, marginBottom: 4, lineHeight: 1.5 }}>
+                  <span style={{ color: '#D65641', fontWeight: 700, flexShrink: 0 }}>{idx + 1}.</span><span>{text}</span>
+                </div>
+              )) : <div style={{ fontSize: 12, color: '#9DB09D', fontStyle: 'italic' }}>Outcome not set yet</div>}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {mySchedule.length > 0 && !anyOutcomes && section('Learning outcomes',
+        <div style={{ fontSize: 12.5, color: '#9DB09D' }}>Learning outcomes for your grade and subjects have not been published yet.</div>)}
+    </div>
+  );
+}
 
 function HistoricalAcademiesPanel({ current, onImportSessions, showToast }) {
   const [archives, setArchives] = useState(null);
@@ -3831,4 +4500,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, AcademyOverviewPanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT };
