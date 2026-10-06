@@ -58,12 +58,12 @@ const wrapSession = (facilitators) => ({
   id: 1, week: 1, date: '2026-10-25', weekday: 'Sunday', start: '23:00', end: '01:00',
   name: 'Cross-midnight session', type: 'Team Culture', pillarIds: ['ptag0'], mode: 'Sync',
   facilitators, roomIds: ['r1'], rooms: [], resources: [{ id: 'res1', label: 'Deck', url: 'https://x.dev' }],
-  outcomes: ['Outcome A'], notes: 'n', fellowNotes: 'fn', afaGroup: 'AFA 1', calendared: true,
+  outcomes: ['Outcome A'], notes: 'n', fellowNotes: 'fn', afaGroup: 'AFA 1', calendared: true, assessmentTotal: 10,
 });
 const sessions = [
   wrapSession(legacyFacs),
-  { id: 2, week: 1, date: '2026-10-25', weekday: 'Sunday', start: '09:00', end: '10:30', name: 'Normal session', type: 'Team Culture', pillarIds: [], mode: 'Async', facilitators: [{ id: 'f9', staffName: '', roomId: '' }], roomIds: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: true },
-  { id: 3, week: 2, date: '', weekday: '', start: '', end: '', name: 'Unscheduled', type: 'Coaching', pillarIds: [], mode: 'Sync', facilitators: [], roomIds: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: false },
+  { id: 2, week: 1, date: '2026-10-25', weekday: 'Sunday', start: '09:00', end: '10:30', name: 'Normal session', type: 'Team Culture', pillarIds: [], mode: 'Async', facilitators: [{ id: 'f9', staffName: '', roomId: '' }], roomIds: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: true, assessmentTotal: 10 },
+  { id: 3, week: 2, date: '', weekday: '', start: '', end: '', name: 'Unscheduled', type: 'Coaching', pillarIds: [], mode: 'Sync', facilitators: [], roomIds: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: false, assessmentTotal: 0 },
 ];
 const afaGroups = ['AFA 1', 'Legacy AFA 9'];
 const attendanceRecs = [
@@ -109,8 +109,11 @@ export const cases = [
   ['FilterBar', () => <P.FilterBar typeFilter="all" setTypeFilter={noop} pillarTagFilter="all" setPillarTagFilter={noop} modeFilter="all" setModeFilter={noop} sessionTypes={null} pillarTags={null} modes={null} />],
   ['MyAttendancePanel', () => <P.MyAttendancePanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} />],
   ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} onExport={noop} />],
+  ['SessionMarksPanel', () => <P.SessionMarksPanel sessions={sessions} roster={roster} manualSessionMarks={[{ id: 'sm1', sessionId: 1, fellowId: 'fe1', fellowName: 'Fellow One', mark: 8, recordedAt: '2026-10-25T09:00:00Z', method: 'admin' }]} onSaveMarks={noop} onUpdateSession={noop} />],
+  ['SessionMarksPanel-empty', () => <P.SessionMarksPanel sessions={sessions} roster={roster} manualSessionMarks={[]} onSaveMarks={noop} onUpdateSession={noop} />],
   ['FellowOverview', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} />],
-  ['FellowAnalyticsPanel', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} />],
+  ['FellowAnalyticsPanel', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} manualSessionMarks={[]} />],
+  ['FellowAnalyticsPanel-marks', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} manualSessionMarks={[{ id: 'sm1', sessionId: 1, fellowId: 'fe1', fellowName: 'Fellow One', mark: 8, recordedAt: '2026-10-25T09:00:00Z', method: 'admin' }]} />],
   ['AcademyOverviewPanel', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: 'Foundations', vision: 'Every child receives an excellent education.', goals: ['Goal one', 'Goal two'], outcomes: ['Outcome one'], pillars: ['Pillar A', 'Pillar B'] }} onChange={noop} canEdit={false} pillarTags={[{ id: 'ptag0', name: 'Leadership' }, { id: 'ptag1', name: 'Equity & Inclusion' }]} />],
   // Fellows pass canEdit={false}: they must see the vision + pillars but never the goals.
   ['AcademyOverviewPanel-fellow', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: '', vision: 'Every child receives an excellent education.', goals: [{ id: 'g1', pillarId: 'ptag0', serial: 1, text: 'SECRET GOAL TEXT' }], outcomes: [], pillars: [] }} onChange={noop} canEdit={false} pillarTags={[{ id: 'ptag0', name: 'Leadership' }]} />],

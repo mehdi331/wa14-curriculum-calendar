@@ -40,7 +40,7 @@ const DEFAULT_MODES = [
   { id: 'mode3', name: 'Workshop', color: '#A64D4D' },
 ];
 const DEFAULT_MODE_COLORS = DEFAULT_MODES.reduce((acc, m) => { acc[m.name] = m.color; return acc; }, {});
-const RESOURCE_KINDS = ['Session plan', 'Slides', 'Async work', 'Exit ticket', 'Old folder', 'Other'];
+const RESOURCE_KINDS = ['Session plan', 'Slides', 'Async work', 'Exit ticket', 'Printables', 'Old folder', 'Other'];
 const ASSESSMENT_TYPES = ['single', 'multiple', 'check', 'paragraph', 'mcq_grid', 'checkbox_grid'];
 const WEEKS = [0, 1, 2, 3, 4, 5, 6];
 const GRID_START = 0;      // 00:00 -- full-day grid
@@ -566,7 +566,7 @@ function LoginGate({ onLogin, onLocalLogin, onRedirectLogin, error, busy, localT
   );
 }
 
-const HASH_TABS = ['dashboard', 'calendar', 'sessions', 'attendance', 'summary', 'fellows', 'rooms', 'sessionTypes', 'pillarTags', 'modes', 'requests', 'assessments', 'review', 'analytics', 'incidents', 'devices', 'planners', 'roles', 'staffCalendar', 'legend', 'overview', 'fellowAnalytics', 'academyArchives', 'practiceTeaching', 'fellowPractice'];
+const HASH_TABS = ['dashboard', 'calendar', 'sessions', 'attendance', 'summary', 'fellows', 'rooms', 'sessionTypes', 'pillarTags', 'modes', 'requests', 'assessments', 'review', 'analytics', 'incidents', 'devices', 'planners', 'roles', 'staffCalendar', 'legend', 'overview', 'fellowAnalytics', 'academyArchives', 'practiceTeaching', 'fellowPractice', 'sessionMarks'];
 
 function normalizeHashTab(hash, isAdmin, isFullAdmin, isSuperadmin, isFellow) {
   const home = isAdmin ? 'dashboard' : (isFellow ? 'overview' : 'calendar');
@@ -579,6 +579,7 @@ function normalizeHashTab(hash, isAdmin, isFullAdmin, isSuperadmin, isFellow) {
   // collab + learning outcomes view is for Fellows only.
   if (base === 'practiceTeaching' && isFullAdmin && !isFellow) return 'practiceTeaching';
   if (base === 'fellowPractice' && isFellow) return 'fellowPractice';
+  if (base === 'sessionMarks' && isFullAdmin) return 'sessionMarks';
   if (base === 'dashboard') return isAdmin ? 'dashboard' : home;
   if (base === 'legend') return 'legend';
   if (base === 'sessions' && isAdmin) return 'sessions';
@@ -626,6 +627,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   const [staffTasks, setStaffTasks] = useState(null);
   const [collaborations, setCollaborations] = useState(null);   // practice-teaching collabs (S1/P1 + rotation)
   const [learningOutcomes, setLearningOutcomes] = useState(null); // grade + subject outcome library
+  const [manualSessionMarks, setManualSessionMarks] = useState(null); // session assessment marks
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState(() => normalizeHashTab(window.location.hash.slice(1), isAdmin, isFullAdmin, isSuperadmin, isFellow));
   const [activeWeek, setActiveWeek] = useState(0);
@@ -670,6 +672,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   
   const incidentsSaveTimer = useRef(null);
   const deviceRequestsSaveTimer = useRef(null);
+  const sessionMarksSaveTimer = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -677,7 +680,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
         const r = await storage.get('wa14-sessions');
         const raw = r && r.value ? JSON.parse(r.value) : SEED;
         // Migrate legacy "pillar" field to "type" and ensure pillar tags exist.
-        setSessions(raw.map(s => ({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [] })));
+        setSessions(raw.map(s => ({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 })));
       }
       catch (e) { setSessions(SEED.map(s => ({ ...s, type: s.pillar || SESSION_TYPES[0], pillarIds: [] }))); }
       let loadedQuestions = [];
@@ -763,6 +766,12 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
         setLearningOutcomes(Array.isArray(raw) ? raw : []);
       }
       catch (e) { setLearningOutcomes([]); }
+      try {
+        const r = await storage.get(ACADEMY_KEYS.manualSessionMarks);
+        const raw = r && r.value ? JSON.parse(r.value) : [];
+        setManualSessionMarks(Array.isArray(raw) ? raw : []);
+      }
+      catch (e) { setManualSessionMarks([]); }
       setLoaded(true);
     })();
   }, []);
@@ -781,7 +790,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
       const serialized = JSON.stringify(next);
       if (serialized === lastRemoteSessions.current) return;
       lastRemoteSessions.current = serialized;
-      setSessions(next.map(s => ({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [] })));
+      setSessions(next.map(s => ({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 })));
     });
     const unsubStaff = storage.subscribe('wa14-staff-tasks', (rec) => {
       const next = rec && rec.value ? JSON.parse(rec.value) : [];
@@ -821,6 +830,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   const persistAssessmentQuestions = debouncedPersist(setAssessmentQuestions, questionsSaveTimer, ASSESSMENT_KEYS.questions);
   const persistAssessmentAttempts = debouncedPersist(setAssessmentAttempts, attemptsSaveTimer, ASSESSMENT_KEYS.attempts, err => { if (err) showToast('Save failed: ' + (err.code || err.message) + ' -- check that you are signed in with a Teach For Bangladesh account.'); });
   const persistAttendance = debouncedPersist(setAttendance, attendanceSaveTimer, ASSESSMENT_KEYS.attendance);
+  const persistManualSessionMarks = debouncedPersist(setManualSessionMarks, sessionMarksSaveTimer, ACADEMY_KEYS.manualSessionMarks);
   
   const persistAssessmentIncidents = debouncedPersist(setAssessmentIncidents, incidentsSaveTimer, ASSESSMENT_KEYS.incidents);
   const persistDeviceRequests = debouncedPersist(setDeviceRequests, deviceRequestsSaveTimer, ASSESSMENT_KEYS.deviceRequests);
@@ -978,6 +988,7 @@ const importExcel = () => {
           fellowNotes: findValue(row, ['Fellow Notes', 'fellow notes', 'Fellow Note', 'fellow note']),
           afaGroup: findValue(row, ['AFA Group', 'afa group', 'AFA', 'afa', 'Group', 'group']),
           calendared: true,
+          assessmentTotal: 0,
         });
       });
 
@@ -1051,6 +1062,7 @@ const sessionRows = () => {
     Facilitators: fmtFacilitators(s.facilitators, rooms, planners),
     Resources: (s.resources || []).map(r => r.label + ': ' + r.url).join(' | '),
     Outcomes: (s.outcomes || []).join(' | '),
+    'Assessment Total': s.assessmentTotal || '',
     Calendared: s.calendared ? 'Yes' : 'No',
   }));
   rows.sort((a, b) => (a.Date || 'zzzz').localeCompare(b.Date || 'zzzz') || (a.Start || '').localeCompare(b.Start || ''));
@@ -1078,8 +1090,8 @@ const pageExporters = {
   planners: () => exportSheetFile('Fellow_Training_System_WA_Staff.xlsx', [{ name: 'WA Staff', rows: planners.map(p => ({ Name: p.name, Email: p.email || '', Role: p.role || '', CallSign: p.callSign || '', Group: p.group || '' })) }]),
   roles: () => exportSheetFile('Fellow_Training_System_Roles.xlsx', [{ name: 'Roles', rows: roles.map(r => ({ Id: r.id, Label: r.label || '' })) }, { name: 'City codes', rows: (cityCodes || []).map(c => ({ City: c.city, Code: c.code })) }]),
   practiceTeaching: () => exportSheetFile('Fellow_Training_System_Practice_Teaching.xlsx', [
-    { name: 'Collaborations', rows: (collaborations || []).map(c => ({ Code: c.code, Band: c.band, Grade: c.grade, School: c.school, Days: c.days, Fellows: c.fellowIds.map(id => (fellowById(roster, id) || {}).name || id).join(', '), DaysScheduled: scheduledDays(c) + ' of ' + c.days })) },
-    { name: 'Rotation', rows: (collaborations || []).flatMap(c => Object.entries(c.rotation || {}).flatMap(([day, byFellow]) => Object.entries(byFellow).map(([fid, subject]) => ({ Code: c.code, Day: day, Fellow: (fellowById(roster, fid) || {}).name || fid, Subject: subject })))) },
+    { name: 'Collaborations', rows: (collaborations || []).map(c => ({ Code: c.code, Band: c.band, Grade: c.grade, Schools: [...new Set(c.fellowIds.map(fid => schoolForMember(c, fid)).filter(Boolean))].join(' + '), Days: c.days, Fellows: c.fellowIds.map(id => (fellowById(roster, id) || {}).name || id).join(', '), DaysScheduled: scheduledDays(c) + ' of ' + c.days })) },
+    { name: 'Rotation', rows: (collaborations || []).flatMap(c => Object.entries(c.rotation || {}).flatMap(([day, byFellow]) => Object.entries(byFellow).map(([fid, subject]) => ({ Code: c.code, Day: day, Fellow: (fellowById(roster, fid) || {}).name || fid, School: schoolForMember(c, fid), Subject: subject })))) },
     { name: 'Learning outcomes', rows: (learningOutcomes || []).flatMap(o => Object.entries((o && o.outcomesByDay) || {}).filter(([d]) => d !== ALL_DAYS_KEY).flatMap(([d, rows]) => (rows || []).map(text => ({ Grade: o.grade, Subject: o.subject, Day: d, Outcome: text })))) },
     { name: 'Unassigned', rows: unassignedFellows(roster, collaborations || []).map(f => ({ Name: f.name, Email: f.email, Missing: [collabForFellow(collaborations || [], f.id) ? null : 'collaboration', (f.accountabilityIds || []).length ? null : 'accountability partner'].filter(Boolean).join(' + ') })) },
   ]),
@@ -1152,7 +1164,7 @@ const calendarSessions = auth.role === 'fellow' ? filtered.filter(session => fel
 
 const openRequests = (requests || []).filter(r => !r.resolved).length;
 
-if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !academyOverview || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !assessmentIncidents || !deviceRequests || !staffTasks || !collaborations || !learningOutcomes) {
+if (!loaded || !sessions || !roster || !planners || !requests || !rooms || !sessionTypes || !pillarTags || !modes || !roles || !cityCodes || !academySettings || !academyOverview || !assessments || !assessmentQuestions || !assessmentAttempts || !attendance || !assessmentIncidents || !deviceRequests || !staffTasks || !collaborations || !learningOutcomes || !manualSessionMarks) {
   return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading schedule...</div>;
 }
 
@@ -1200,7 +1212,7 @@ return (
             </>
           )}
           {tab === 'fellowAnalytics' && auth.role === 'fellow' && (
-            <FellowAnalyticsPanel sessions={sessions} attendance={attendance} auth={auth} assessments={assessments} attempts={assessmentAttempts} roster={roster} />
+            <FellowAnalyticsPanel sessions={sessions} attendance={attendance} auth={auth} assessments={assessments} attempts={assessmentAttempts} roster={roster} manualSessionMarks={manualSessionMarks} />
           )}
           {tab === 'overview' && (
             <AcademyOverviewPanel overview={academyOverview} onChange={persistAcademyOverview} canEdit={isAdmin && !isFellow} pillarTags={pillarTags} />
@@ -1238,7 +1250,7 @@ return (
             />
           )}
           {tab === 'attendance' && isFullAdmin && (
-            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} onExport={exportAttendanceRecords} />
+            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} onExport={exportAttendanceRecords} onSaveAttendance={records => { setAttendance(records); persistAttendance(records); showToast('Attendance updated'); }} />
           )}
           {tab === 'summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} modes={modes} />}
           {tab === 'fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
@@ -1254,6 +1266,7 @@ return (
           {tab === 'incidents' && isFullAdmin && <IncidentLogPanel incidents={assessmentIncidents} attempts={assessmentAttempts} assessments={assessments} roster={roster} sessions={sessions} />}
           {tab === 'devices' && isFullAdmin && <DeviceRequestPanel requests={deviceRequests} attempts={assessmentAttempts} assessments={assessments} roster={roster} onResolve={(id, approved) => { persistDeviceRequests((deviceRequests || []).map(r => String(r.id) === String(id) ? { ...r, status: approved ? 'approved' : 'denied', resolvedAt: new Date().toISOString() } : r)); showToast(approved ? 'Device change approved' : 'Device change denied'); }} />}
           {tab === 'analytics' && canEditAssessments && <ExpandedAnalyticsPanel sessions={sessions} attendance={attendance} attempts={assessmentAttempts} assessments={assessments} roster={roster} afaGroups={afaGroups} onSeedDemo={seedDemo} onDeleteDemo={deleteDemo} />}
+          {tab === 'sessionMarks' && isFullAdmin && <SessionMarksPanel sessions={sessions} roster={roster} manualSessionMarks={manualSessionMarks} onSaveMarks={records => { setManualSessionMarks(records); persistManualSessionMarks(records); showToast('Assessment marks updated'); }} onUpdateSession={(next) => { persist(sessions.map(s => String(s.id) === String(next.id) ? next : s)); showToast('Assessment total updated'); }} />}
         </div>
       </div>
     </div>
@@ -1272,7 +1285,7 @@ return (
 }
 
 function blankSession() {
-  return { id: newId(), week: 0, date: '', weekday: '', start: '', end: '', name: '', type: SESSION_TYPES[0], pillarIds: [], mode: 'Sync', facilitators: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: false };
+  return { id: newId(), week: 0, date: '', weekday: '', start: '', end: '', name: '', type: SESSION_TYPES[0], pillarIds: [], mode: 'Sync', facilitators: [], rooms: [], resources: [], outcomes: [], notes: '', fellowNotes: '', afaGroup: '', calendared: false, assessmentTotal: 0 };
 }
 
 function blankStaffTask() {
@@ -1510,6 +1523,7 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
       { id: 'requests', label: 'Requests' + (openRequests ? ' (' + openRequests + ')' : ''), icon: Tray },
       { id: 'academyArchives', label: 'Historical Academies', icon: Archive },
       { id: 'practiceTeaching', label: 'Practice Teaching', icon: GradCapIcon },
+      { id: 'sessionMarks', label: 'Session Assessment Marks', icon: FileText },
     ] : []),
     ...(isAdmin ? [{ id: 'assessments', label: 'Assessments', icon: ClipboardText }] : []),
     ...(isAdmin ? [{ id: 'review', label: 'Review', icon: FileText }] : []),
@@ -1957,28 +1971,135 @@ function MyAttendancePanel({ sessions, attendance, auth }) {
   );
 }
 
-function AttendanceRecordsPanel({ sessions, attendance, roster, onExport }) {
+function AttendanceRecordsPanel({ sessions, attendance, roster, onExport, onSaveAttendance }) {
   const records = attendance || [];
   const bySession = sessions.filter(session => attendanceEligible(session) && sessionDateTime(session, 'start')).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.start || '').localeCompare(String(a.start || '')));
+  const [selectedSessionId, setSelectedSessionId] = useState(() => bySession[0]?.id ? String(bySession[0].id) : null);
+  const selectedSession = bySession.find(s => String(s.id) === String(selectedSessionId)) || bySession[0];
+
   const count = (sessionId, status) => records.filter(entry => String(entry.sessionId) === String(sessionId) && entry.status === status).length;
-  const noRecord = session => Math.max(0, (roster || []).length - new Set(records.filter(entry => String(entry.sessionId) === String(session.id)).map(entry => String(entry.fellowId))).size);
-  const pct = session => { const total = (roster || []).length; return total ? Math.round(((roster || []).length - noRecord(session)) / total * 100) : 0; };
+  const noRecord = session => Math.max(0, (roster || []).length - new Set(records.filter(entry => String(entry.sessionId) === String(session.id) && ['on_time', 'late', 'absent'].includes(entry.status)).map(entry => String(entry.fellowId))).size);
+  const pct = session => { const total = (roster || []).length; return total ? Math.round(((count(session.id, 'on_time') + count(session.id, 'late')) / total * 100)) : 0; };
+
+  const handleUpdateStatus = (sessionId, fellowId, fellowName, status) => {
+    const next = records.filter(r => !(String(r.sessionId) === String(sessionId) && String(r.fellowId) === String(fellowId)));
+    if (status) {
+      next.push({
+        id: 'att-' + sessionId + '-' + fellowId,
+        sessionId: String(sessionId),
+        fellowId: String(fellowId),
+        fellowName: fellowName || 'Fellow',
+        status,
+        recordedAt: new Date().toISOString(),
+        method: 'admin',
+      });
+    }
+    if (onSaveAttendance) onSaveAttendance(next);
+  };
+
+  const handleBulkStatus = (sessionId, status) => {
+    let next = records.filter(r => String(r.sessionId) !== String(sessionId));
+    if (status) {
+      (roster || []).forEach(f => {
+        next.push({
+          id: 'att-' + sessionId + '-' + f.id,
+          sessionId: String(sessionId),
+          fellowId: String(f.id),
+          fellowName: f.name || 'Fellow',
+          status,
+          recordedAt: new Date().toISOString(),
+          method: 'admin',
+        });
+      });
+    }
+    if (onSaveAttendance) onSaveAttendance(next);
+  };
+
+  const statusColor = st => st === 'on_time' ? '#2D7A4F' : st === 'late' ? '#D0A023' : st === 'absent' ? '#D65641' : '#9DB09D';
+  const statusLabel = st => st === 'on_time' ? 'On time' : st === 'late' ? 'Late' : st === 'absent' ? 'Absent' : 'No record';
+
   return (
     <div style={{ maxWidth: 1000 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 15, fontWeight: 800, marginRight: 'auto' }}>Attendance records</div>
         <button onClick={onExport} className={btnSecondary}><Download size={14} /> Export attendance (XLSX)</button>
       </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, maxWidth: 900, marginBottom: 18 }}>
         <Metric label="Attendance records" value={records.length} />
         <Metric label="On time" value={records.filter(entry => entry.status === 'on_time').length} />
         <Metric label="Late" value={records.filter(entry => entry.status === 'late').length} />
+        <Metric label="Absent" value={records.filter(entry => entry.status === 'absent').length} />
         <Metric label="Fellows recorded" value={new Set(records.map(entry => String(entry.fellowId))).size} />
       </div>
+
+      {onSaveAttendance && (
+        <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Admin Session Attendance Input</div>
+          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 12 }}>
+            Input or override session attendance manually for each Fellow (On Time, Late, or Absent).
+          </div>
+          {bySession.length > 0 ? (
+            <div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>Select Session:</span>
+                <select className={selectStyle} style={{ minWidth: 260 }} value={selectedSessionId || (selectedSession?.id ? String(selectedSession.id) : '')} onChange={e => setSelectedSessionId(e.target.value)}>
+                  {bySession.map(s => <option key={s.id} value={s.id}>{s.name} ({s.date ? dateLabel(s.date) : 'unscheduled'})</option>)}
+                </select>
+                {selectedSession && (
+                  <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
+                    <button type="button" onClick={() => handleBulkStatus(selectedSession.id, 'on_time')} className={btnSecondary} style={{ fontSize: 11.5, padding: '4px 8px', color: '#2D7A4F' }}>Mark all On Time</button>
+                    <button type="button" onClick={() => handleBulkStatus(selectedSession.id, 'late')} className={btnSecondary} style={{ fontSize: 11.5, padding: '4px 8px', color: '#D0A023' }}>Mark all Late</button>
+                    <button type="button" onClick={() => handleBulkStatus(selectedSession.id, 'absent')} className={btnSecondary} style={{ fontSize: 11.5, padding: '4px 8px', color: '#D65641' }}>Mark all Absent</button>
+                    <button type="button" onClick={() => handleBulkStatus(selectedSession.id, null)} className={btnGhost} style={{ fontSize: 11.5, padding: '4px 8px' }}>Clear session</button>
+                  </div>
+                )}
+              </div>
+
+              {selectedSession && (
+                <div style={{ overflowX: 'auto', border: '1px solid #1F4A3C', borderRadius: 6 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead>
+                      <tr style={{ background: '#00402E', textAlign: 'left' }}>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Fellow</th>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Track / AFA</th>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Current status</th>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Attendance action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(roster || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(f => {
+                        const rec = records.find(r => String(r.sessionId) === String(selectedSession.id) && String(r.fellowId) === String(f.id));
+                        const st = rec ? rec.status : null;
+                        return (
+                          <tr key={f.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                            <td style={{ padding: '8px 10px', fontWeight: 600 }}>{f.name}</td>
+                            <td style={{ padding: '8px 10px', color: '#9DB09D' }}>{f.track || '--'} · {f.afaGroup || 'No AFA'}</td>
+                            <td style={{ padding: '8px 10px', color: statusColor(st), fontWeight: 700 }}>{statusLabel(st)}</td>
+                            <td style={{ padding: '6px 10px' }}>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, 'on_time')} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: st === 'on_time' ? '#2D7A4F' : '#1F4A3C', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: st === 'on_time' ? 700 : 400 }}>On Time</button>
+                                <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, 'late')} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: st === 'late' ? '#D0A023' : '#1F4A3C', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: st === 'late' ? 700 : 400 }}>Late</button>
+                                <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, 'absent')} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: st === 'absent' ? '#D65641' : '#1F4A3C', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: st === 'absent' ? 700 : 400 }}>Absent</button>
+                                {st && <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, null)} style={{ fontSize: 11, padding: '3px 6px', borderRadius: 4, background: 'transparent', color: '#9DB09D', border: '1px solid #2A5C4B', cursor: 'pointer' }}>Clear</button>}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No eligible sessions available.</div>}
+        </div>
+      )}
+
       <div style={{ marginBottom: 8, fontWeight: 700 }}>Attendance by session</div>
       <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', marginBottom: 18 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Date', 'Session', 'On time', 'Late', 'No record', 'Attendance %'].map(h => <th key={h} style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Date', 'Session', 'On time', 'Late', 'Absent', 'No record', 'Attendance %'].map(h => <th key={h} style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
           <tbody>
             {bySession.map(session => (
               <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}>
@@ -1986,15 +2107,225 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, onExport }) {
                 <td style={{ padding: 9, fontWeight: 600 }}>{session.name || 'Session'} {session.start ? <span style={{ fontWeight: 400, color: '#9DB09D' }}>{' \u00B7 '}{session.start}</span> : null}</td>
                 <td style={{ padding: 9, color: '#2D7A4F', fontWeight: 700 }}>{count(session.id, 'on_time')}</td>
                 <td style={{ padding: 9, color: '#D0A023', fontWeight: 700 }}>{count(session.id, 'late')}</td>
+                <td style={{ padding: 9, color: '#D65641', fontWeight: 700 }}>{count(session.id, 'absent')}</td>
                 <td style={{ padding: 9 }}>{noRecord(session)}</td>
                 <td style={{ padding: 9, fontWeight: 700 }}>{pct(session)}%</td>
               </tr>
             ))}
-            {bySession.length === 0 && <tr><td colSpan={6} style={{ padding: 12, color: '#9DB09D' }}>No eligible Sync, Workshop, or Clinic sessions yet.</td></tr>}
+            {bySession.length === 0 && <tr><td colSpan={7} style={{ padding: 12, color: '#9DB09D' }}>No eligible Sync, Workshop, or Clinic sessions yet.</td></tr>}
           </tbody>
         </table>
       </div>
       <FellowAttendanceBreakdown sessions={sessions} attendance={records} fellows={(roster || [])} roster={roster} />
+    </div>
+  );
+}
+
+// One editable row per Fellow for a session's mark.
+function SessionMarkRow({ fellow, rec, onSave, onClear }) {
+  const [markVal, setMarkVal] = useState(rec ? String(rec.mark) : '');
+  const dirty = markVal !== '' && markVal != null;
+  return (
+    <tr style={{ borderTop: '1px solid #1F4A3C' }}>
+      <td style={{ padding: '8px 10px', fontWeight: 600 }}>{fellow.name}</td>
+      <td style={{ padding: '8px 10px', color: '#9DB09D' }}>{fellow.track || '--'} · {fellow.afaGroup || 'No AFA'}</td>
+      <td style={{ padding: '6px 10px' }}>
+        <input type="number" className={inputStyle} style={{ width: 80, fontSize: 12, padding: '4px 6px' }} placeholder="Mark" value={markVal}
+          onChange={e => setMarkVal(e.target.value)} />
+      </td>
+      <td style={{ padding: '6px 10px' }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button type="button" disabled={!dirty} onClick={() => onSave(markVal === '' ? null : markVal)}
+            style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: dirty ? '#1F6F78' : '#1F4A3C', color: '#fff', border: 'none', cursor: dirty ? 'pointer' : 'not-allowed', fontWeight: 600 }}>Save</button>
+          {rec && <button type="button" onClick={() => { onClear(); setMarkVal(''); }}
+            style={{ fontSize: 11, padding: '3px 6px', borderRadius: 4, background: 'transparent', color: '#9DB09D', border: '1px solid #2A5C4B', cursor: 'pointer' }}>Clear</button>}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function SessionMarksPanel({ sessions, roster, manualSessionMarks, onSaveMarks, onUpdateSession }) {
+  const marks = manualSessionMarks || [];
+  const eligible = sessions.filter(s => s.date).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(a.start || '').localeCompare(String(b.start || '')));
+  const [selectedSessionId, setSelectedSessionId] = useState(() => eligible[0]?.id ? String(eligible[0].id) : null);
+  const selectedSession = eligible.find(s => String(s.id) === String(selectedSessionId)) || eligible[0];
+  const sessionTotal = selectedSession?.assessmentTotal || 0;
+  const [hasAssessment, setHasAssessment] = useState(() => sessionTotal > 0);
+  const [totalInput, setTotalInput] = useState(() => String(sessionTotal));
+  useEffect(() => {
+    setTotalInput(String(sessionTotal));
+    setHasAssessment(sessionTotal > 0);
+  }, [sessionTotal]);
+
+  const forSession = sessionId => marks.filter(m => String(m.sessionId) === String(sessionId));
+  const markFor = (sessionId, fellowId) => marks.find(m => String(m.sessionId) === String(sessionId) && String(m.fellowId) === String(fellowId));
+  const takenCount = sessionId => new Set(forSession(sessionId).map(m => String(m.fellowId))).size;
+  const sessionAvg = sessionId => {
+    const rows = forSession(sessionId).filter(m => m.mark != null && m.mark !== '' && !isNaN(Number(m.mark)));
+    if (!rows.length) return null;
+    const sum = rows.reduce((acc, m) => acc + Number(m.mark), 0);
+    return Math.round((sum / rows.length) * 10) / 10;
+  };
+
+  const handleSetTotal = () => {
+    const nextTotal = totalInput === '' ? 0 : Number(totalInput);
+    if (onUpdateSession) onUpdateSession({ ...selectedSession, assessmentTotal: nextTotal });
+    setHasAssessment(nextTotal > 0);
+  };
+
+  const handleUpdateMark = (sessionId, fellowId, fellowName, mark) => {
+    const next = marks.filter(m => !(String(m.sessionId) === String(sessionId) && String(m.fellowId) === String(fellowId)));
+    if (mark !== '' && mark != null) {
+      next.push({
+        id: 'sm-' + sessionId + '-' + fellowId,
+        sessionId: String(sessionId),
+        fellowId: String(fellowId),
+        fellowName: fellowName || 'Fellow',
+        mark: Number(mark),
+        recordedAt: new Date().toISOString(),
+        method: 'admin',
+      });
+    }
+    if (onSaveMarks) onSaveMarks(next);
+  };
+
+  const clearSession = sessionId => {
+    if (onSaveMarks) onSaveMarks(marks.filter(m => String(m.sessionId) !== String(sessionId)));
+  };
+
+  const exportMarks = () => {
+    const rows = marks.slice().sort((a, b) => String(b.recordedAt || '').localeCompare(String(a.recordedAt || ''))).map(entry => {
+      const session = sessions.find(ss => String(ss.id) === String(entry.sessionId));
+      return { Session: session && session.name ? session.name : String(entry.sessionId), Date: session ? session.date || '' : '', 'Fellow Name': entry.fellowName || 'Fellow', Mark: entry.mark ?? '', 'Total': session?.assessmentTotal ?? '', 'Recorded At': entry.recordedAt ? new Date(entry.recordedAt).toLocaleString() : '' };
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Session Marks');
+    XLSX.writeFile(wb, 'Fellow_Training_System_Session_Marks.xlsx');
+  };
+
+  return (
+    <div style={{ maxWidth: 1000 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, marginRight: 'auto' }}>Session assessment marks</div>
+        <button onClick={exportMarks} className={btnSecondary}><Download size={14} /> Export marks (XLSX)</button>
+      </div>
+
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 20 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Admin Session Marks Input</div>
+        <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 12 }}>
+          Record the total assessment marks for each Fellow for a session. Use this when assessments are taken outside the web app (paper, Google Forms, etc.).
+        </div>
+        {eligible.length > 0 ? (
+          <div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>Select Session:</span>
+              <select className={selectStyle} style={{ minWidth: 260 }} value={selectedSessionId || (selectedSession?.id ? String(selectedSession.id) : '')} onChange={e => setSelectedSessionId(e.target.value)}>
+                {eligible.map(s => <option key={s.id} value={s.id}>{s.name} ({s.date ? dateLabel(s.date) : 'unscheduled'})</option>)}
+              </select>
+              {selectedSession && (
+                <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11.5, color: '#9DB09D' }}>Taken by {takenCount(selectedSession.id)} fellow(s)</span>
+                  {sessionTotal > 0 && sessionAvg(selectedSession.id) != null && <span style={{ fontSize: 11.5, color: '#9FD9BE', fontWeight: 700 }}>Avg: {sessionAvg(selectedSession.id)} / {sessionTotal} ({Math.round((sessionAvg(selectedSession.id) / sessionTotal) * 100)}%)</span>}
+                  <button type="button" onClick={() => clearSession(selectedSession.id)} className={btnGhost} style={{ fontSize: 11.5, padding: '4px 8px' }}>Clear session</button>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input type="checkbox" checked={hasAssessment} onChange={e => { setHasAssessment(e.target.checked); if (!e.target.checked) { setTotalInput('0'); handleSetTotal(); } }} />
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>This session has an assessment</span>
+              </label>
+              {hasAssessment && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600 }}>Total marks:</span>
+                  <input type="number" className={inputStyle} style={{ width: 80, fontSize: 12, padding: '4px 6px' }} value={totalInput} onChange={e => setTotalInput(e.target.value)} onBlur={handleSetTotal} />
+                </div>
+              )}
+            </div>
+
+            {selectedSession && (
+              sessionTotal > 0 ? (
+                <div style={{ overflowX: 'auto', border: '1px solid #1F4A3C', borderRadius: 6 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead>
+                      <tr style={{ background: '#00402E', textAlign: 'left' }}>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Fellow</th>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Track / AFA</th>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Mark</th>
+                        <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(roster || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(f => (
+                        <SessionMarkRow key={f.id} fellow={f} rec={markFor(selectedSession.id, f.id)}
+                          onSave={(mark) => handleUpdateMark(selectedSession.id, f.id, f.name, mark)}
+                          onClear={() => handleUpdateMark(selectedSession.id, f.id, f.name, null)} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ border: '1px dashed #2A5C4B', borderRadius: 6, padding: 24, textAlign: 'center', color: '#9DB09D', fontSize: 12.5 }}>
+                  No assessment configured...
+                </div>
+              )
+            )}
+          </div>
+        ) : <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No scheduled sessions available.</div>}
+      </div>
+
+      <div style={{ marginBottom: 8, fontWeight: 700 }}>Marks by session</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', marginBottom: 18 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Date', 'Session', 'Fellows with marks', 'Average mark', 'Total'].map(h => <th key={h} style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {eligible.map(session => {
+              const avg = sessionAvg(session.id);
+              const total = session.assessmentTotal || 0;
+              return (
+                <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                  <td style={{ padding: 9 }}>{session.date ? dateLabel(session.date) : '--'}</td>
+                  <td style={{ padding: 9, fontWeight: 600 }}>{session.name || 'Session'} {session.start ? <span style={{ fontWeight: 400, color: '#9DB09D' }}>{' \u00B7 '}{session.start}</span> : null}</td>
+                  <td style={{ padding: 9, color: '#D5E0D5', fontWeight: 700 }}>{takenCount(session.id)}</td>
+                  <td style={{ padding: 9, color: '#9FD9BE', fontWeight: 700 }}>{avg != null ? (total > 0 ? `${avg} / ${total} (${Math.round((avg / total) * 100)}%)` : avg) : '--'}</td>
+                  <td style={{ padding: 9, color: '#D5E0D5' }}>{total > 0 ? total : '--'}</td>
+                </tr>
+              );
+            })}
+            {eligible.length === 0 && <tr><td colSpan={5} style={{ padding: 12, color: '#9DB09D' }}>No scheduled sessions yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginBottom: 8, fontWeight: 700 }}>Marks by Fellow</div>
+      <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>{['Fellow', 'Track / AFA', 'Sessions with marks', 'Average mark', 'Sessions'].map(h => <th key={h} style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {(roster || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).map(f => {
+              const mine = marks.filter(m => String(m.fellowId) === String(f.id));
+              const valid = mine.filter(m => m.mark != null && m.mark !== '' && !isNaN(Number(m.mark)));
+              const avg = valid.length ? Math.round((valid.reduce((acc, m) => acc + Number(m.mark), 0) / valid.length) * 10) / 10 : null;
+              const sessionNames = mine.map(m => {
+                const s = sessions.find(ss => String(ss.id) === String(m.sessionId));
+                return s ? s.name : m.sessionId;
+              });
+              return (
+                <tr key={f.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                  <td style={{ padding: 9, fontWeight: 600 }}>{f.name}</td>
+                  <td style={{ padding: 9, color: '#9DB09D' }}>{f.track || '--'} · {f.afaGroup || 'No AFA'}</td>
+                  <td style={{ padding: 9, color: '#D5E0D5', fontWeight: 700 }}>{mine.length}</td>
+                  <td style={{ padding: 9, color: '#9FD9BE', fontWeight: 700 }}>{avg != null ? avg : '--'}</td>
+                  <td style={{ padding: 9, color: '#9DB09D', fontSize: 11.5 }}>{sessionNames.slice(0, 4).join(', ')}{sessionNames.length > 4 ? ' …' : ''}</td>
+                </tr>
+              );
+            })}
+            {(roster || []).length === 0 && <tr><td colSpan={5} style={{ padding: 12, color: '#9DB09D' }}>No Fellows on the roster yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -2134,7 +2465,8 @@ function FellowRecentAttempts({ attempts, assessments, auth }) {
   );
 }
 
-function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempts, roster }) {
+function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempts, roster, manualSessionMarks }) {
+  const assessmentSessions = sessions.filter(s => s.assessmentTotal > 0);
   return (
     <div>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>My analytics</div>
@@ -2142,6 +2474,40 @@ function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempt
       <MyAttendancePanel sessions={sessions} attendance={attendance} auth={auth} />
       <FellowGradesPanel attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={null} />
       <FellowRecentAttempts attempts={attempts} assessments={assessments} auth={auth} />
+      {!assessmentSessions.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No session assessments recorded yet.</div>}
+      {assessmentSessions.length > 0 && (
+        <div style={{ maxWidth: 780, marginTop: 18 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Session assessment marks</div>
+          <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead style={{ background: '#00402E', textAlign: 'left' }}>
+                <tr>
+                  <th style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Session</th>
+                  <th style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Date</th>
+                  <th style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Total</th>
+                  <th style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>My mark</th>
+                  <th style={{ padding: 9, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Percentage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assessmentSessions.map(session => {
+                  const mark = (manualSessionMarks || []).find(m => String(m.sessionId) === String(session.id) && String(m.fellowId) === String(auth.fellowId));
+                  const pct = mark && mark.mark != null && session.assessmentTotal > 0 ? Math.round((Number(mark.mark) / session.assessmentTotal) * 100) : null;
+                  return (
+                    <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                      <td style={{ padding: 9 }}>{session.name}</td>
+                      <td style={{ padding: 9 }}>{session.date ? dateLabel(session.date) : '--'}</td>
+                      <td style={{ padding: 9 }}>{session.assessmentTotal}</td>
+                      <td style={{ padding: 9 }}>{mark && mark.mark != null ? mark.mark : '--'}</td>
+                      <td style={{ padding: 9 }}>{pct !== null ? pct + '%' : '--'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2173,7 +2539,24 @@ function normalizeCollab(raw) {
     });
     if (Object.keys(clean).length) rotation[String(day)] = clean;
   });
-  return { id: raw.id || 'col-' + Date.now(), code: raw.code || '', band, grade: raw.grade || '', school: raw.school || '', days, fellowIds, rotation };
+  // Per-member schools: a collab group shares a grade, but members may
+  // come from the same school or from different schools teaching the
+  // same grade. `schools` maps fellowId -> school name; a member with
+  // no entry falls back to the collab-level `school`.
+  const schools = {};
+  Object.entries(raw.schools || {}).forEach(([fid, name]) => {
+    if (fellowIds.includes(String(fid))) schools[String(fid)] = String(name || '').trim();
+  });
+  return { id: raw.id || 'col-' + Date.now(), code: raw.code || '', band, grade: raw.grade || '', school: raw.school || '', days, fellowIds, schools, rotation };
+}
+
+// The school a Fellow belongs to within a collab: their per-member
+// school when set, otherwise the collab-level school.
+function schoolForMember(collab, fellowId) {
+  if (!collab) return '';
+  const per = (collab.schools || {})[String(fellowId)];
+  if (per && per.trim()) return per.trim();
+  return collab.school || '';
 }
 
 // Codes are derived, never typed: next free S# / P# for that band.
@@ -2424,14 +2807,18 @@ function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChang
   const unassigned = unassignedFellows(people, list);
 
   const startNew = band => {
-    const base = { id: 'col-' + Date.now(), code: nextCollabCode(list, band), band, grade: '', school: '', days: PRACTICE_DAYS_DEFAULT, fellowIds: [], rotation: {} };
+    const base = { id: 'col-' + Date.now(), code: nextCollabCode(list, band), band, grade: '', school: '', days: PRACTICE_DAYS_DEFAULT, fellowIds: [], schools: {}, rotation: {} };
     setDraft(base); setEditingId(base.id);
   };
   const startEdit = c => { setDraft(normalizeCollab({ ...c })); setEditingId(c.id); };
   const saveDraft = () => {
-    if (!draft.school.trim()) { showToast('Enter the school name'); return; }
     if (!draft.grade.trim()) { showToast('Enter the grade name'); return; }
     if (draft.fellowIds.length < 2) { showToast('Pick at least two Fellows'); return; }
+    // At least one school must be known: either the group school or a
+    // per-member school for every member.
+    const groupSchool = (draft.school || '').trim();
+    const everyMemberHasSchool = draft.fellowIds.every(fid => groupSchool || ((draft.schools || {})[String(fid)] || '').trim());
+    if (!groupSchool && !everyMemberHasSchool) { showToast('Enter the group school or set a school for each member'); return; }
     const next = list.some(c => String(c.id) === String(draft.id))
       ? list.map(c => (String(c.id) === String(draft.id) ? draft : c))
       : [...list, draft];
@@ -2446,13 +2833,21 @@ function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChang
     showToast('Collaboration removed');
   };
   const memberNames = c => c.fellowIds.map(id => (fellowById(people, id) || {}).name || 'Unknown').join(', ');
+  const memberSchools = c => {
+    const schools = new Set();
+    c.fellowIds.forEach(fid => {
+      const s = schoolForMember(c, fid);
+      if (s) schools.add(s);
+    });
+    return [...schools];
+  };
 
   if (draft) return <CollabEditor draft={draft} setDraft={setDraft} people={people} list={list} onCancel={() => { setDraft(null); setEditingId(null); }} onSave={saveDraft} />;
   return (
     <div>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Practice teaching</div>
       <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>
-        Collaborations are 2-3+ Fellows in one school for the practice teaching week. S codes are secondary, P codes are primary. You decide who teaches which subject on each day.
+        Collaborations are 2-3+ Fellows who share a grade for the practice teaching days. S codes are secondary, P codes are primary. Members are usually in the same school, but you can also group Fellows from different schools who teach the same grade. You decide who teaches which subject on each day.
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
@@ -2463,20 +2858,23 @@ function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChang
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Collaborations ({list.length})</div>
       {list.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 20 }}>No collaborations yet.</div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
-        {list.map(c => (
-          <div key={c.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 800, background: c.band === 'primary' ? '#1F4A3C' : '#1F6F78', padding: '4px 12px', borderRadius: 12 }}>{c.code}</span>
-            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{c.grade} · {c.school}</div>
-              <div style={{ fontSize: 12, color: '#9DB09D' }}>{memberNames(c)}</div>
+        {list.map(c => {
+          const schools = memberSchools(c);
+          return (
+            <div key={c.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, background: c.band === 'primary' ? '#1F4A3C' : '#1F6F78', padding: '4px 12px', borderRadius: 12 }}>{c.code}</span>
+              <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{c.grade}{schools.length ? ' · ' + schools.join(' + ') : ''}</div>
+                <div style={{ fontSize: 12, color: '#9DB09D' }}>{memberNames(c)}</div>
+              </div>
+              <span style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 10, fontWeight: 700, background: '#1F4A3C', color: '#9FD9BE' }}>
+                {scheduledDays(c)} of {c.days} days scheduled
+              </span>
+              <button onClick={() => startEdit(c)} style={linkBtn}>Edit</button>
+              <button onClick={() => remove(c.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', display: 'inline-flex' }}><Trash2 size={14} /></button>
             </div>
-            <span style={{ fontSize: 11.5, padding: '3px 9px', borderRadius: 10, fontWeight: 700, background: '#1F4A3C', color: '#9FD9BE' }}>
-              {scheduledDays(c)} of {c.days} days scheduled
-            </span>
-            <button onClick={() => startEdit(c)} style={linkBtn}>Edit</button>
-            <button onClick={() => remove(c.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', display: 'inline-flex' }}><Trash2 size={14} /></button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Accountability partners</div>
@@ -2545,7 +2943,10 @@ function CollabEditor({ draft, setDraft, people, list, onCancel, onSave }) {
       if (has) delete clean[sid];
       if (Object.keys(clean).length) rotation[day] = clean;
     });
-    return { ...d, fellowIds: has ? d.fellowIds.filter(x => x !== sid) : [...d.fellowIds, sid], rotation };
+    // Also drop their per-member school entry.
+    const schools = { ...(d.schools || {}) };
+    if (has) delete schools[sid];
+    return { ...d, fellowIds: has ? d.fellowIds.filter(x => x !== sid) : [...d.fellowIds, sid], rotation, schools };
   });
   const setCell = (day, fid, subject) => setDraft(d => {
     const key = String(day);
@@ -2554,6 +2955,12 @@ function CollabEditor({ draft, setDraft, people, list, onCancel, onSave }) {
     const rotation = { ...d.rotation };
     if (Object.keys(byFellow).length) rotation[key] = byFellow; else delete rotation[key];
     return { ...d, rotation };
+  });
+  const setMemberSchool = (fid, name) => setDraft(d => {
+    const sid = String(fid);
+    const schools = { ...(d.schools || {}) };
+    if (name && name.trim()) schools[sid] = name.trim(); else delete schools[sid];
+    return { ...d, schools };
   });
   const days = Array.from({ length: draft.days }, (_, i) => i + 1);
   const tally = rotationTallies(draft);
@@ -2569,14 +2976,15 @@ function CollabEditor({ draft, setDraft, people, list, onCancel, onSave }) {
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-        <Field label="School name" style={{ flex: '1 1 240px' }}><input className={inputStyle} value={draft.school} onChange={e => set('school', e.target.value)} placeholder="e.g. Dhaka Collegiate School" /></Field>
         <Field label="Grade name" style={{ flex: '1 1 180px' }}><input className={inputStyle} value={draft.grade} onChange={e => set('grade', e.target.value)} placeholder="e.g. Grade 9" /></Field>
         <Field label="Practice days" style={{ flex: '0 1 130px' }}><input type="number" min="1" max="30" className={inputStyle} value={draft.days} onChange={e => set('days', Math.max(1, Math.min(30, parseInt(e.target.value, 10) || PRACTICE_DAYS_DEFAULT)))} /></Field>
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Collaboration members</div>
-      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Pick 2-3 (or more) Fellows.</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>
+        Pick 2-3 (or more) Fellows. Members are usually in the same school and grade, but you can also add Fellows from a different school who teach the same grade -- set each member's school below.
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {people.map(f => {
           const on = draft.fellowIds.includes(String(f.id));
           const locked = !on && taken(f.id);
@@ -2586,6 +2994,32 @@ function CollabEditor({ draft, setDraft, people, list, onCancel, onSave }) {
             title={locked ? 'Already in another collaboration' : ''}>{f.name}</button>;
         })}
         {people.length === 0 && <span style={{ fontSize: 12.5, color: '#9DB09D' }}>No Fellows on the roster yet.</span>}
+      </div>
+
+      {members.length > 0 && (
+        <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead><tr style={{ background: '#00402E', textAlign: 'left' }}>
+              <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>Member</th>
+              <th style={{ padding: '8px 10px', borderBottom: '1px solid #2A5C4B' }}>School (leave blank to use the group school)</th>
+            </tr></thead>
+            <tbody>
+              {members.map(f => (
+                <tr key={f.id} style={{ borderTop: '1px solid #1F4A3C' }}>
+                  <td style={{ padding: '6px 10px', fontWeight: 600 }}>{f.name}</td>
+                  <td style={{ padding: '6px 10px' }}>
+                    <input className={inputStyle} style={{ fontSize: 12, padding: '4px 6px' }} value={(draft.schools || {})[String(f.id)] || ''}
+                      onChange={e => setMemberSchool(f.id, e.target.value)} placeholder={draft.school || 'School name'} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        <Field label="Group school (default)" style={{ flex: '1 1 240px' }}><input className={inputStyle} value={draft.school} onChange={e => set('school', e.target.value)} placeholder="e.g. Dhaka Collegiate School" /></Field>
       </div>
 
 
@@ -2764,6 +3198,7 @@ function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth })
   const partners = collab.fellowIds.filter(id => String(id) !== String(auth.fellowId)).map(id => fellowById(roster, id) || { name: 'Unknown' });
   const days = Array.from({ length: collab.days }, (_, i) => i + 1);
   const mySubjects = [...new Set(days.map(d => (collab.rotation[String(d)] || {})[String(auth.fellowId)]).filter(Boolean))];
+  const mySchool = schoolForMember(collab, auth.fellowId);
   // Each scheduled day becomes one card: day + subject + that day's outcome.
   // A Fellow only ever sees outcomes for the subject they teach that day.
   const mySchedule = days
@@ -2774,6 +3209,14 @@ function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth })
     })
     .filter(Boolean);
   const anyOutcomes = mySchedule.some(row => row.outcomes.length > 0);
+  const partnerChip = f => {
+    const school = schoolForMember(collab, f.id);
+    return (
+      <span key={f.id} style={{ fontSize: 12.5, padding: '5px 12px', borderRadius: 12, background: '#1F4A3C', border: '1px solid #2A5C4B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {f.name}{school ? <span style={{ fontSize: 11, color: '#9DB09D', fontWeight: 500 }}>{school}</span> : null}
+      </span>
+    );
+  };
 
   return (
     <div>
@@ -2786,10 +3229,10 @@ function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth })
             <span style={{ fontSize: 14, fontWeight: 800, background: collab.band === 'primary' ? '#1F4A3C' : '#1F6F78', padding: '4px 14px', borderRadius: 12 }}>{collab.code}</span>
             <span style={{ fontSize: 13, fontWeight: 700 }}>{collab.grade}</span>
           </div>
-          <div style={{ fontSize: 13, marginBottom: 4 }}><b>School:</b> {collab.school}</div>
+          {mySchool && <div style={{ fontSize: 13, marginBottom: 4 }}><b>My school:</b> {mySchool}</div>}
           <div style={{ fontSize: 13, marginBottom: 8 }}><b>My subjects:</b> {mySubjects.length ? mySubjects.join(', ') : 'Not scheduled yet'}</div>
           <div style={{ fontSize: 12, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>Collaboration partners</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{partners.map(f => chip(f.name))}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{partners.map(f => partnerChip(f))}</div>
         </div>
       ))}
 
@@ -3581,8 +4024,8 @@ function ExpandedAnalyticsPanel({ sessions, attendance, attempts, assessments, r
 
 
 function FellowAttendanceBreakdown({ sessions, attendance, fellows, roster }) {
-  const statusColor = st => st === 'on_time' ? '#2D7A4F' : st === 'late' ? '#D0A023' : '#9DB09D';
-  const statusLabel = st => st === 'on_time' ? 'On time' : st === 'late' ? 'Late' : 'No record';
+  const statusColor = st => st === 'on_time' ? '#2D7A4F' : st === 'late' ? '#D0A023' : st === 'absent' ? '#D65641' : '#9DB09D';
+  const statusLabel = st => st === 'on_time' ? 'On time' : st === 'late' ? 'Late' : st === 'absent' ? 'Absent' : 'No record';
   const hasRecords = sessions.some(session => (attendance || []).some(entry => String(entry.sessionId) === String(session.id)));
   return <div style={{ marginTop: 24 }}>
     <div style={{ fontWeight: 700 }}>Fellow-wise attendance</div>
@@ -3591,11 +4034,12 @@ function FellowAttendanceBreakdown({ sessions, attendance, fellows, roster }) {
       if (!records.length) return null;
       const onTime = records.filter(entry => entry.status === 'on_time').length;
       const late = records.filter(entry => entry.status === 'late').length;
-      const present = new Set(records.map(entry => String(entry.fellowId))).size;
+      const absent = records.filter(entry => entry.status === 'absent').length;
+      const recorded = new Set(records.filter(entry => ['on_time', 'late', 'absent'].includes(entry.status)).map(entry => String(entry.fellowId))).size;
       return (
         <div key={session.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 14, maxWidth: 960, overflowX: 'auto' }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{session.name || 'Session'} <span style={{ fontWeight: 400, color: '#9DB09D', fontSize: 12 }}>{session.date ? '· ' + dateLabel(session.date) : '· unscheduled'}</span></div>
-          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 10 }}>{present} fellow{present === 1 ? '' : 's'} attended · {onTime} on time · {late} late · {Math.max(0, fellows.length - present)} without record</div>
+          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 10 }}>{recorded} fellow{recorded === 1 ? '' : 's'} recorded · {onTime} on time · {late} late · {absent} absent · {Math.max(0, fellows.length - recorded)} without record</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr style={{ background: '#00402E', textAlign: 'left' }}>
@@ -3895,6 +4339,14 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
           <div style={{ marginTop: 18 }}>
             <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 6 }}>Notes</div>
             <div style={{ fontSize: 12.5, color: '#D5E0D5', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{session.fellowNotes}</div>
+          </div>
+        )}
+        {session.assessmentTotal > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600, marginBottom: 6 }}>Assessment</div>
+            <div style={{ fontSize: 12.5, color: '#D5E0D5' }}>
+              Total marks: {session.assessmentTotal}
+            </div>
           </div>
         )}
 
@@ -4500,4 +4952,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT };

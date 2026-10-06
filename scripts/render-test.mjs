@@ -119,9 +119,17 @@ try {
     && JSON.stringify(outcomesForDay([legacyNorm], 'Grade 9', 'Bangla', 4)) === '["flat"]';
   const norm = normalizeCollab({ code: 'S3', band: 'primary', fellowIds: [1, 2], rotation: { 1: { 1: 'Bangla', 9: 'Math' }, 2: { 1: 'Paint' } }, days: 0 });
   const normOk = norm.band === 'primary' && JSON.stringify(norm.fellowIds) === '["1","2"]' && !norm.rotation[2] && norm.days === 12;
-  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk)
-    console.log('OK    collab codes + free rotation + unassigned rule + per-day outcomes');
-  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk })); failed++; }
+  // Cross-school collabs: per-member schools override the group school.
+  const schoolForMember = mod2.__panels.schoolForMember;
+  const crossCollab = { id: 'cx', code: 'S9', band: 'secondary', grade: 'Grade 8', school: 'Group School', days: 12, fellowIds: ['m1', 'm2', 'm3'], schools: { m2: 'Other School' }, rotation: {} };
+  const schoolOk = schoolForMember(crossCollab, 'm1') === 'Group School'
+    && schoolForMember(crossCollab, 'm2') === 'Other School'
+    && schoolForMember(crossCollab, 'm3') === 'Group School'
+    && schoolForMember({ school: 'Only School' }, 'm1') === 'Only School'
+    && schoolForMember({}, 'm1') === '';
+  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk && schoolOk)
+    console.log('OK    collab codes + free rotation + unassigned rule + per-day outcomes + cross-school');
+  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk, schoolOk })); failed++; }
 } catch (err) { console.log('FAIL  practice helpers: ' + err.message); failed++; }
 // Goal records: legacy strings convert, serial ordering is honoured, blanks dropped.
 try {
@@ -359,6 +367,29 @@ try {
     console.log('OK    cohortAccessRevoked ( alumni blocked, current/future OK )');
   else { console.log('FAIL  cohortAccessRevoked got ' + JSON.stringify({ priorCohortRevoked, currentCohortRevoked, futureCohortRevoked })); failed++; }
 } catch (err) { console.log('FAIL  city/cohort helpers: ' + err.message); failed++; }
+
+// Session assessment marks: admin panel + fellow view + ViewPanel
+try {
+  const marksHtml = renderHtml('SessionMarksPanel');
+  const marksEmptyHtml = renderHtml('SessionMarksPanel-empty');
+  const fellowMarksHtml = renderHtml('FellowAnalyticsPanel-marks');
+  const fellowNoMarksHtml = renderHtml('FellowAnalyticsPanel');
+  const viewHtml = renderHtml('ViewPanel');
+  const marksChecks = [
+    ['admin panel renders with total checkbox', marksHtml.includes('This session has an assessment')],
+    ['admin panel shows session total when set', marksHtml.includes('Total marks:')],
+    ['admin panel per-fellow table has no Total column', marksHtml.includes('>Fellow<') && marksHtml.includes('>Track / AFA<') && marksHtml.includes('>Mark<') && marksHtml.includes('>Actions<')],
+    ['empty marks panel renders', marksEmptyHtml.length > 60],
+    ['fellow with marks sees session assessment section', fellowMarksHtml.includes('Session assessment marks')],
+    ['fellow with marks sees total', fellowMarksHtml.includes('10')],
+    ['fellow with marks sees own mark', fellowMarksHtml.includes('8')],
+    ['fellow without marks still sees assessment table', fellowNoMarksHtml.includes('Session assessment marks')],
+    ['ViewPanel shows assessment total', viewHtml.includes('Total marks:') && viewHtml.includes('10')],
+  ];
+  const badMarks = marksChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  if (!badMarks.length) console.log('OK    session assessment marks (admin + fellow + ViewPanel)');
+  else { console.log('FAIL  session marks: ' + badMarks.join('; ')); failed++; }
+} catch (err) { console.log('FAIL  session marks: ' + err.message); failed++; }
 
 await vite.close();
 console.log(failed === 0 ? 'ALL PANELS RENDER OK' : failed + ' PANEL(S) FAILED');

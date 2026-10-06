@@ -10,6 +10,7 @@ export const ASSESSMENT_KEYS = {
   questions: 'wa14-assessment-questions',
   attempts: 'wa14-assessment-attempts',
   attendance: 'wa14-attendance',
+  manualSessionMarks: 'wa14-session-marks',
   incidents: 'wa14-assessment-incidents',
   deviceRequests: 'wa14-device-change-requests',
   analytics: 'wa14-assessment-analytics',
@@ -25,6 +26,7 @@ export const ACADEMY_KEYS = {
   // firestore.rules or their writes are rejected silently.
   collaborations: 'wa14-collaborations',
   learningOutcomes: 'wa14-learning-outcomes',
+  manualSessionMarks: 'wa14-session-marks',
 };
 
 // [CITY] keys for the City system (year-round fellowship calendar). These docs
