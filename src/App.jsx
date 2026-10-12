@@ -322,6 +322,13 @@ function facilitatorLabel(f, rooms, staff) {
 function fmtFacilitators(facs, rooms, staff) {
   return (facs || []).map(f => facilitatorLabel(f, rooms, staff)).filter(Boolean).join(', ');
 }
+// Room label with an optional "join" link when the room has a meeting URL
+// (online/hybrid rooms). Fellows can click it straight from the calendar.
+function roomJoinLink(room) {
+  const label = room.facilitator ? room.name + ' · ' + room.facilitator : room.name;
+  if (room.meetingUrl) return <a href={room.meetingUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#1565C0', textDecoration: 'underline', fontWeight: 600, overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{label}</a>;
+  return label;
+}
 function fellowMatchesGroup(fellow, group) {
   const track = (fellow.track || '').toLowerCase();
   const groupTrack = (group.track || '').toLowerCase();
@@ -521,7 +528,10 @@ async function resolveRole(user) {
     const access = accessForSystem({ ...match, role }, 'city', STAFF_ADMIN_ROLES);
     // [CITY] staff carry their Training Systems + admin-panel rights on the
     // auth object; both decide the post-login system picker.
-    return { ok: true, email: em, role, access, systems: systemsForStaff({ role, systems: match?.systems }), adminPanel: canOpenAdminPanel({ role, access }), name: match?.name || user.displayName || em.split('@')[0], uid: user.uid };
+    // AFA staffers edit attendance only inside their own AFA group, so the
+    // group travels on the auth object for panels to gate per-Fellow actions.
+    const afaGroup = (role === 'afa' || role === 'afa_lead') ? String(match?.group || match?.name || '').trim() : '';
+    return { ok: true, email: em, role, access, systems: systemsForStaff({ role, systems: match?.systems }), adminPanel: canOpenAdminPanel({ role, access }), name: match?.name || user.displayName || em.split('@')[0], uid: user.uid, ...(afaGroup ? { afaGroup } : {}) };
   }
 
   if (FELLOW_EMAIL_RE.test(em)) {
@@ -634,7 +644,6 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   const [editing, setEditing] = useState(null);
   const [staffEditing, setStaffEditing] = useState(null);
   const [placement, setPlacement] = useState(null);
-  const [assigning, setAssigning] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [weekFilter, setWeekFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -702,7 +711,17 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
       catch (e) { setPlanners([]); }
       try { const r = await storage.get('wa14-requests'); setRequests(r && r.value ? JSON.parse(r.value) : []); }
       catch (e) { setRequests([]); }
-      try { const r = await storage.get('wa14-rooms'); setRooms(r && r.value ? JSON.parse(r.value) : []); }
+      try {
+        const r = await storage.get('wa14-rooms');
+        const loadedRooms = r && r.value ? JSON.parse(r.value) : [];
+        const ensured = ensureMainRoom(loadedRooms);
+        setRooms(ensured.rooms);
+        // Auto-create the Main Room (staff writers only; Fellows keep a local copy).
+        if (ensured.rooms !== loadedRooms && auth.role !== 'fellow') {
+          try { await storage.set('wa14-rooms', JSON.stringify(ensured.rooms)); }
+          catch (e) { console.error('main room create failed', e); }
+        }
+      }
       catch (e) { setRooms([]); }
       try {
         const r = await storage.get('wa14-session-types');
@@ -862,7 +881,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
 const recordFellowAttendance = (session) => {
   const phase = attendancePhase(session);
   if (!attendanceEligible(session)) { showToast('Attendance is only available for Sync, Workshop, and Clinic sessions.'); return false; }
-  if (phase === 'upcoming') { showToast('Attendance opens at the session start time.'); return false; }
+  if (phase === 'upcoming') { showToast('Attendance opens 3 minutes before the session start time.'); return false; }
   if (phase === 'closed') { showToast('The attendance window has closed.'); return false; }
   const fellowId = auth.fellowId;
   const fellowName = friendlyFellowName({ ...auth, fellowId }, roster);
@@ -885,7 +904,11 @@ const exportAttendanceRecords = () => {
 
 const importArchivedSessions = (imported) => {
   if (!Array.isArray(imported) || !imported.length) return;
-  persist([...(sessions || []), ...imported]);
+  // Imported sessions are new too: default unassigned rooms to the Main Room.
+  const ensured = ensureMainRoom(rooms);
+  const nextImported = imported.map(s => (!(s.roomIds || []).length && !(s.rooms || []).length) ? { ...s, roomIds: [ensured.room.id] } : s);
+  if (ensured.rooms !== rooms) persistRooms(ensured.rooms);
+  persist([...(sessions || []), ...nextImported]);
   showToast(imported.length + ' session' + (imported.length === 1 ? '' : 's') + ' imported from archive');
 };
 
@@ -1001,6 +1024,10 @@ const importExcel = () => {
         return;
       }
 
+      // CSV/XLSX imports create new sessions: default unassigned rooms to Main Room.
+      const ensuredImport = ensureMainRoom(rooms);
+      newSessions.forEach(s => { if (!(s.roomIds || []).length && !(s.rooms || []).length) s.roomIds = [ensuredImport.room.id]; });
+      if (ensuredImport.rooms !== rooms) persistRooms(ensuredImport.rooms);
       const next = [...sessions, ...newSessions];
       persist(next);
       showToast('Imported ' + newSessions.length + ' session' + (newSessions.length === 1 ? '' : 's') + (skippedRows.length ? ' (' + skippedRows.length + ' skipped)' : ''));
@@ -1015,10 +1042,28 @@ const importExcel = () => {
 
 const saveSession = (s) => {
   const current = sessionsRef.current;
-  const next = current.find(x => String(x.id) === String(s.id)) ? current.map(x => String(x.id) === String(s.id) ? s : x) : [...current, s];
-  persist(next); setEditing(null); showToast('Session saved');
+  const exists = current.find(x => String(x.id) === String(s.id));
+  let toSave = s;
+  let nextRooms = rooms;
+  if (!exists) {
+    // New sessions default to the Main Room when no room is set; existing
+    // sessions are never rewritten (no retroactive room changes).
+    const ensured = ensureMainRoom(rooms);
+    nextRooms = ensured.rooms;
+    if (!(s.roomIds || []).length && !(s.rooms || []).length) toSave = { ...s, roomIds: [ensured.room.id] };
+  }
+  const next = exists ? current.map(x => String(x.id) === String(s.id) ? toSave : x) : [...current, toSave];
+  persist(next);
+  if (nextRooms !== rooms) persistRooms(nextRooms);
+  setEditing(null); showToast('Session saved');
 };
-const deleteSession = (id) => { persist(sessions.filter(x => String(x.id) !== String(id))); setEditing(null); showToast('Session removed'); };
+const deleteSession = (id) => {
+  persist(sessions.filter(x => String(x.id) !== String(id)));
+  // Purge the session's attendance rows so no orphaned records remain.
+  const kept = (attendance || []).filter(r => String(r.sessionId) !== String(id));
+  if (kept.length !== (attendance || []).length) persistAttendance(kept);
+  setEditing(null); showToast('Session removed');
+};
 const duplicateSession = (s) => {
   const now = Date.now();
   if (now - duplicateGuard.current < 400) return;
@@ -1173,7 +1218,7 @@ return (
       <Sidebar tab={tab} setTab={setTab} isAdmin={isAdmin} isFullAdmin={isFullAdmin} isSuperadmin={isSuperadmin} isFellow={auth.role === 'fellow'} openRequests={openRequests} />
       <div className="wa14-content flex-1 min-w-0">
         <TopBar
-          tab={tab} isFullAdmin={isFullAdmin} auth={auth} onLogout={onLogout} roles={roles}
+          tab={tab} isFullAdmin={isFullAdmin} isFellow={isFellow} auth={auth} onLogout={onLogout} roles={roles}
           onAdd={() => setEditing('new')}
           onSwitchSystem={onSwitchSystem}
         />
@@ -1201,8 +1246,8 @@ return (
                 sessions={calendarSessions} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
                 hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
                 weeks={weeks} startDate={academySettings?.startDate || null}
-                academySettings={academySettings} onSettingsChange={isFullAdmin ? next => persistSettings(next) : null}
-                fellowWeeks={fellowWeeks} onFellowWeeksChange={isFullAdmin ? next => persistSettings({ ...academySettings, fellowWeeks: next }) : null}
+                academySettings={academySettings} onSettingsChange={(isFullAdmin && !isFellow) ? next => persistSettings(next) : null}
+                fellowWeeks={fellowWeeks} onFellowWeeksChange={(isFullAdmin && !isFellow) ? next => persistSettings({ ...academySettings, fellowWeeks: next }) : null}
                 onPlace={isFullAdmin ? (session, date, start) => setPlacement({ session, date, start }) : null}
                 onSelect={setViewing} onDrop={isFullAdmin ? (session, date, start) => {
                   saveSession({ ...session, date, start, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate), calendared: true });
@@ -1249,10 +1294,10 @@ return (
             />
           )}
           {tab === 'attendance' && isFullAdmin && (
-            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} onExport={exportAttendanceRecords} onSaveAttendance={records => { setAttendance(records); persistAttendance(records); showToast('Attendance updated'); }} />
+            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} auth={auth} onExport={exportAttendanceRecords} onSaveAttendance={records => { setAttendance(records); persistAttendance(records); showToast('Attendance updated'); }} />
           )}
           {tab === 'summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} modes={modes} />}
-          {tab === 'fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} onChange={persistRoster} onAccount={addAccount} showToast={showToast} />}
+          {tab === 'fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} rooms={rooms} onChange={persistRoster} onRoomsChange={persistRooms} onAccount={addAccount} showToast={showToast} />}
           {tab === 'planners' && (isSuperadmin || (isFullAdmin && !isFellow)) && <PlannerPanel planners={planners} roles={roles} onChange={persistPlanners} onAccount={addAccount} showToast={showToast} isSuperadmin={isSuperadmin} selfEmail={auth.email} />}
           {tab === 'roles' && isSuperadmin && <RolesPanel roles={roles} cityCodes={cityCodes} onRolesChange={persistRoles} onCityCodesChange={persistCityCodes} showToast={showToast} />}
           {tab === 'rooms' && isFullAdmin && <RoomsPanel rooms={rooms} roster={roster} onChange={persistRoomsAndRoster} showToast={showToast} />}
@@ -1274,8 +1319,7 @@ return (
       <EditPanel session={editing === 'new' ? blankSession() : editing} onSave={saveSession} onDelete={isFullAdmin && editing !== 'new' ? deleteSession : null} onClose={() => setEditing(null)} canEditSchedule={isFullAdmin} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} rooms={rooms} staff={planners} weeks={weeks} startDate={academySettings?.startDate || null} />
     )}
     {isFullAdmin && placement && <PlacementPanel sessions={sessions} initial={placement} onSave={(session, date, start, end) => { saveSession({ ...session, date, start, end, weekday: new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }), week: weekForDate(date, academySettings?.startDate) ?? activeWeek, calendared: true }); setPlacement(null); }} onClose={() => setPlacement(null)} onAddSession={(date, start, end) => { setPlacement(null); setEditing({ ...blankSession(), date, start, end, weekday: date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '', week: date ? (weekForDate(date, academySettings?.startDate) ?? activeWeek) : 0, calendared: !!date && !!start && !!end }); }} />}
-    {isFullAdmin && assigning && <AssignmentPanel session={assigning} rooms={rooms} onSave={(next) => { saveSession(next); setAssigning(null); }} onClose={() => setAssigning(null)} />}
-    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onAssign={() => setAssigning(viewing)} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} onDuplicate={isFullAdmin ? duplicateSession : null} onRemove={isFullAdmin ? unscheduleSession : null} onDelete={isFullAdmin ? deleteSession : null} />}
+    {viewing && <ViewPanel session={viewing} auth={auth} rooms={rooms} sessionTypes={sessionTypes} pillarTags={pillarTags} modes={modes} onRequestUpdate={requestUpdate} onClose={() => setViewing(null)} staff={planners} onEdit={isFullAdmin ? (s) => { setViewing(null); setEditing(s); } : null} onDuplicate={isFullAdmin ? duplicateSession : null} onRemove={isFullAdmin ? unscheduleSession : null} onDelete={isFullAdmin ? deleteSession : null} />}
     {isAdmin && staffEditing && (
       <StaffTaskEditor task={staffEditing === 'new' ? null : staffEditing} isFullAdmin={isFullAdmin} onSave={saveStaffTask} onDelete={isFullAdmin && staffEditing !== 'new' ? deleteStaffTask : null} onClose={() => setStaffEditing(null)} />
     )}
@@ -1507,8 +1551,11 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
     { id: 'overview', label: 'Vision, Goals & Pillars', icon: Compass },
     ...(isAdmin ? [{ id: 'dashboard', label: 'Dashboard', icon: SquaresFour }] : []),
     { id: 'calendar', label: 'Winter Academy Calendar', icon: CalendarIcon },
-    ...(isFellow ? [{ id: 'fellowAnalytics', label: 'Analytics', icon: TrendUp }] : []),
-    ...(isFellow ? [{ id: 'fellowPractice', label: 'Practice Teaching', icon: GradCapIcon }] : []),
+    // Fellow-only navigation lives behind one gate so it stays in one place.
+    ...(isFellow ? [
+      { id: 'fellowAnalytics', label: 'Analytics', icon: TrendUp },
+      { id: 'fellowPractice', label: 'Practice Teaching', icon: GradCapIcon },
+    ] : []),
     { id: 'legend', label: 'Legend', icon: ListDashes },
     ...(isAdmin ? [{ id: 'sessions', label: 'Sessions', icon: TableIcon }] : []),
     ...(isFullAdmin ? [{ id: 'attendance', label: 'Attendance records', icon: UserCheck }] : []),
@@ -1585,7 +1632,7 @@ function Sidebar({ tab, setTab, isAdmin, isFullAdmin, isSuperadmin, isFellow, op
   );
 }
 
-function TopBar({ tab, isFullAdmin, auth, onLogout, onAdd, roles, onSwitchSystem = null }) {
+function TopBar({ tab, isFullAdmin, isFellow, auth, onLogout, onAdd, roles, onSwitchSystem = null }) {
   return (
     <div className="bg-wa-container/95 backdrop-blur-md border-b border-wa-border px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3 sticky top-0 z-20 shadow-xs">
       <div className="py-2.5 min-w-[170px]">
@@ -1593,7 +1640,7 @@ function TopBar({ tab, isFullAdmin, auth, onLogout, onAdd, roles, onSwitchSystem
         <div className="text-[11.5px] text-wa-muted mt-[2px] font-medium wa14-hide-mobile">Teach For Bangladesh</div>
       </div>
       <div className="flex items-center gap-3 py-2.5 flex-wrap">
-        {isFullAdmin && (
+        {isFullAdmin && !isFellow && (
           <div className="flex gap-2 flex-wrap">
             {(tab === 'calendar' || tab === 'sessions') && (
               <button onClick={onAdd} className={btnPrimary}>
@@ -1775,7 +1822,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                           <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><Users size={9} /> {fmtFacilitators(s.facilitators, rooms, staff)}</div>
                         )}
                         {height > 56 && ((s.rooms || []).length > 0 || (s.roomIds || []).length > 0) && (
-                          <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><DoorOpen size={9} /> {getVisibleRooms(s, auth, roster, rooms).map(r => r.facilitator ? r.name + ' · ' + r.facilitator : r.name).join(', ') || 'Room not assigned'}</div>
+                          <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1, flexWrap: 'wrap' }}><DoorOpen size={9} /> {(() => { const vr = getVisibleRooms(s, auth, roster, rooms); return vr.length ? vr.map((r, i) => <span key={r.id || i}>{roomJoinLink(r)}{i < vr.length - 1 ? ', ' : ''}</span>) : 'Room not assigned'; })()}</div>
                         )}
                         {auth.role !== 'fellow' && height > 56 && s.resources && s.resources.length > 0 && (
                           <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><LinkIcon size={9} /> {s.resources.length} resource{s.resources.length > 1 ? 's' : ''}</div>
@@ -1883,17 +1930,36 @@ function layoutOverlapping(daySessions) {
   return result;
 }
 
+// The Main Room is the default venue: auto-created when missing, assigned to
+// every new session and every new Fellow, and it never restricts visibility.
+const MAIN_ROOM_NAME = 'Main Room';
+const isMainRoom = room => String((room || {}).name || '').trim().toLowerCase() === MAIN_ROOM_NAME.toLowerCase();
+function findMainRoom(rooms) {
+  return (rooms || []).find(isMainRoom) || null;
+}
+function ensureMainRoom(rooms) {
+  const existing = findMainRoom(rooms);
+  if (existing) return { rooms, room: existing };
+  const room = { id: 'room-main', name: MAIN_ROOM_NAME, locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] };
+  return { rooms: [...(rooms || []), room], room };
+}
+
 function getVisibleRooms(session, auth, roster, rooms) {
   const assigned = (session.rooms || []).concat((session.roomIds || []).map(id => (rooms || []).find(room => room.id === id)).filter(Boolean));
   if (auth.role !== 'fellow') return assigned;
-  return assigned.filter(room => (room.fellowIds || []).includes(roster.find(fellow => fellow.email === auth.email)?.id));
+  const fellowId = roster.find(fellow => fellow.email === auth.email)?.id;
+  // The Main Room stays visible to every Fellow; other rooms need membership.
+  return assigned.filter(room => isMainRoom(room) || (room.fellowIds || []).includes(fellowId));
 }
 
 function isSessionVisibleToFellow(session, auth, roster, rooms) {
   const fellow = (roster || []).find(item => item.id === auth.fellowId || item.email === auth.email);
-  const hasTargeting = (session.roomIds || []).length > 0 || (session.rooms || []).length > 0 || Boolean(session.afaGroup);
+  // Main Room targeting never restricts: it is everyone's default room.
+  const targetedIds = (session.roomIds || []).filter(id => !isMainRoom((rooms || []).find(room => room.id === id)));
+  const targetedLegacy = (session.rooms || []).filter(room => !isMainRoom(room));
+  const hasTargeting = targetedIds.length > 0 || targetedLegacy.length > 0 || Boolean(session.afaGroup);
   if (!hasTargeting) return true; // sessions with no room/AFA targeting are visible to everyone
-  const roomMatch = (session.roomIds || []).some(id => (rooms || []).find(room => room.id === id)?.fellowIds?.includes(fellow?.id));
+  const roomMatch = targetedIds.some(id => (rooms || []).find(room => room.id === id)?.fellowIds?.includes(fellow?.id));
   const groupMatch = Boolean(auth.afaGroup && session.afaGroup && auth.afaGroup === session.afaGroup);
   return roomMatch || groupMatch;
 }
@@ -1911,7 +1977,8 @@ function attendancePhase(session, now = new Date()) {
   const start = sessionDateTime(session, 'start');
   if (!attendanceEligible(session) || !start) return null;
   const mins = (now.getTime() - start.getTime()) / 60000;
-  if (mins < 0) return 'upcoming';
+  // Check-in opens 3 minutes before the session start.
+  if (mins < -3) return 'upcoming';
   if (mins < 5) return 'on_time';
   if (mins < 15) return 'late';
   return 'closed';
@@ -1937,7 +2004,7 @@ function MyAttendancePanel({ sessions, attendance, auth }) {
   return (
     <div style={{ maxWidth: 960 }}>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>My Attendance</div>
-      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 16 }}>Per-session attendance for Sync, Workshop, and Clinic sessions. You can mark yourself present within the first 5 minutes (on time) or within 15 minutes from the start (late).</div>
+      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 16 }}>Per-session attendance for Sync, Workshop, and Clinic sessions. You can mark yourself present from 3 minutes before the start through the first 5 minutes (on time), or within 15 minutes from the start (late).</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, maxWidth: 780, marginBottom: 18 }}>
         <Metric label="Attendance records" value={attended} />
         <Metric label="On time" value={onTime} />
@@ -1970,8 +2037,12 @@ function MyAttendancePanel({ sessions, attendance, auth }) {
   );
 }
 
-function AttendanceRecordsPanel({ sessions, attendance, roster, onExport, onSaveAttendance }) {
+function AttendanceRecordsPanel({ sessions, attendance, roster, auth = null, onExport, onSaveAttendance }) {
   const records = attendance || [];
+  // AFA staffers (afa / afa_lead) may only edit Fellows in their own AFA group.
+  const isAfaStaff = Boolean(auth && (auth.role === 'afa' || auth.role === 'afa_lead'));
+  const myGroup = String((auth && auth.afaGroup) || '').trim();
+  const canEditFellow = fellow => !isAfaStaff || (myGroup !== '' && String((fellow && fellow.afaGroup) || '').trim() === myGroup);
   const bySession = sessions.filter(session => attendanceEligible(session) && sessionDateTime(session, 'start')).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.start || '').localeCompare(String(a.start || '')));
   const [selectedSessionId, setSelectedSessionId] = useState(() => bySession[0]?.id ? String(bySession[0].id) : null);
   const selectedSession = bySession.find(s => String(s.id) === String(selectedSessionId)) || bySession[0];
@@ -1981,6 +2052,8 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, onExport, onSave
   const pct = session => { const total = (roster || []).length; return total ? Math.round(((count(session.id, 'on_time') + count(session.id, 'late')) / total * 100)) : 0; };
 
   const handleUpdateStatus = (sessionId, fellowId, fellowName, status) => {
+    const fellow = (roster || []).find(f => String(f.id) === String(fellowId));
+    if (fellow && !canEditFellow(fellow)) return; // AFA staff: own group only
     const next = records.filter(r => !(String(r.sessionId) === String(sessionId) && String(r.fellowId) === String(fellowId)));
     if (status) {
       next.push({
@@ -1997,6 +2070,7 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, onExport, onSave
   };
 
   const handleBulkStatus = (sessionId, status) => {
+    if (isAfaStaff) return; // bulk edits span every group, so they stay admin-only
     let next = records.filter(r => String(r.sessionId) !== String(sessionId));
     if (status) {
       (roster || []).forEach(f => {
@@ -2037,6 +2111,7 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, onExport, onSave
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Admin Session Attendance Input</div>
           <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 12 }}>
             Input or override session attendance manually for each Fellow (On Time, Late, or Absent).
+            {isAfaStaff ? ' AFA staff can update Fellows in their own AFA group only.' : ''}
           </div>
           {bySession.length > 0 ? (
             <div>
@@ -2045,7 +2120,7 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, onExport, onSave
                 <select className={selectStyle} style={{ minWidth: 260 }} value={selectedSessionId || (selectedSession?.id ? String(selectedSession.id) : '')} onChange={e => setSelectedSessionId(e.target.value)}>
                   {bySession.map(s => <option key={s.id} value={s.id}>{s.name} ({s.date ? dateLabel(s.date) : 'unscheduled'})</option>)}
                 </select>
-                {selectedSession && (
+                {selectedSession && !isAfaStaff && (
                   <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexWrap: 'wrap' }}>
                     <button type="button" onClick={() => handleBulkStatus(selectedSession.id, 'on_time')} className={btnSecondary} style={{ fontSize: 11.5, padding: '4px 8px', color: '#2D7A4F' }}>Mark all On Time</button>
                     <button type="button" onClick={() => handleBulkStatus(selectedSession.id, 'late')} className={btnSecondary} style={{ fontSize: 11.5, padding: '4px 8px', color: '#D0A023' }}>Mark all Late</button>
@@ -2076,12 +2151,16 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, onExport, onSave
                             <td style={{ padding: '8px 10px', color: '#9DB09D' }}>{f.track || '--'} · {f.afaGroup || 'No AFA'}</td>
                             <td style={{ padding: '8px 10px', color: statusColor(st), fontWeight: 700 }}>{statusLabel(st)}</td>
                             <td style={{ padding: '6px 10px' }}>
+                              {canEditFellow(f) ? (
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, 'on_time')} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: st === 'on_time' ? '#2D7A4F' : '#1F4A3C', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: st === 'on_time' ? 700 : 400 }}>On Time</button>
                                 <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, 'late')} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: st === 'late' ? '#D0A023' : '#1F4A3C', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: st === 'late' ? 700 : 400 }}>Late</button>
                                 <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, 'absent')} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: st === 'absent' ? '#D65641' : '#1F4A3C', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: st === 'absent' ? 700 : 400 }}>Absent</button>
                                 {st && <button type="button" onClick={() => handleUpdateStatus(selectedSession.id, f.id, f.name, null)} style={{ fontSize: 11, padding: '3px 6px', borderRadius: 4, background: 'transparent', color: '#9DB09D', border: '1px solid #2A5C4B', cursor: 'pointer' }}>Clear</button>}
                               </div>
+                              ) : (
+                                <span style={{ fontSize: 11, color: '#9DB09D', fontStyle: 'italic' }}>Not your AFA group</span>
+                              )}
                             </td>
                           </tr>
                         );
@@ -2469,7 +2548,7 @@ function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempt
   return (
     <div>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>My analytics</div>
-      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>Your attendance, grades, and recent assessment attempts.</div>
+      <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>Your attendance, grades, and recent assessment attempts. Expand a grade to see its question-level details.</div>
       <MyAttendancePanel sessions={sessions} attendance={attendance} auth={auth} />
       <FellowGradesPanel attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={null} />
       <FellowRecentAttempts attempts={attempts} assessments={assessments} auth={auth} />
@@ -3538,6 +3617,7 @@ function FellowGradesPanel({ attempts, assessments, auth, roster, onBack }) {
 }
 
 function FellowGradesPanelInner({ attempts, assessments, auth, roster, onBack }) {
+  const [openDetail, setOpenDetail] = useState(null); // attempt whose question breakdown is expanded
   const mine = (attempts || []).filter(item => String(item.fellowId) === String(auth.fellowId) && item.status === 'submitted');
   let totalEarned = 0; let totalPossible = 0;
   const rows = mine.map(item => {
@@ -3577,7 +3657,12 @@ function FellowGradesPanelInner({ attempts, assessments, auth, roster, onBack })
         <div key={row.attempt.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 10, maxWidth: 760 }}>
           <div style={{ fontWeight: 800 }}>{row.assessment.title}</div>
           <div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 4 }}>{row.released ? (row.status === 'graded' ? `Score: ${row.score.earned}/${row.score.total} (${row.pct}%)` : 'Submitted, waiting for staff review') : 'Submitted, grades not released yet'}</div>
-          {row.released && row.detail.map(d => (
+          {row.released && row.detail.length > 0 && (
+            <button type="button" onClick={() => setOpenDetail(current => current === row.attempt.id ? null : row.attempt.id)} style={{ display: 'block', marginTop: 10, background: 'none', border: 'none', padding: 0, color: '#D65641', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              {openDetail === row.attempt.id ? 'Hide question details' : 'Show question details'}
+            </button>
+          )}
+          {row.released && openDetail === row.attempt.id && row.detail.map(d => (
             <div key={d.id} style={{ marginTop: 10, borderTop: '1px solid #1F4A3C', paddingTop: 8 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700 }}>{d.text} <span style={{ color: '#9DB09D' }}>({d.earned}/{d.points})</span></div>
               {d.feedback && <div style={{ fontSize: 12.5, color: '#D65641', marginTop: 4 }}>Feedback: {d.feedback}</div>}
@@ -3917,7 +4002,7 @@ function RoomsPanel({ rooms, roster, onChange, showToast }) {
   const emptyRoom = () => ({ id: 'room' + Date.now(), name: '', locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] });
   const save = room => { if (!room.name.trim()) return; onChange(rooms.some(item => item.id === room.id) ? rooms.map(item => item.id === room.id ? room : item) : [...rooms, room]); setDraft(null); showToast('Room saved'); };
   const toggleFellow = id => setDraft(room => ({ ...room, fellowIds: (room.fellowIds || []).includes(id) ? room.fellowIds.filter(item => item !== id) : [...(room.fellowIds || []), id] }));
-  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={() => setDraft(emptyRoom())} className={btnPrimary + ' mb-[18px]'}><Plus size={14} /> Add room</button>{draft && <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 18 }}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Room A" /></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType || 'physical'} onChange={e => setDraft({ ...draft, locationType: e.target.value })}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType !== 'online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation || ''} onChange={e => setDraft({ ...draft, physicalLocation: e.target.value })} placeholder="Building, floor, or room location" /></Field>}{draft.locationType !== 'physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform || ''} onChange={e => setDraft({ ...draft, onlinePlatform: e.target.value })} placeholder="Zoom or Google Meet" /></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl || ''} onChange={e => setDraft({ ...draft, meetingUrl: e.target.value })} placeholder="https://..." /></Field><Field label="Access instructions"><textarea className={inputStyle + ' resize-y'} rows={2} value={draft.accessInstructions || ''} onChange={e => setDraft({ ...draft, accessInstructions: e.target.value })} /></Field></>}<Field label="Fellows"><div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>{roster.map(f => <label key={f.id} style={{ fontSize: 12 }}><input type="checkbox" checked={(draft.fellowIds || []).includes(f.id)} onChange={() => toggleFellow(f.id)} /> {f.name}</label>)}</div></Field><div style={{ display: 'flex', gap: 8 }}><button onClick={() => save(draft)} className={btnPrimary}>Save room</button><button onClick={() => setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room => <div key={room.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 8, maxWidth: 560 }}><b>{room.name}</b><div style={{ fontSize: 12, color: '#D5E0D5' }}>{[room.facilitator, room.locationType || 'physical', room.physicalLocation || room.meetingUrl || 'Location not set', (room.fellowIds || []).length + ' Fellows'].filter(Boolean).join(' · ')}</div><button onClick={() => setDraft({ ...room })} style={{ ...linkBtn, marginTop: 8 }}>Edit</button><button onClick={() => onChange(rooms.filter(r => r.id !== room.id))} style={{ ...linkBtn, color: '#D0A023', marginTop: 8, marginLeft: 12 }}>Delete</button></div>)}</div>;
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={() => setDraft(emptyRoom())} className={btnPrimary + ' mb-[18px]'}><Plus size={14} /> Add room</button>{draft && <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 18 }}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Room A" /></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType || 'physical'} onChange={e => setDraft({ ...draft, locationType: e.target.value })}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType !== 'online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation || ''} onChange={e => setDraft({ ...draft, physicalLocation: e.target.value })} placeholder="Building, floor, or room location" /></Field>}{draft.locationType !== 'physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform || ''} onChange={e => setDraft({ ...draft, onlinePlatform: e.target.value })} placeholder="Zoom or Google Meet" /></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl || ''} onChange={e => setDraft({ ...draft, meetingUrl: e.target.value })} placeholder="https://..." /></Field><Field label="Access instructions"><textarea className={inputStyle + ' resize-y'} rows={2} value={draft.accessInstructions || ''} onChange={e => setDraft({ ...draft, accessInstructions: e.target.value })} /></Field></>}<Field label="Fellows"><div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>{roster.map(f => <label key={f.id} style={{ fontSize: 12 }}><input type="checkbox" checked={(draft.fellowIds || []).includes(f.id)} onChange={() => toggleFellow(f.id)} /> {f.name}</label>)}</div></Field><div style={{ display: 'flex', gap: 8 }}><button onClick={() => save(draft)} className={btnPrimary}>Save room</button><button onClick={() => setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room => <div key={room.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 8, maxWidth: 560 }}><b>{room.name}</b><div style={{ fontSize: 12, color: '#D5E0D5', overflowWrap: 'anywhere', wordBreak: 'break-word', overflow: 'hidden' }}>{[room.facilitator, room.locationType || 'physical'].filter(Boolean).join(' · ')}{room.meetingUrl ? <>{' · '}<a href={room.meetingUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#7FD4FF', textDecoration: 'underline', overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{room.meetingUrl}</a></> : <>{room.physicalLocation ? ' · ' + room.physicalLocation : ' · Location not set'}</>}{' · ' + (room.fellowIds || []).length + ' Fellows'}</div><button onClick={() => setDraft({ ...room })} style={{ ...linkBtn, marginTop: 8 }}>Edit</button><button onClick={() => onChange(rooms.filter(r => r.id !== room.id))} style={{ ...linkBtn, color: '#D0A023', marginTop: 8, marginLeft: 12 }}>Delete</button></div>)}</div>;
 }
 
 function SessionTypesPanel({ sessionTypes, onChange, showToast }) {
@@ -4266,7 +4351,7 @@ function AnalyticsPanel({ sessions, attendance, attempts, onSeedDemo, onDeleteDe
   return <div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}><button onClick={onSeedDemo} className={btnSecondary}>Create demo data</button><button onClick={onDeleteDemo} className={btnSecondary + ' text-wa-warn'}>Delete demo data</button></div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Attendance and assessment overview for Staff.</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, maxWidth: 780 }}><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>On-time attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{onTime}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Late attendance</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{late}</div></div><div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16 }}><div style={{ fontSize: 12, color: '#D5E0D5' }}>Completed assessments</div><div style={{ fontSize: 26, fontWeight: 700, marginTop: 5 }}>{completed}</div></div></div><div style={{ marginTop: 24, fontSize: 13, fontWeight: 700 }}>Session attendance</div><div style={{ marginTop: 8, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'hidden', maxWidth: 780 }}><table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}><thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: 9 }}>Session</th><th style={{ padding: 9 }}>On time</th><th style={{ padding: 9 }}>Late</th></tr></thead><tbody>{sessions.map(session => <tr key={session.id} style={{ borderTop: '1px solid #1F4A3C' }}><td style={{ padding: 9 }}>{session.name}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'on_time').length}</td><td style={{ padding: 9 }}>{attendance.filter(entry => entry.sessionId === session.id && entry.status === 'late').length}</td></tr>)}</tbody></table></div></div>;
 }
 
-function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAssign, onRequestUpdate, onClose, staff, onEdit, onDuplicate, onRemove, onDelete }) {
+function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onRequestUpdate, onClose, staff, onEdit, onDuplicate, onRemove, onDelete }) {
   const color = getTypeColor(session.type, sessionTypes);
   const pillarTagNames = sessionPillarNames(session, pillarTags);
   const [reqOpen, setReqOpen] = useState(false);
@@ -4294,8 +4379,7 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         <DetailRow label="When">{session.date ? dateLabel(session.date) + ' · ' + session.weekday : 'Unscheduled'}</DetailRow>
         <DetailRow label="Time">{session.start ? session.start + '–' + session.end : '--'}</DetailRow>
         <DetailRow label="Facilitators">{fmtFacilitators(session.facilitators, rooms, staff) || '--'}</DetailRow>
-        <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(r => r.facilitator ? r.name + ' · ' + r.facilitator : r.name).join(', ') || '--'}</DetailRow>
-        {auth.role !== 'fellow' && <button onClick={onAssign} className={btnSecondary + ' w-full justify-center mt-1'}>Assign rooms</button>}
+        <DetailRow label="Session rooms">{(() => { const vr = getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms); return vr.length ? vr.map((r, i) => <span key={r.id || i}>{roomJoinLink(r)}{i < vr.length - 1 ? ', ' : ''}</span>) : '--'; })()}</DetailRow>
         {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-muted'}><Edit size={12} /> Edit session</button>}
         {auth.role !== 'fellow' && onDuplicate && <button onClick={() => { onClose(); onDuplicate(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-warn'}><CopyIcon size={12} /> Duplicate session</button>}
         {auth.role !== 'fellow' && onRemove && <button onClick={() => { if (!window.confirm('Remove this session from the calendar? It will move to the unscheduled list.')) return; onClose(); onRemove(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-button'}><Trash2 size={12} /> Remove from calendar</button>}
@@ -4374,7 +4458,7 @@ function DetailRow({ label, children }) {
   return (<div style={{ marginBottom: 12 }}><div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 2 }}>{label}</div><div style={{ fontSize: 13.5, color: '#D5E0D5' }}>{children}</div></div>);
 }
 
-function RosterPanel({ roster, staff, cityCodes, onChange, onAccount, showToast }) {
+function RosterPanel({ roster, staff, cityCodes, rooms = [], onChange, onRoomsChange = null, onAccount, showToast }) {
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [afaGroup, setAfaGroup] = useState(''); const [track, setTrack] = useState(''); const [grade, setGrade] = useState(''); const [placementCity, setPlacementCity] = useState(''); const [error, setError] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false); const [bulkText, setBulkText] = useState('');
   const afaStaff = (staff || []).filter(p => (p.role === 'afa' || p.role === 'afa_lead') && p.name);
@@ -4388,8 +4472,11 @@ function RosterPanel({ roster, staff, cityCodes, onChange, onAccount, showToast 
     if (!name.trim()) { setError('Enter a name.'); return; }
     if (!FELLOW_EMAIL_RE.test(em)) { setError('Email must look like firstname.lastname@teachforbangladesh.org'); return; }
     if (roster.some(r => r.email.toLowerCase() === em)) { setError('That email is already on the roster.'); return; }
-    const fellow = { id: 'f' + Date.now(), name: name.trim(), email: em, afaGroup: afaGroup.trim(), track: track.toLowerCase(), grade: grade.trim(), placementCity: placementCity.trim(), cohort: defaultCohortForCreator({ role: 'afa' }), roomIds: [] };
+    // New Fellows start in the Main Room; existing records are never rewritten.
+    const mainRoom = findMainRoom(rooms);
+    const fellow = { id: 'f' + Date.now(), name: name.trim(), email: em, afaGroup: afaGroup.trim(), track: track.toLowerCase(), grade: grade.trim(), placementCity: placementCity.trim(), cohort: defaultCohortForCreator({ role: 'afa' }), roomIds: mainRoom ? [mainRoom.id] : [] };
     onChange([...roster, fellow]); onAccount(fellow, 'fellow');
+    if (mainRoom && onRoomsChange) onRoomsChange(rooms.map(room => room.id === mainRoom.id ? { ...room, fellowIds: [...new Set([...(room.fellowIds || []), fellow.id])] } : room));
     setName(''); setEmail(''); setAfaGroup(''); setTrack(''); setGrade(''); setPlacementCity(''); setError(''); showToast('Fellow added (cohort ' + fellow.cohort + ')');
   };
   const removeOne = (id) => { onChange(roster.filter(r => r.id !== id)); showToast('Fellow removed'); };
@@ -4397,15 +4484,20 @@ function RosterPanel({ roster, staff, cityCodes, onChange, onAccount, showToast 
   const importBulk = () => {
     const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
     let added = 0, skipped = 0; const next = [...roster];
+    const mainRoom = findMainRoom(rooms);
+    const mainRoomFellowIds = [];
     lines.forEach(line => {
       const parts = line.split(',').map(p => p.trim());
       if (parts.length < 2) { skipped++; return; }
       const [nm, em] = parts; const emLower = em.toLowerCase();
       if (!FELLOW_EMAIL_RE.test(emLower) || next.some(r => r.email.toLowerCase() === emLower)) { skipped++; return; }
       const fellow = { id: 'f' + Date.now() + added, name: nm, email: emLower, track: (parts[2] || '').toLowerCase(), grade: parts[3] || '', placementCity: parts[4] || '', afaGroup: parts[5] || '', roomIds: (parts[6] || '').split('|').filter(Boolean), cohort: Number(parts[7]) || defaultCohortForCreator({ role: 'afa' }) };
+      if (!fellow.roomIds.length && mainRoom) fellow.roomIds = [mainRoom.id];
       next.push(fellow); onAccount(fellow, 'fellow'); added++;
+      if (mainRoom) mainRoomFellowIds.push(fellow.id);
     });
     onChange(next); setBulkText(''); setBulkOpen(false);
+    if (mainRoom && mainRoomFellowIds.length && onRoomsChange) onRoomsChange(rooms.map(room => room.id === mainRoom.id ? { ...room, fellowIds: [...new Set([...(room.fellowIds || []), ...mainRoomFellowIds])] } : room));
     showToast(added + ' added' + (skipped ? ', ' + skipped + ' skipped' : ''));
   };
   const sorted = roster.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -4830,8 +4922,24 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
   const updateOutcome = (id, val) => set('outcomes', form.outcomes.map(o => o.id === id ? { ...o, text: val } : o));
   const removeOutcome = (id) => set('outcomes', form.outcomes.filter(o => o.id !== id));
   const addFacilitator = () => set('facilitators', [...form.facilitators, { id: newResId(), staffName: '', roomId: '' }]);
-  const updateFacilitator = (id, key, val) => set('facilitators', form.facilitators.map(f => f.id === id ? { ...f, [key]: val } : f));
-  const removeFacilitator = (id) => set('facilitators', form.facilitators.filter(f => f.id !== id));
+  const updateFacilitator = (id, key, val) => {
+    const old = form.facilitators.find(f => f.id === id);
+    const nextFacilitators = form.facilitators.map(f => f.id === id ? { ...f, [key]: val } : f);
+    set('facilitators', nextFacilitators);
+    // Picking a room next to a facilitator assigns that room to the session so it shows on the calendar.
+    if (key === 'roomId') {
+      let nextRooms = (form.roomIds || []).slice();
+      if (val && !nextRooms.includes(val)) nextRooms.push(val);
+      const oldRoom = old && old.roomId;
+      if (oldRoom && oldRoom !== val && !nextFacilitators.some(f => f.roomId === oldRoom)) nextRooms = nextRooms.filter(rid => rid !== oldRoom);
+      set('roomIds', nextRooms);
+    }
+  };
+  const removeFacilitator = (id) => {
+    const removed = form.facilitators.find(f => f.id === id);
+    set('facilitators', form.facilitators.filter(f => f.id !== id));
+    if (removed && removed.roomId && !form.facilitators.some(f => f.id !== id && f.roomId === removed.roomId)) set('roomIds', (form.roomIds || []).filter(rid => rid !== removed.roomId));
+  };
   // Facilitator options: all WA Staff plus the built-in Superadmin (who can also facilitate).
   const staffOptions = () => {
     const list = (staff || []).slice();
@@ -4854,7 +4962,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
       date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: finalEnd,
       name: form.name, type: form.type, pillarIds: form.pillarIds || [], mode: form.mode,
       facilitators: form.facilitators.map(f => { const rec = { id: f.id || newResId(), staffName: (f.staffName || '').trim(), roomId: (f.roomId || '').trim() }; if (f.group) rec.group = f.group; return rec; }).filter(f => f.staffName || f.roomId || f.group),
-      roomIds: form.roomIds || [],
+      roomIds: [...new Set([...(form.roomIds || []), ...form.facilitators.map(f => (f.roomId || '').trim()).filter(Boolean)])],
       resources: form.resources.filter(r => r.url.trim()),
       outcomes: form.outcomes.map(o => (o.text || '').trim()).filter(Boolean),
       notes: form.notes.trim(), fellowNotes: form.fellowNotes.trim(), afaGroup: form.afaGroup.trim(),
@@ -4898,12 +5006,16 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
                 ) : (
                   <input disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[130px]'} placeholder="Facilitator name" value={f.staffName || ''} onChange={e => updateFacilitator(f.id, 'staffName', e.target.value)} />
                 )}
+                <select disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[120px]'} value={f.roomId || ''} onChange={e => updateFacilitator(f.id, 'roomId', e.target.value)}>
+                  <option value="">Session room…</option>
+                  {(rooms || []).map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
+                </select>
                 <button onClick={() => removeFacilitator(f.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', flexShrink: 0 }}><X size={15} /></button>
               </div>
             ))}
           </div>
           <button disabled={!canEditSchedule} onClick={addFacilitator} className={btnGhost + ' mt-2 px-1 py-1.5'}><Plus size={13} /> Add facilitator</button>
-          <div style={{ fontSize: 11, color: '#9DB09D', marginTop: 6 }}>Session rooms and AFA rooms are managed in the Rooms tab.</div>
+          <div style={{ fontSize: 11, color: '#9DB09D', marginTop: 6 }}>Choosing a room here assigns it to this session and shows it on the calendar.</div>
         </Field>
         
 
@@ -4947,4 +5059,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT };

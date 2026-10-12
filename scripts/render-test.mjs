@@ -159,8 +159,10 @@ try {
   const phase = mod2.__panels.attendancePhase;
   const elig = mod2.__panels.attendanceEligible;
   const syncSession = { mode: 'Sync', date: '2026-10-25', start: '09:00', end: '10:00' };
+  // The window opens 3 minutes early: 02:56:59 is upcoming, 02:57:00 is on time.
   const phaseChecks = [
-    ['upcoming', phase(syncSession, new Date('2026-10-25T02:59:00Z'))],
+    ['upcoming', phase(syncSession, new Date('2026-10-25T02:56:59Z'))],
+    ['on_time', phase(syncSession, new Date('2026-10-25T02:57:00Z'))],
     ['on_time', phase(syncSession, new Date('2026-10-25T03:04:59Z'))],
     ['late', phase(syncSession, new Date('2026-10-25T03:05:00Z'))],
     ['closed', phase(syncSession, new Date('2026-10-25T03:15:00Z'))],
@@ -176,6 +178,35 @@ try {
   if (released === true && hidden === false && submittedUngraded === 'pending_review' && submittedGraded === 'graded' && typeof fp === 'string' && fp.startsWith('dev-')) console.log('OK    grade/device helpers');
   else { console.log('FAIL  grade/device helpers got ' + JSON.stringify({ released, hidden, submittedUngraded, submittedGraded, fp })); failed++; }
 } catch (err) { console.log('FAIL  grade/device helpers: ' + err.message); failed++; }
+
+// [PLAN] Main Room defaults, AFA attendance gating, collapsible grade details.
+try {
+  const ensuredEmpty = mod2.__panels.ensureMainRoom([]);
+  const ensuredAgain = mod2.__panels.ensureMainRoom(ensuredEmpty.rooms);
+  const mainRooms = [{ id: 'room-main', name: 'Main Room', fellowIds: [] }];
+  const visMain = mod2.__panels.isSessionVisibleToFellow({ roomIds: ['room-main'], rooms: [], afaGroup: '' }, { role: 'fellow', fellowId: 'fe9', email: 'new@x.dev' }, [{ id: 'fe9', email: 'new@x.dev' }], mainRooms);
+  const visOther = mod2.__panels.isSessionVisibleToFellow({ roomIds: ['r1'], rooms: [], afaGroup: '' }, { role: 'fellow', fellowId: 'fe9', email: 'new@x.dev' }, [{ id: 'fe9', email: 'new@x.dev' }], [{ id: 'r1', name: 'Room A', fellowIds: ['someone-else'] }]);
+  const mainVisible = mod2.__panels.getVisibleRooms({ rooms: [], roomIds: ['room-main'] }, { role: 'fellow', email: 'stranger@x.dev' }, [], mainRooms);
+  const afaHtml = renderHtml('AttendanceRecordsPanel-afa');
+  const fullHtml = renderHtml('AttendanceRecordsPanel');
+  const gradesHtml = renderHtml('FellowGradesPanel-released');
+  const planChecks = [
+    ['main room auto-created once', ensuredEmpty.room.name === 'Main Room' && ensuredAgain.rooms === ensuredEmpty.rooms && ensuredAgain.room.id === ensuredEmpty.room.id],
+    ['main-room targeting does not hide sessions', visMain === true],
+    ['other rooms still restrict', visOther === false],
+    ['main room link visible to non-member fellow', mainVisible.length === 1],
+    ['AFA staffer sees own-group note', afaHtml.includes('their own AFA group')],
+    ['AFA staffer blocked outside own group', afaHtml.includes('Not your AFA group')],
+    ['bulk actions hidden from AFA staff', !afaHtml.includes('Mark all On Time')],
+    ['full admin keeps all attendance buttons', !fullHtml.includes('Not your AFA group') && fullHtml.includes('On Time') && fullHtml.includes('Mark all On Time')],
+    ['grade details collapsed by default', gradesHtml.includes('Show question details') && !gradesHtml.includes('Feedback: Good')],
+    ['assign-rooms button removed', !renderHtml('ViewPanel').includes('Assign rooms')],
+    ['fellow sidebar behind one gate', renderHtml('Sidebar-fellow').includes('Practice Teaching')],
+  ];
+  const planBad = planChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  if (!planBad.length) console.log('OK    plan: Main Room + AFA gating + collapsible grades + assign-flow removal');
+  else { console.log('FAIL  plan checks: ' + planBad.join('; ') + ' :: ' + JSON.stringify({ visMain, visOther, mainVisibleLen: mainVisible.length })); failed++; }
+} catch (err) { console.log('FAIL  plan checks: ' + err.message); failed++; }
 
 // normalizeHashTab routing rules
 try {

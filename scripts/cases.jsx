@@ -19,6 +19,7 @@ const auth = { email: 'test@user.dev', role: 'superadmin', access: 'full' };
 const rooms = [
   { id: 'r1', name: 'Room A', facilitator: 'Nusrat', locationType: 'physical' },
   { id: 'r2', name: 'Online 1', facilitator: 'Asif', locationType: 'online', meetingUrl: 'https://meet.example/x' },
+  { id: 'rmain', name: 'Main Room', locationType: 'physical', physicalLocation: '', fellowIds: [] },
 ];
 const roster = [
   { id: 'fe1', name: 'Fellow One', email: 'f1@x.dev', track: 'Secondary', afaGroup: 'AFA 1', placementCity: 'Dhaka', roomIds: ['r1'] },
@@ -91,7 +92,7 @@ export const cases = [
   ['FellowAttendanceBreakdown', () => <P.FellowAttendanceBreakdown sessions={sessions} attendance={[{ id: 'a1', sessionId: 1, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T09:05:00.000Z' }, { id: 'a2', sessionId: 1, fellowId: 'fe2', status: 'late', recordedAt: '2026-10-25T09:20:00.000Z' }]} fellows={roster} roster={roster} />],
   ['ExpandedAnalyticsPanel-attendance', () => <P.ExpandedAnalyticsPanel sessions={sessions} attendance={[{ id: 'a1', sessionId: 1, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T09:05:00.000Z' }, { id: 'a2', sessionId: 1, fellowId: 'fe2', status: 'late', recordedAt: '2026-10-25T09:20:00.000Z' }, { id: 'a3', sessionId: 2, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T10:05:00.000Z' }]} attempts={[]} assessments={[]} roster={roster} afaGroups={afaGroups} onSeedDemo={noop} onDeleteDemo={noop} />],
   ['ParagraphReviewPanel', () => <P.ParagraphReviewPanel attempts={[]} assessments={[]} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={noop} />],
-  ['ViewPanel', () => <P.ViewPanel session={sessions[0]} auth={auth} rooms={rooms} sessionTypes={null} pillarTags={null} modes={null} onAssign={noop} onRequestUpdate={noop} onClose={noop} />],
+  ['ViewPanel', () => <P.ViewPanel session={sessions[0]} auth={auth} rooms={rooms} sessionTypes={null} pillarTags={null} modes={null} onRequestUpdate={noop} onClose={noop} />],
   ['RosterPanel', () => <P.RosterPanel roster={roster} staff={planners} cityCodes={[{ id:'c1', city:'Dhaka', code:'DH' }]} onChange={noop} onAccount={noop} showToast={noop} />],
   ['PlannerPanel', () => <P.PlannerPanel planners={planners} roles={null} onChange={noop} onAccount={noop} showToast={noop} />],
   ['RolesPanel', () => <P.RolesPanel roles={null} cityCodes={[{ id:'c1', city:'Dhaka', code:'DH' }]} onRolesChange={noop} onCityCodesChange={noop} showToast={noop} />],
@@ -102,15 +103,21 @@ export const cases = [
   ['EditPanel-nostaff', () => <P.EditPanel session={sessions[0]} onSave={noop} onDelete={null} onClose={noop} canEditSchedule sessionTypes={null} pillarTags={null} modes={null} rooms={rooms} staff={[]} />],
   ['EditPanel-readonly', () => <P.EditPanel session={sessions[0]} onSave={noop} onDelete={null} onClose={noop} canEditSchedule={false} sessionTypes={null} pillarTags={null} modes={null} rooms={rooms} staff={planners} />],
   ['Sidebar', () => <P.Sidebar tab="calendar" setTab={noop} isAdmin isFullAdmin isSuperadmin openRequests={2} />],
+  ['Sidebar-fellow', () => <P.Sidebar tab="fellowAnalytics" setTab={noop} isAdmin={false} isFullAdmin={false} isSuperadmin={false} isFellow openRequests={0} />],
   ['StaffCalendar', () => <P.StaffCalendar staffTasks={[{ id: 'st1', kind: 'staff-task', name: 'Prep slides', date: '2026-10-25', weekday: 'Sunday', start: '09:00', end: '10:00', week: 1, notes: '', owner: 'Mehdi', status: 'todo' }]} sessions={sessions} weeks={[0,1,2]} startDate="2026-10-25" activeWeek={1} setActiveWeek={noop} hiddenDays={hidden} setHiddenDays={noop} isFullAdmin onSelect={noop} onEditStaff={noop} onAddStaff={noop} />],
   ['StaffTaskEditor-new', () => <P.StaffTaskEditor task={null} isFullAdmin onSave={noop} onDelete={null} onClose={noop} />],
   ['StaffTaskEditor-edit', () => <P.StaffTaskEditor task={{ id: 'st1', kind: 'staff-task', name: 'Prep slides', date: '2026-10-25', weekday: 'Sunday', start: '09:00', end: '10:00', week: 1, notes: 'some notes', owner: 'Mehdi', status: 'todo' }} isFullAdmin onSave={noop} onDelete={noop} onClose={noop} />],
   ['TopBar', () => <P.TopBar tab="calendar" isFullAdmin auth={auth} onLogout={noop} onExport={noop} onImport={noop} onReset={noop} onAdd={noop} />],
   ['FilterBar', () => <P.FilterBar typeFilter="all" setTypeFilter={noop} pillarTagFilter="all" setPillarTagFilter={noop} modeFilter="all" setModeFilter={noop} sessionTypes={null} pillarTags={null} modes={null} />],
   ['MyAttendancePanel', () => <P.MyAttendancePanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} />],
-  ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} onExport={noop} />],
+  ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={auth} onExport={noop} onSaveAttendance={noop} />],
+  // AFA staff edit attendance only inside their own group (approved plan item).
+  ['AttendanceRecordsPanel-afa', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={{ email: 'n@x.dev', role: 'afa', afaGroup: 'AFA 1', access: 'full' }} onExport={noop} onSaveAttendance={noop} />],
+
   ['SessionMarksPanel', () => <P.SessionMarksPanel sessions={sessions} roster={roster} manualSessionMarks={[{ id: 'sm1', sessionId: 1, fellowId: 'fe1', fellowName: 'Fellow One', mark: 8, recordedAt: '2026-10-25T09:00:00Z', method: 'admin' }]} onSaveMarks={noop} onUpdateSession={noop} />],
   ['SessionMarksPanel-empty', () => <P.SessionMarksPanel sessions={sessions} roster={roster} manualSessionMarks={[]} onSaveMarks={noop} onUpdateSession={noop} />],
+  // Released grades collapse to a summary; question details expand on demand.
+  ['FellowGradesPanel-released', () => <P.FellowGradesPanel attempts={[{ id: 'at2', assessmentId: 'a2', fellowId: 'fe1', sessionId: 1, questionOrder: ['q1'], answers: { q1: 'My paragraph answer' }, status: 'submitted', submittedAt: '2026-10-25T10:00:00Z', reviews: { q1: { status: 'reviewed', score: 3, questionId: 'q1', feedback: 'Good' } } }]} assessments={[{ id: 'a2', title: 'Released assessment', sessionId: 1, status: 'published', gradesReleased: true, assignmentGroups: [{ id: 'g1', fellowIds: ['fe1'] }], questions: [{ id: 'q1', type: 'paragraph', text: 'Explain your approach', points: 4 }] }]} auth={fellowAuth} roster={roster} onBack={null} />],
   ['FellowOverview', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} />],
   ['FellowAnalyticsPanel', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} manualSessionMarks={[]} />],
   ['FellowAnalyticsPanel-marks', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} manualSessionMarks={[{ id: 'sm1', sessionId: 1, fellowId: 'fe1', fellowName: 'Fellow One', mark: 8, recordedAt: '2026-10-25T09:00:00Z', method: 'admin' }]} />],
