@@ -199,6 +199,18 @@ function weekForDate(date, startDate) {
   const diff = Math.floor((d - s) / (24 * 60 * 60 * 1000));
   return Math.floor(diff / 7);
 }
+// The week a session actually occupies in the calendar grid: derived from its date
+// (same Sunday anchor as the grid), falling back to the stored week when there is no
+// date or no start date. Fellow week-visibility uses this so the checkbox filter stays
+// in sync with what the grid renders (which is keyed on session.date), even when the
+// stored session.week is stale/defaulted.
+function effectiveWeekOf(session, startDate) {
+  if (session && session.date && startDate) {
+    const w = weekForDate(session.date, startDate);
+    if (w != null) return w;
+  }
+  return session ? session.week : null;
+}
 // A session whose end <= start flows past midnight into the next day (e.g. 23:00 → 01:00)
 function wrapsMidnight(s) { const a = toMin(s.start), b = toMin(s.end); return a != null && b != null && b <= a; }
 function durationMin(s) { const a = toMin(s.start), b = toMin(s.end); if (a == null || b == null) return 0; let d = b - a; if (d <= 0) d += 24 * 60; return d; }
@@ -457,11 +469,9 @@ export default function App({ injectedAuth = null, onInjectedLogout = null }) {
   const activeSystem = system || (activeAuth && activeAuth.role !== 'fellow' ? systemsForStaff(activeAuth)[0] : null);
   // Per-system access: a staffer entering City gets their City access, a
   // staffer entering the Winter Academy gets their waAccess (or 'full' when
-  // they never carried access at all, e.g. legacy local fixtures).
-  const systemAuth = activeAuth ? {
-    ...activeAuth,
-    access: activeAuth.access || (activeAuth.role === 'fellow' ? undefined : accessForSystem(activeAuth, activeSystem || 'winter_academy', STAFF_ADMIN_ROLES)) || 'full'
-  } : null;
+  // they never carried access at all, e.g. legacy local fixtures). Fellows
+  // must never receive that legacy 'full' fallback -- see systemAccessFor.
+  const systemAuth = activeAuth ? { ...activeAuth, access: systemAccessFor(activeAuth, activeSystem) } : null;
   const logoutAll = injectedAuth ? (onInjectedLogout || (() => { })) : handleLogoutAll;
   const staffSystems = systemAuth && systemAuth.role !== 'fellow' ? systemsForStaff(systemAuth) : [];
   if (!injectedAuth && !authLoaded) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading…</div>;
@@ -603,16 +613,42 @@ function normalizeHashTab(hash, isAdmin, isFullAdmin, isSuperadmin, isFellow) {
   return home;
 }
 
-function MainApp({ auth, onLogout, onSwitchSystem = null }) {
+// The effective `access` stamped onto an auth object when entering a system.
+// Staff keep the legacy fallback: a record with no stored access at all (old
+// local fixtures) resolves to 'full' so existing test logins behave as before.
+// Fellows must never inherit that fallback -- their auth carries no access, so
+// MainApp falls back to DEFAULT_ACCESS ('resources') and admin UI stays closed.
+export function systemAccessFor(activeAuth, activeSystem) {
+  if (!activeAuth) return undefined;
+  if (activeAuth.role === 'fellow') return activeAuth.access;
+  return activeAuth.access || accessForSystem(activeAuth, activeSystem || 'winter_academy', STAFF_ADMIN_ROLES) || 'full';
+}
+
+// Role flags consumed by MainApp, its Sidebar and the hash router, kept as one
+// pure function so tests can pin the Fellow gating: a Fellow is never an admin
+// and never a full admin, even if a fixture or staff record carries
+// access: 'full' on a role: 'fellow' auth.
+export function deriveRoleFlags(auth = {}) {
+  const isFellow = auth.role === 'fellow';
   const isSuperadmin = auth.role === 'superadmin';
   const access = auth.access || (isSuperadmin ? 'full' : (STAFF_ADMIN_ROLES.includes(auth.role) || auth.role === 'planner' ? 'full' : DEFAULT_ACCESS));
   const isFullControl = access === 'full';
   const isAssessmentsEditor = access === 'full' || access === 'resources_assessments';
-  const isAdmin = auth.role !== 'fellow' && (isFullControl || access === 'resources' || isAssessmentsEditor);
-  const isFullAdmin = isSuperadmin || isFullControl;
-  const isFellow = auth.role === 'fellow';
-  const isViewer = !isAdmin; // read-only staff/fellow
-  const canEditAssessments = isAssessmentsEditor;
+  const isAdmin = !isFellow && (isFullControl || access === 'resources' || isAssessmentsEditor);
+  const isFullAdmin = (isSuperadmin || isFullControl) && !isFellow;
+  return {
+    isSuperadmin, access, isFullControl, isAssessmentsEditor,
+    isAdmin, isFullAdmin, isFellow,
+    isViewer: !isAdmin,                 // read-only staff/fellow
+    canEditAssessments: isAssessmentsEditor,
+  };
+}
+
+function MainApp({ auth, onLogout, onSwitchSystem = null }) {
+  const {
+    isSuperadmin, access, isFullControl, isAssessmentsEditor,
+    isAdmin, isFullAdmin, isFellow, isViewer, canEditAssessments,
+  } = deriveRoleFlags(auth);
 
   const [sessions, setSessions] = useState(null);
   const [roster, setRoster] = useState(null);       // fellows
@@ -659,6 +695,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
   staffTasksRef.current = staffTasks;
   const lastRemoteSessions = useRef(null);
   const lastRemoteStaff = useRef(null);
+  const lastRemoteSettings = useRef(null);
   const duplicateGuard = useRef(0);
   const rosterSaveTimer = useRef(null);
   const plannerSaveTimer = useRef(null);
@@ -818,7 +855,15 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
       lastRemoteStaff.current = serialized;
       setStaffTasks(next);
     });
-    return () => { unsubSessions(); unsubStaff(); };
+    const unsubSettings = storage.subscribe('wa14-settings', (rec) => {
+      const raw = rec && rec.value ? JSON.parse(rec.value) : {};
+      const next = { ...raw, fellowWeeks: Array.isArray(raw.fellowWeeks) ? raw.fellowWeeks : WEEKS };
+      const serialized = JSON.stringify(next);
+      if (serialized === lastRemoteSettings.current) return;
+      lastRemoteSettings.current = serialized;
+      setAcademySettings(next);
+    });
+    return () => { unsubSessions(); unsubStaff(); unsubSettings(); };
   }, []);
 
   const debouncedPersist = (setter, timerRef, key, onError) => (next) => {
@@ -1204,7 +1249,7 @@ const afaGroups = [...new Set(
   (planners || []).filter(p => AFA_ROLES.includes(p.role)).flatMap(p => [p.group || '', p.name || '']).filter(Boolean)
     .concat((roster || []).map(r => (r.afaGroup || '').trim()).filter(Boolean))
 )];
-const calendarSessions = auth.role === 'fellow' ? filtered.filter(session => fellowWeeks.includes(session.week) && isSessionVisibleToFellow(session, auth, roster, rooms)) : filtered;
+const calendarSessions = auth.role === 'fellow' ? filtered.filter(session => fellowWeeks.includes(effectiveWeekOf(session, academySettings?.startDate)) && isSessionVisibleToFellow(session, auth, roster, rooms)) : filtered;
 
 const openRequests = (requests || []).filter(r => !r.resolved).length;
 
@@ -5059,4 +5104,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };

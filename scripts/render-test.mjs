@@ -227,6 +227,40 @@ try {
   if (!nhtBad.length) console.log('OK    normalizeHashTab routing rules');
   else { console.log('FAIL  normalizeHashTab got ' + JSON.stringify(nhtBad)); failed++; }
 } catch (err) { console.log('FAIL  normalizeHashTab: ' + err.message); failed++; }
+
+// Fellow gating: systemAccessFor must not stamp the legacy 'full' onto Fellows,
+// and deriveRoleFlags must keep Fellows out of isAdmin/isFullAdmin even when an
+// auth object carries access: 'full' (regression: Fellows saw the full admin
+// sidebar -- Attendance records, Time Summary, Fellows, Rooms, Incidents...).
+try {
+  const sysAccess = mod2.__panels.systemAccessFor;
+  const flags = mod2.__panels.deriveRoleFlags;
+  const fAcc = sysAccess({ role: 'fellow' }, 'winter_academy');
+  const fAccExplicit = sysAccess({ role: 'fellow', access: 'full' }, 'winter_academy');
+  const staffAcc = sysAccess({ role: 'planner' }, 'winter_academy');
+  const flagsFellow = flags({ role: 'fellow' });
+  const flagsFellowPoisoned = flags({ role: 'fellow', access: 'full' });
+  const flagsSuper = flags({ role: 'superadmin' });
+  const flagsAfaFull = flags({ role: 'afa', access: 'full' });
+  const flagsResStaff = flags({ role: 'academy_lead', access: 'resources' });
+  const sidebarFellow = renderHtml('Sidebar-derived-fellow');
+  const fellowNav = [...sidebarFellow.matchAll(/href="#([A-Za-z]+)"/g)].map(m => m[1]);
+  const gatingChecks = [
+    ['fellow access not stamped full', fAcc === undefined],
+    ['fellow explicit access passes through', fAccExplicit === 'full'],
+    ['staff legacy fallback stays full', staffAcc === 'full'],
+    ['plain fellow is not admin', flagsFellow.isAdmin === false && flagsFellow.isFullAdmin === false && flagsFellow.isFellow === true],
+    ['fellow with access full still blocked', flagsFellowPoisoned.isAdmin === false && flagsFellowPoisoned.isFullAdmin === false],
+    ['superadmin keeps admin', flagsSuper.isAdmin === true && flagsSuper.isFullAdmin === true],
+    ['AFA full keeps attendance admin', flagsAfaFull.isAdmin === true && flagsAfaFull.isFullAdmin === true],
+    ['resources-only staff stays non-full', flagsResStaff.isAdmin === true && flagsResStaff.isFullAdmin === false],
+    ['fellow sidebar is exactly 5 items ending at Legend', JSON.stringify(fellowNav) === JSON.stringify(['overview', 'calendar', 'fellowAnalytics', 'fellowPractice', 'legend'])],
+    ['fellow sidebar hides admin pages', !sidebarFellow.includes('Attendance records') && !sidebarFellow.includes('Time Summary') && !sidebarFellow.includes('Incidents') && !sidebarFellow.includes('Devices') && !sidebarFellow.includes('WA Staff')],
+  ];
+  const badGate = gatingChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  if (!badGate.length) console.log('OK    fellow gating: systemAccessFor + deriveRoleFlags + sidebar');
+  else { console.log('FAIL  fellow gating: ' + badGate.join('; ') + ' :: ' + JSON.stringify({ fAcc, staffAcc, fellowNav })); failed++; }
+} catch (err) { console.log('FAIL  fellow gating: ' + err.message); failed++; }
 // weekForDate: 2026-10-25 is a Sunday → dates map to correct week indexes
 // Week 00 is the full week before (Oct 18-24), Week 01 is Oct 25-31, etc.
 const wf = mod2.__panels.weekForDate;
@@ -236,6 +270,43 @@ for (const [d, expected] of wfChecks) {
   if (got === expected) console.log('OK    weekForDate ' + d + ' → ' + got);
   else { console.log('FAIL  weekForDate ' + d + ' → ' + got + ' (expected ' + expected + ')'); failed++; }
 }
+
+// Fellow week-visibility (regression): the Fellow filter must hide sessions by the
+// week their DATE occupies in the grid (anchor = start date's Sunday-of-week-before),
+// NOT by the possibly-stale stored session.week field. Otherwise, deselecting a week
+// in the admin panel left its sessions visible because the grid rendered them by date.
+try {
+  const ew = mod2.__panels.effectiveWeekOf;
+  const startDate = '2026-10-25';
+  // Stored week is stale (0) but the session's date falls in Week 2 (Nov 1-7):
+  const stale = { date: '2026-11-01', week: 0 };
+  // Stored week agrees with the date:
+  const consistent = { date: '2026-11-01', week: 2 };
+  // No date → fall back to stored week (how unscheduled sessions appear in the grid):
+  const noDate = { date: '', week: 3 };
+  // Date but no start date → cannot derive, fall back to stored week:
+  const noStart = { date: '2026-11-01', week: 5 };
+  const staleGot = ew(stale, startDate);
+  const consistentGot = ew(consistent, startDate);
+  const noDateGot = ew(noDate, startDate);
+  const noStartGot = ew(noStart, null);
+  // Simulate the Fellow calendarSessions filter with Week 2 deselected:
+  const fellowWeeksOff = [0, 1, 3, 4, 5, 6]; // Week 2 unchecked
+  const fellowWeeksOn = [0, 1, 2, 3, 4, 5, 6];
+  const hiddenWhenOff = !fellowWeeksOff.includes(ew(stale, startDate));
+  const shownWhenOn = fellowWeeksOn.includes(ew(stale, startDate));
+  const ewChecks = [
+    ['date-derived week wins over stale stored week', staleGot === 2],
+    ['matching date/week stays consistent', consistentGot === 2],
+    ['no date falls back to stored week', noDateGot === 3],
+    ['no start date falls back to stored week', noStartGot === 5],
+    ['stale session hidden when its DATE week is off', hiddenWhenOff === true],
+    ['stale session shown when its DATE week is on', shownWhenOn === true],
+  ];
+  const ewBad = ewChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  if (!ewBad.length) console.log('OK    fellow week visibility: date-derived week filters stale sessions');
+  else { console.log('FAIL  fellow week visibility: ' + ewBad.join('; ') + ' :: ' + JSON.stringify({ staleGot, consistentGot, noDateGot, noStartGot, hiddenWhenOff, shownWhenOn })); failed++; }
+} catch (err) { console.log('FAIL  fellow week visibility: ' + err.message); failed++; }
 
 // Overlap layout + type/mode colors + fellow visibility helpers
 try {

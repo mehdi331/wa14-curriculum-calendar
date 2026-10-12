@@ -104,6 +104,9 @@ export const cases = [
   ['EditPanel-readonly', () => <P.EditPanel session={sessions[0]} onSave={noop} onDelete={null} onClose={noop} canEditSchedule={false} sessionTypes={null} pillarTags={null} modes={null} rooms={rooms} staff={planners} />],
   ['Sidebar', () => <P.Sidebar tab="calendar" setTab={noop} isAdmin isFullAdmin isSuperadmin openRequests={2} />],
   ['Sidebar-fellow', () => <P.Sidebar tab="fellowAnalytics" setTab={noop} isAdmin={false} isFullAdmin={false} isSuperadmin={false} isFellow openRequests={0} />],
+  // Flags derived exactly the way MainApp derives them for a Fellow: pins the
+  // full chain (deriveRoleFlags → Sidebar) that once leaked the admin pages.
+  ['Sidebar-derived-fellow', () => { const f = P.deriveRoleFlags({ role: 'fellow' }); return <P.Sidebar tab="overview" setTab={noop} isAdmin={f.isAdmin} isFullAdmin={f.isFullAdmin} isSuperadmin={f.isSuperadmin} isFellow={f.isFellow} openRequests={0} />; }],
   ['StaffCalendar', () => <P.StaffCalendar staffTasks={[{ id: 'st1', kind: 'staff-task', name: 'Prep slides', date: '2026-10-25', weekday: 'Sunday', start: '09:00', end: '10:00', week: 1, notes: '', owner: 'Mehdi', status: 'todo' }]} sessions={sessions} weeks={[0,1,2]} startDate="2026-10-25" activeWeek={1} setActiveWeek={noop} hiddenDays={hidden} setHiddenDays={noop} isFullAdmin onSelect={noop} onEditStaff={noop} onAddStaff={noop} />],
   ['StaffTaskEditor-new', () => <P.StaffTaskEditor task={null} isFullAdmin onSave={noop} onDelete={null} onClose={noop} />],
   ['StaffTaskEditor-edit', () => <P.StaffTaskEditor task={{ id: 'st1', kind: 'staff-task', name: 'Prep slides', date: '2026-10-25', weekday: 'Sunday', start: '09:00', end: '10:00', week: 1, notes: 'some notes', owner: 'Mehdi', status: 'todo' }} isFullAdmin onSave={noop} onDelete={noop} onClose={noop} />],
