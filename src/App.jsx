@@ -306,18 +306,17 @@ function normalizeAssessment(assessment, legacyQuestions) {
   };
 }
 
-// Facilitator record: { id, staffName, roomId } (+ optional legacy `group`)
+// Facilitator display: staff only. Rooms are a separate concern (assigned to a
+// session via roomIds), so the room is never mixed into a facilitator label.
+// Legacy `roomId` / `group` shapes below are kept so old data still renders.
 function facilitatorLabel(f, rooms, staff) {
   if (typeof f === 'string') return f;
   if (!f) return '';
-  const room = f.roomId ? (rooms || []).find(x => '' + x.id === String(f.roomId)) : null;
-  const roomName = room ? room.name : '';
   const superadminMatch = f.staffName === SUPERADMIN_ACCOUNT.name || f.staffName === SUPERADMIN_ACCOUNT.email || (f.id && String(f.id) === 'superadmin');
   const staffMember = superadminMatch ? SUPERADMIN_ACCOUNT : (staff || []).find(s => s.name === f.staffName);
   const callSign = staffMember?.callSign || (f.staffName ? callSignFromName(f.staffName) : '');
-  const parts = [callSign, roomName].filter(Boolean);
-  if (parts.length) return parts.join(' · ');
-  if (f.kind === 'room') return roomName || (f.roomId || '');   // legacy shape
+  if (callSign) return callSign;
+  if (f.kind === 'room') { const room = f.roomId ? (rooms || []).find(x => '' + x.id === String(f.roomId)) : null; return (room ? room.name : '') || (f.roomId || ''); }   // legacy shape
   return f.group || f.afaGroup || '';                          // legacy shape
 }
 function fmtFacilitators(facs, rooms, staff) {
@@ -1776,7 +1775,7 @@ function CalendarView({ sessions, activeWeek, setActiveWeek, hiddenDays, setHidd
                           <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><Users size={9} /> {fmtFacilitators(s.facilitators, rooms, staff)}</div>
                         )}
                         {height > 56 && ((s.rooms || []).length > 0 || (s.roomIds || []).length > 0) && (
-                          <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><DoorOpen size={9} /> {getVisibleRooms(s, auth, roster, rooms).map(r => r.name + ' · ' + (r.facilitator || 'Facilitator not set')).join(', ') || 'Room not assigned'}</div>
+                          <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><DoorOpen size={9} /> {getVisibleRooms(s, auth, roster, rooms).map(r => r.facilitator ? r.name + ' · ' + r.facilitator : r.name).join(', ') || 'Room not assigned'}</div>
                         )}
                         {auth.role !== 'fellow' && height > 56 && s.resources && s.resources.length > 0 && (
                           <div style={{ color: '#003223', display: 'flex', alignItems: 'center', gap: 3, marginTop: 1 }}><LinkIcon size={9} /> {s.resources.length} resource{s.resources.length > 1 ? 's' : ''}</div>
@@ -3906,7 +3905,7 @@ function AssignmentPanel({ session, rooms, onSave, onClose }) {
     <div onClick={e => e.stopPropagation()} style={{ width: 360, maxWidth: '92vw', background: '#003223', height: '100%', overflowY: 'auto', padding: 22 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><div style={{ fontWeight: 700 }}>Assign session</div><button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button></div>
       <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 18 }}>Calendar placement is changed by dragging the session. Choose rooms here or from Sessions.</div>
-      {rooms.map(room => <label key={room.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1F4A3C', fontSize: 13 }}><input type="checkbox" checked={selected.includes(room.id)} onChange={() => toggle(room.id)} /><span><b>{room.name}</b><br /><span style={{ fontSize: 11.5, color: '#9DB09D' }}>{room.facilitator || 'Facilitator not set'}</span></span></label>)}
+      {rooms.map(room => <label key={room.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1F4A3C', fontSize: 13 }}><input type="checkbox" checked={selected.includes(room.id)} onChange={() => toggle(room.id)} /><span><b>{room.name}</b>{room.facilitator ? <><br /><span style={{ fontSize: 11.5, color: '#9DB09D' }}>{room.facilitator}</span></> : null}</span></label>)}
       {rooms.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>Create rooms in the Rooms tab first.</div>}
       <button onClick={() => onSave({ ...session, roomIds: selected })} className={btnPrimary + ' w-full justify-center mt-5'}>Save assignments</button>
     </div>
@@ -3915,10 +3914,10 @@ function AssignmentPanel({ session, rooms, onSave, onClose }) {
 
 function RoomsPanel({ rooms, roster, onChange, showToast }) {
   const [draft, setDraft] = useState(null);
-  const emptyRoom = () => ({ id: 'room' + Date.now(), name: '', facilitator: '', locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] });
+  const emptyRoom = () => ({ id: 'room' + Date.now(), name: '', locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] });
   const save = room => { if (!room.name.trim()) return; onChange(rooms.some(item => item.id === room.id) ? rooms.map(item => item.id === room.id ? room : item) : [...rooms, room]); setDraft(null); showToast('Room saved'); };
   const toggleFellow = id => setDraft(room => ({ ...room, fellowIds: (room.fellowIds || []).includes(id) ? room.fellowIds.filter(item => item !== id) : [...(room.fellowIds || []), id] }));
-  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={() => setDraft(emptyRoom())} className={btnPrimary + ' mb-[18px]'}><Plus size={14} /> Add room</button>{draft && <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 18 }}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Room A" /></Field><Field label="Facilitator"><input className={inputStyle} value={draft.facilitator} onChange={e => setDraft({ ...draft, facilitator: e.target.value })} placeholder="Facilitator name" /></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType || 'physical'} onChange={e => setDraft({ ...draft, locationType: e.target.value })}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType !== 'online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation || ''} onChange={e => setDraft({ ...draft, physicalLocation: e.target.value })} placeholder="Building, floor, or room location" /></Field>}{draft.locationType !== 'physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform || ''} onChange={e => setDraft({ ...draft, onlinePlatform: e.target.value })} placeholder="Zoom or Google Meet" /></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl || ''} onChange={e => setDraft({ ...draft, meetingUrl: e.target.value })} placeholder="https://..." /></Field><Field label="Access instructions"><textarea className={inputStyle + ' resize-y'} rows={2} value={draft.accessInstructions || ''} onChange={e => setDraft({ ...draft, accessInstructions: e.target.value })} /></Field></>}<Field label="Fellows"><div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>{roster.map(f => <label key={f.id} style={{ fontSize: 12 }}><input type="checkbox" checked={(draft.fellowIds || []).includes(f.id)} onChange={() => toggleFellow(f.id)} /> {f.name}</label>)}</div></Field><div style={{ display: 'flex', gap: 8 }}><button onClick={() => save(draft)} className={btnPrimary}>Save room</button><button onClick={() => setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room => <div key={room.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 8, maxWidth: 560 }}><b>{room.name}</b><div style={{ fontSize: 12, color: '#D5E0D5' }}>{room.facilitator || 'Facilitator not set'} · {room.locationType || 'physical'} · {room.physicalLocation || room.meetingUrl || 'Location not set'} · {(room.fellowIds || []).length} Fellows</div><button onClick={() => setDraft({ ...room })} style={{ ...linkBtn, marginTop: 8 }}>Edit</button><button onClick={() => onChange(rooms.filter(r => r.id !== room.id))} style={{ ...linkBtn, color: '#D0A023', marginTop: 8, marginLeft: 12 }}>Delete</button></div>)}</div>;
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={() => setDraft(emptyRoom())} className={btnPrimary + ' mb-[18px]'}><Plus size={14} /> Add room</button>{draft && <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 18 }}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Room A" /></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType || 'physical'} onChange={e => setDraft({ ...draft, locationType: e.target.value })}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType !== 'online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation || ''} onChange={e => setDraft({ ...draft, physicalLocation: e.target.value })} placeholder="Building, floor, or room location" /></Field>}{draft.locationType !== 'physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform || ''} onChange={e => setDraft({ ...draft, onlinePlatform: e.target.value })} placeholder="Zoom or Google Meet" /></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl || ''} onChange={e => setDraft({ ...draft, meetingUrl: e.target.value })} placeholder="https://..." /></Field><Field label="Access instructions"><textarea className={inputStyle + ' resize-y'} rows={2} value={draft.accessInstructions || ''} onChange={e => setDraft({ ...draft, accessInstructions: e.target.value })} /></Field></>}<Field label="Fellows"><div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>{roster.map(f => <label key={f.id} style={{ fontSize: 12 }}><input type="checkbox" checked={(draft.fellowIds || []).includes(f.id)} onChange={() => toggleFellow(f.id)} /> {f.name}</label>)}</div></Field><div style={{ display: 'flex', gap: 8 }}><button onClick={() => save(draft)} className={btnPrimary}>Save room</button><button onClick={() => setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room => <div key={room.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 8, maxWidth: 560 }}><b>{room.name}</b><div style={{ fontSize: 12, color: '#D5E0D5' }}>{[room.facilitator, room.locationType || 'physical', room.physicalLocation || room.meetingUrl || 'Location not set', (room.fellowIds || []).length + ' Fellows'].filter(Boolean).join(' · ')}</div><button onClick={() => setDraft({ ...room })} style={{ ...linkBtn, marginTop: 8 }}>Edit</button><button onClick={() => onChange(rooms.filter(r => r.id !== room.id))} style={{ ...linkBtn, color: '#D0A023', marginTop: 8, marginLeft: 12 }}>Delete</button></div>)}</div>;
 }
 
 function SessionTypesPanel({ sessionTypes, onChange, showToast }) {
@@ -4295,7 +4294,7 @@ function ViewPanel({ session, auth, rooms, sessionTypes, pillarTags, modes, onAs
         <DetailRow label="When">{session.date ? dateLabel(session.date) + ' · ' + session.weekday : 'Unscheduled'}</DetailRow>
         <DetailRow label="Time">{session.start ? session.start + '–' + session.end : '--'}</DetailRow>
         <DetailRow label="Facilitators">{fmtFacilitators(session.facilitators, rooms, staff) || '--'}</DetailRow>
-        <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(r => r.name + ' · ' + (r.facilitator || 'Facilitator not set')).join(', ') || '--'}</DetailRow>
+        <DetailRow label="Session rooms">{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(r => r.facilitator ? r.name + ' · ' + r.facilitator : r.name).join(', ') || '--'}</DetailRow>
         {auth.role !== 'fellow' && <button onClick={onAssign} className={btnSecondary + ' w-full justify-center mt-1'}>Assign rooms</button>}
         {auth.role !== 'fellow' && onEdit && <button onClick={() => { onClose(); onEdit(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-muted'}><Edit size={12} /> Edit session</button>}
         {auth.role !== 'fellow' && onDuplicate && <button onClick={() => { onClose(); onDuplicate(session); }} className={btnGhost + ' w-full justify-center mt-1 text-wa-warn'}><CopyIcon size={12} /> Duplicate session</button>}
@@ -4899,10 +4898,6 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
                 ) : (
                   <input disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[130px]'} placeholder="Facilitator name" value={f.staffName || ''} onChange={e => updateFacilitator(f.id, 'staffName', e.target.value)} />
                 )}
-                <select disabled={!canEditSchedule} className={inputStyle + ' w-auto flex-1 min-w-[120px]'} value={f.roomId || ''} onChange={e => updateFacilitator(f.id, 'roomId', e.target.value)}>
-                  <option value="">Session room…</option>
-                  {(rooms || []).map(room => <option key={room.id} value={room.id}>{room.name}</option>)}
-                </select>
                 <button onClick={() => removeFacilitator(f.id)} style={{ background: 'none', border: 'none', color: '#D0A023', cursor: 'pointer', flexShrink: 0 }}><X size={15} /></button>
               </div>
             ))}
