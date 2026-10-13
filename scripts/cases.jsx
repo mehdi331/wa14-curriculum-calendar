@@ -22,10 +22,11 @@ const rooms = [
   { id: 'rmain', name: 'Main Room', locationType: 'physical', physicalLocation: '', fellowIds: [] },
 ];
 const roster = [
-  { id: 'fe1', name: 'Fellow One', email: 'f1@x.dev', track: 'Secondary', afaGroup: 'AFA 1', placementCity: 'Dhaka', roomIds: ['r1'] },
-  { id: 'fe2', name: 'Fellow Two', email: 'f2@x.dev', track: 'Primary', afaGroup: '', placementCity: '', roomIds: [] },
+  { id: 'fe1', name: 'Fellow One', email: 'f1@x.dev', track: 'Secondary', afaGroup: 'AFA 1', placementCity: 'Dhaka', roomIds: ['r1'], accountabilityIds: ['fe2'] },
+  { id: 'fe2', name: 'Fellow Two', email: 'f2@x.dev', track: 'Primary', afaGroup: '', placementCity: '', roomIds: [], accountabilityIds: ['fe1'] },
 ];
-// Practice-teaching fixtures: a 2-Fellow secondary collab with a deliberately
+// Practice-teaching fixtures: a 2-Fellow secondary collab that is also a mutual
+// accountability pair (fe1 lists fe2, fe2 lists fe1), with a deliberately
 // lopsided rotation (no 4/4/4 balance enforced), and its grade+subject+day
 // learning outcomes.
 const buildRotation = () => {
@@ -40,7 +41,7 @@ const collab = {
   rotation: buildRotation(),
 };
 const learningOutcomes = [
-  { id: 'lo1', grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['SECRET_BANGLA_DAY1'], 2: ['SECRET_BANGLA_DAY2'] } },
+  { id: 'lo1', grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['SECRET_BANGLA_DAY1'], 2: ['SECRET_BANGLA_DAY2'] }, chaptersByDay: { 1: { chapter: 'Chapter 7 · Algebra', pages: '12-15' } } },
   { id: 'lo2', grade: 'Grade 9', subject: 'English', outcomesByDay: { 1: ['SECRET_ENGLISH_DAY1'] } },
   { id: 'lo3', grade: 'Grade 5', subject: 'Math', outcomesByDay: { 1: ['OTHER_GRADE_OUTCOME'] } },
 ];
@@ -122,6 +123,8 @@ export const cases = [
   // Released grades collapse to a summary; question details expand on demand.
   ['FellowGradesPanel-released', () => <P.FellowGradesPanel attempts={[{ id: 'at2', assessmentId: 'a2', fellowId: 'fe1', sessionId: 1, questionOrder: ['q1'], answers: { q1: 'My paragraph answer' }, status: 'submitted', submittedAt: '2026-10-25T10:00:00Z', reviews: { q1: { status: 'reviewed', score: 3, questionId: 'q1', feedback: 'Good' } } }]} assessments={[{ id: 'a2', title: 'Released assessment', sessionId: 1, status: 'published', gradesReleased: true, assignmentGroups: [{ id: 'g1', fellowIds: ['fe1'] }], questions: [{ id: 'q1', type: 'paragraph', text: 'Explain your approach', points: 4 }] }]} auth={fellowAuth} roster={roster} onBack={null} />],
   ['FellowOverview', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} />],
+  // Accountability partner resolves from the roster and shows beside the AFA group.
+  ['FellowOverview-partner', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} roster={[{ id: 'fe1', name: 'Fellow One', afaGroup: 'AFA 1', accountabilityIds: ['fe2'] }, { id: 'fe2', name: 'Fellow Two' }]} />],
   ['FellowAnalyticsPanel', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} manualSessionMarks={[]} />],
   ['FellowAnalyticsPanel-marks', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} manualSessionMarks={[{ id: 'sm1', sessionId: 1, fellowId: 'fe1', fellowName: 'Fellow One', mark: 8, recordedAt: '2026-10-25T09:00:00Z', method: 'admin' }]} />],
   ['AcademyOverviewPanel', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: 'Foundations', vision: 'Every child receives an excellent education.', goals: ['Goal one', 'Goal two'], outcomes: ['Outcome one'], pillars: ['Pillar A', 'Pillar B'] }} onChange={noop} canEdit={false} pillarTags={[{ id: 'ptag0', name: 'Leadership' }, { id: 'ptag1', name: 'Equity & Inclusion' }]} />],
@@ -136,6 +139,9 @@ export const cases = [
   ['PracticeTeachingPanel-assigned', () => <P.PracticeTeachingPanel roster={roster} collaborations={[collab]} onChange={noop} onRosterChange={noop} showToast={noop} />],
   ['CollabEditor', () => <P.CollabEditor draft={collab} setDraft={noop} people={roster} list={[collab]} onCancel={noop} onSave={noop} />],
   ['LearningOutcomesPanel', () => <P.LearningOutcomesPanel learningOutcomes={learningOutcomes} onChange={noop} showToast={noop} />],
+  // Saved-list preview: every day shows ALL of its outcomes (no first-only,
+  // no 3-day cut). Day 1 has two outcomes; day 4 sits past the old cut.
+  ['LearningOutcomesPanel-multi', () => <P.LearningOutcomesPanel learningOutcomes={[{ id: 'lom', grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['MULTI_ONE_A', 'MULTI_ONE_B'], 2: ['MULTI_TWO'], 3: ['MULTI_THREE'], 4: ['MULTI_FOUR'] }, chaptersByDay: { 1: { chapter: 'Ch 1', pages: '1-2' } } }]} onChange={noop} showToast={noop} />],
   // Fellows see grade/school/partners/schedule/outcomes once assigned...
   ['FellowPracticePanel', () => <P.FellowPracticePanel roster={roster} collaborations={[collab]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
   // ...and only a gated message when unassigned (no outcome text may leak).

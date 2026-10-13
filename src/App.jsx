@@ -1181,7 +1181,7 @@ const pageExporters = {
   practiceTeaching: () => exportSheetFile('Fellow_Training_System_Practice_Teaching.xlsx', [
     { name: 'Collaborations', rows: (collaborations || []).map(c => ({ Code: c.code, Band: c.band, Grade: c.grade, Schools: [...new Set(c.fellowIds.map(fid => schoolForMember(c, fid)).filter(Boolean))].join(' + '), Days: c.days, Fellows: c.fellowIds.map(id => (fellowById(roster, id) || {}).name || id).join(', '), DaysScheduled: scheduledDays(c) + ' of ' + c.days })) },
     { name: 'Rotation', rows: (collaborations || []).flatMap(c => Object.entries(c.rotation || {}).flatMap(([day, byFellow]) => Object.entries(byFellow).map(([fid, subject]) => ({ Code: c.code, Day: day, Fellow: (fellowById(roster, fid) || {}).name || fid, School: schoolForMember(c, fid), Subject: subject })))) },
-    { name: 'Learning outcomes', rows: (learningOutcomes || []).flatMap(o => Object.entries((o && o.outcomesByDay) || {}).filter(([d]) => d !== ALL_DAYS_KEY).flatMap(([d, rows]) => (rows || []).map(text => ({ Grade: o.grade, Subject: o.subject, Day: d, Outcome: text })))) },
+    { name: 'Learning outcomes', rows: (learningOutcomes || []).flatMap(o => Object.entries((o && o.outcomesByDay) || {}).filter(([d]) => d !== ALL_DAYS_KEY).flatMap(([d, rows]) => (rows || []).map(text => { const metaInfo = ((o.chaptersByDay || {})[d]) || {}; return { Grade: o.grade, Subject: o.subject, Day: d, Chapter: metaInfo.chapter || '', Pages: metaInfo.pages || '', Outcome: text }; }))) },
     { name: 'Unassigned', rows: unassignedFellows(roster, collaborations || []).map(f => ({ Name: f.name, Email: f.email, Missing: [collabForFellow(collaborations || [], f.id) ? null : 'collaboration', (f.accountabilityIds || []).length ? null : 'accountability partner'].filter(Boolean).join(' + ') })) },
   ]),
 };
@@ -1223,6 +1223,101 @@ const deleteDemo = () => {
   persistAssessmentAttempts(assessmentAttempts.filter(attempt => !attempt.id?.toString().startsWith('demo-')));
   persistAttendance(attendance.filter(entry => !entry.id?.toString().startsWith('demo-')));
   showToast('Demo data deleted');
+};
+
+// [DEV-ONLY] Practice-teaching demo: 50 Fellows grouped into collaborations with
+// derived S#/P# codes, accountability partners, a 12-day subject rotation and a
+// small learning-outcome library (with per-day chapter/pages). Everything is
+// prefixed `demo-practice-` so it can be removed in one pass. Only wired up when
+// import.meta.env.DEV is true, so it never ships to production.
+const chunk = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  // A trailing group of 1 folds into the previous one (a collab needs 2+).
+  if (out.length > 1 && out[out.length - 1].length === 1) out[out.length - 2] = out[out.length - 2].concat(out.pop());
+  return out;
+};
+const seedPracticeDemo = () => {
+  if (!window.confirm('Create 50 demo practice-teaching Fellows with collaborations, partners and rotations?')) return;
+  // Clear any previous practice demo first so re-running is safe.
+  const baseRoster = roster.filter(f => !String(f.id).startsWith('demo-practice-'));
+  const baseCollabs = (collaborations || []).filter(c => !String(c.id).startsWith('demo-practice-'));
+  const baseLos = (learningOutcomes || []).filter(o => !String(o.id).startsWith('demo-practice-'));
+
+  const schools = ['Dhaka Collegiate School', 'Motijheel High School', 'Uttara Model School', 'Chattogram Grammar School'];
+  const grades = ['Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 3', 'Grade 4', 'Grade 5'];
+  // 50 Fellows: first 25 secondary, last 25 primary (tracks align with collab band).
+  const people = Array.from({ length: 50 }, (_, i) => {
+    const track = i < 25 ? 'secondary' : 'primary';
+    return {
+      id: `demo-practice-fellow-${i + 1}`,
+      name: `DEMO Practice Fellow ${String(i + 1).padStart(2, '0')}`,
+      email: `demo.practice${i + 1}@teachforbangladesh.org`,
+      afaGroup: `DEMO AFA ${i % 3 + 1}`,
+      track,
+      grade: '',
+      placementCity: ['Dhaka', 'Chattogram', 'Rajshahi'][i % 3],
+      roomIds: [],
+    };
+  });
+
+  // Accountability: mutual groups (a triple at each end to show groups > 2, pairs
+  // in between) — everyone lists the others, so all 50 leave Unassigned.
+  const apIds = people.map(p => p.id);
+  // chunk() folds a trailing singleton into the previous group, so the tail is
+  // a triple and the head is an explicit triple: [3, 2×22, 3] covers all 50.
+  const apGroups50 = [apIds.slice(0, 3), ...chunk(apIds.slice(3), 2)];
+  const apLookup = {};
+  apGroups50.forEach(g => { (g || []).forEach(id => { apLookup[id] = g.filter(x => x !== id); }); });
+  people.forEach(p => { p.accountabilityIds = apLookup[p.id] || []; });
+
+  const buildCollabs = (pool, band) => chunk(pool, 3).map((group, gi) => {
+    const grade = grades[band === 'primary' ? 4 + (gi % 3) : gi % 4];
+    const rotation = {};
+    for (let d = 1; d <= 12; d++) {
+      const byFellow = {};
+      group.forEach((p, mi) => { byFellow[p.id] = PRACTICE_SUBJECTS[(mi + d) % PRACTICE_SUBJECTS.length]; });
+      rotation[String(d)] = byFellow;
+    }
+    return { id: `demo-practice-col-${band}-${gi + 1}`, code: '', band, grade, school: schools[gi % schools.length], days: 12, fellowIds: group.map(p => p.id), schools: {}, rotation };
+  });
+  // Derive S#/P# codes against the running list so numbers are sequential.
+  const running = [...baseCollabs];
+  const newCollabs = [
+    ...buildCollabs(people.slice(0, 25), 'secondary'),
+    ...buildCollabs(people.slice(25), 'primary'),
+  ].map(c => { const withCode = { ...c, code: nextCollabCode(running, c.band) }; running.push(withCode); return withCode; });
+
+  // Learning outcomes for every grade used, with per-day chapter/pages so the
+  // new Chapter + Pages feature is visible in the demo.
+  const gradesUsed = [...new Set(newCollabs.map(c => c.grade))];
+  const newLos = [];
+  gradesUsed.forEach((grade, gi) => {
+    PRACTICE_SUBJECTS.forEach((subject, si) => {
+      const outcomesByDay = {};
+      const chaptersByDay = {};
+      for (let d = 1; d <= 4; d++) {
+        outcomesByDay[String(d)] = [`${subject} outcome ${d}a for ${grade}`, `${subject} outcome ${d}b for ${grade}`];
+        chaptersByDay[String(d)] = { chapter: `Chapter ${gi + 1}.${si + 1}`, pages: `${(d - 1) * 4 + 1}–${d * 4}` };
+      }
+      newLos.push({
+        id: `demo-practice-lo-${grade.replace(/\s+/g, '-').toLowerCase()}-${subject.toLowerCase()}`,
+        grade, subject, outcomesByDay, chaptersByDay,
+      });
+    });
+  });
+
+  persistRoster([...baseRoster, ...people]);
+  persistCollaborations(running.map(normalizeCollab));
+  persistLearningOutcomes([...baseLos, ...newLos]);
+  showToast('Practice-teaching demo created: 50 Fellows, ' + newCollabs.length + ' collaborations');
+};
+const deletePracticeDemo = () => {
+  if (!window.confirm('Delete the 50-Fellow practice-teaching demo?')) return;
+  persistRoster(roster.filter(f => !String(f.id).startsWith('demo-practice-')));
+  persistCollaborations((collaborations || []).filter(c => !String(c.id).startsWith('demo-practice-')));
+  persistLearningOutcomes((learningOutcomes || []).filter(o => !String(o.id).startsWith('demo-practice-')));
+  showToast('Practice-teaching demo removed');
 };
 
 const filtered = useMemo(() => {
@@ -1286,7 +1381,7 @@ return (
 
           {tab === 'calendar' && (
             <>
-              {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} onCheckIn={recordFellowAttendance} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload) => persistDeviceRequests([...(deviceRequests || []), payload])} showToast={showToast} /></>}
+              {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} onCheckIn={recordFellowAttendance} roster={roster} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload) => persistDeviceRequests([...(deviceRequests || []), payload])} showToast={showToast} /></>}
               <CalendarView
                 sessions={calendarSessions} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
                 hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
@@ -1308,7 +1403,12 @@ return (
           )}
           {tab === 'practiceTeaching' && isFullAdmin && (
             <>
-              <PracticeTeachingPanel roster={roster} collaborations={collaborations} onChange={persistCollaborations} onRosterChange={persistRoster} showToast={showToast} />
+              <PracticeTeachingPanel
+                roster={roster} collaborations={collaborations}
+                onChange={persistCollaborations} onRosterChange={persistRoster} showToast={showToast}
+                onSeedDemo={import.meta.env.DEV ? seedPracticeDemo : undefined}
+                onDeleteDemo={import.meta.env.DEV ? deletePracticeDemo : undefined}
+              />
               <LearningOutcomesPanel learningOutcomes={learningOutcomes} onChange={persistLearningOutcomes} showToast={showToast} />
             </>
           )}
@@ -2453,7 +2553,7 @@ function SessionMarksPanel({ sessions, roster, manualSessionMarks, onSaveMarks, 
   );
 }
 
-function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn }) {
+function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn, roster }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 10000);
@@ -2480,7 +2580,9 @@ function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn }) {
     return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance opens at {session.start}</div>;
   };
   const card = (label, session) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, flex: 1, minWidth: 220 }}><div style={{ fontSize: 11.5, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>{label}</div>{session ? <><div style={{ fontWeight: 700, fontSize: 15 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{dateLabel(session.date)}{' \u00B7 '}{session.start}{'\u2013'}{session.end}{' \u00B7 '}{fmtDur(durationMin(session))}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(room => room.name + ' \u00B7 ' + (room.physicalLocation || room.meetingUrl || 'Location not set')).join(', ') || 'Location not assigned'}</div>{control(session)}</> : <div style={{ fontSize: 13, color: '#9DB09D' }}>No session</div>}</div>;
-  return <div style={{ marginBottom: 18 }}><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 10 }}>AFA group: <b>{auth.afaGroup || 'Not assigned'}</b></div><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>{card('Current session', current)}{card('Upcoming session', next)}</div></div>;
+  const me = fellowById(roster, auth.fellowId);
+  const partners = ((me && me.accountabilityIds) || []).map(id => fellowById(roster, id)).filter(Boolean);
+  return <div style={{ marginBottom: 18 }}><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 10 }}>AFA group: <b>{auth.afaGroup || 'Not assigned'}</b> &nbsp;·&nbsp; Accountability partner: <b>{partners.length ? partners.map(p => p.name).join(', ') : 'Not assigned'}</b></div><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>{card('Current session', current)}{card('Upcoming session', next)}</div></div>;
 }
 function LegacyFellowAssessments({ assessments, questions, attempts, auth, sessions, onAttemptsChange }) {
   const [activeAttempt, setActiveAttempt] = useState(null);
@@ -2733,6 +2835,64 @@ function unassignedFellows(roster, collaborations) {
   return (roster || []).filter(f => !isFellowAssigned(f, collaborations));
 }
 
+// Accountability is modelled as mutual groups: everyone in a group is a partner
+// of everyone else (A<->B for pairs, or a circle like G<->H<->I for three). A
+// Fellow belongs to at most one group, stored as `accountabilityIds` (this
+// Fellow's group-mates). Derive the groups from the roster; a Fellow who lists
+// partners forms a group with them, so even one-sided data still shows up.
+function accountabilityGroups(roster) {
+  const list = roster || [];
+  const live = new Set(list.map(f => String(f.id)));
+  const covered = new Set();
+  const groups = [];
+  list.forEach(f => {
+    const fid = String(f.id);
+    if (covered.has(fid)) return;
+    const mine = Array.from(new Set((f.accountabilityIds || []).map(String).filter(id => live.has(id) && id !== fid)));
+    if (!mine.length) { covered.add(fid); return; }
+    const members = [fid, ...mine];
+    members.forEach(id => covered.add(id));
+    groups.push(members);
+  });
+  return groups;
+}
+
+// True when this Fellow is in any accountability group. Gates the free pool
+// and the Add picker (a grouped Fellow is taken).
+function inAccountabilityGroup(roster, fellowId) {
+  const fid = String(fellowId);
+  return accountabilityGroups(roster).some(g => g.includes(fid));
+}
+
+// Make exactly `memberIds` a mutual accountability group: each member lists all
+// the others, and those same ids are stripped from everyone else, so a Fellow
+// can only ever be in one group. Pass a grown set to add, a shrunken set to
+// remove someone (they are freed automatically). Returns a new roster.
+function setAccountabilityGroup(people, memberIds) {
+  const members = Array.from(new Set((memberIds || []).map(String).filter(Boolean)));
+  const memberSet = new Set(members);
+  return (people || []).map(f => {
+    const fid = String(f.id);
+    if (memberSet.has(fid)) return { ...f, accountabilityIds: members.filter(id => id !== fid) };
+    const kept = (f.accountabilityIds || []).map(String).filter(id => !memberSet.has(id));
+    return kept.length === (f.accountabilityIds || []).length ? f : { ...f, accountabilityIds: kept };
+  });
+}
+
+// Free a whole accountability group: every member gets an empty list, and any
+// stray pointers at them are stripped from everyone else. Returns a new roster.
+function clearAccountabilityGroup(people, memberIds) {
+  const memberSet = new Set((memberIds || []).map(String));
+  return (people || []).map(f => {
+    if (memberSet.has(String(f.id))) {
+      const cur = f.accountabilityIds || [];
+      return cur.length ? { ...f, accountabilityIds: [] } : f;
+    }
+    const kept = (f.accountabilityIds || []).map(String).filter(id => !memberSet.has(id));
+    return kept.length === (f.accountabilityIds || []).length ? f : { ...f, accountabilityIds: kept };
+  });
+}
+
 // Learning outcomes are stored one record per grade + subject, with outcomes
 // keyed by day: { outcomesByDay: { '1': [...], '2': [...] } }. A legacy record
 // that used a flat `outcomes` array is treated as applying to every day, so
@@ -2746,7 +2906,32 @@ function normalizeOutcomeRecord(raw) {
   };
   Object.entries(raw.outcomesByDay || {}).forEach(([day, rows]) => write(day, rows));
   write(ALL_DAYS_KEY, raw.outcomes);
-  return { id: raw.id || 'lo-' + Date.now(), grade: raw.grade || '', subject: raw.subject || '', outcomesByDay: byDay };
+  // Optional per-day chapter/topic + page reference. Purely additive: records
+  // saved before this field carry no chaptersByDay and read as blanks, so
+  // nothing already typed is lost. A day with neither value is dropped.
+  const chapters = {};
+  Object.entries(raw.chaptersByDay || {}).forEach(([day, meta]) => {
+    const chapter = String((meta || {}).chapter || '').trim();
+    const pages = String((meta || {}).pages || '').trim();
+    if (chapter || pages) chapters[String(day)] = { chapter, pages };
+  });
+  return {
+    id: raw.id || 'lo-' + Date.now(), grade: raw.grade || '', subject: raw.subject || '',
+    outcomesByDay: byDay,
+    ...(Object.keys(chapters).length ? { chaptersByDay: chapters } : {}),
+  };
+}
+
+// Optional chapter/topic + page reference for one grade + subject on one day.
+// Absent or blank meta reads as empty strings so callers can render it
+// unconditionally without null checks.
+function outcomeMetaForDay(list, grade, subject, day) {
+  const g = String(grade || '').trim().toLowerCase();
+  if (!g || !subject) return { chapter: '', pages: '' };
+  const rec = (list || []).find(o => String(o.grade || '').trim().toLowerCase() === g && o.subject === subject);
+  if (!rec) return { chapter: '', pages: '' };
+  const meta = (rec.chaptersByDay || {})[String(day)] || {};
+  return { chapter: String(meta.chapter || '').trim(), pages: String(meta.pages || '').trim() };
 }
 
 // Outcomes for one grade + subject on one day (falls back to the all-days list
@@ -2922,12 +3107,21 @@ function AcademyOverviewPanel({ overview, onChange, canEdit, pillarTags }) {
   );
 }
 
-function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChange, showToast }) {
+function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChange, showToast, onSeedDemo, onDeleteDemo }) {
   const list = collaborations || [];
   const people = roster || [];
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [newGroupSel, setNewGroupSel] = useState([]);
   const unassigned = unassignedFellows(people, list);
+  // Accountability groups (derived from the roster) plus the free pool and the
+  // pool-filtered new-group selection for the group builder below.
+  const apGroups = accountabilityGroups(people);
+  const apGrouped = new Set(apGroups.flat());
+  const apPool = people.filter(f => !apGrouped.has(String(f.id)));
+  const apSel = newGroupSel.filter(id => apPool.some(f => String(f.id) === String(id)));
+  // [DEV-ONLY] demo controls only render when the host passes the handlers
+  // (import.meta.env.DEV), so the panel is unchanged in production and tests.
 
   const startNew = band => {
     const base = { id: 'col-' + Date.now(), code: nextCollabCode(list, band), band, grade: '', school: '', days: PRACTICE_DAYS_DEFAULT, fellowIds: [], schools: {}, rotation: {} };
@@ -2976,6 +3170,8 @@ function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChang
       <div style={{ display: 'flex', gap: 8, marginBottom: 18, flexWrap: 'wrap' }}>
         <button onClick={() => startNew('secondary')} className={btnPrimary}><Plus size={14} /> New secondary collab</button>
         <button onClick={() => startNew('primary')} className={btnSecondary}><Plus size={14} /> New primary collab</button>
+        {onSeedDemo && <button onClick={onSeedDemo} className={btnGhost}>Seed 50 demo Fellows</button>}
+        {onDeleteDemo && <button onClick={onDeleteDemo} className={btnGhost + ' text-wa-warn'}>Remove demo Fellows</button>}
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Collaborations ({list.length})</div>
@@ -3000,31 +3196,54 @@ function PracticeTeachingPanel({ roster, collaborations, onChange, onRosterChang
         })}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Accountability partners</div>
-      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Each Fellow gets one or two accountability partners. A Fellow only leaves the unassigned list below once they have both a collab and at least one partner.</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 640, marginBottom: 26 }}>
-        {people.map(f => {
-          const ids = (f.accountabilityIds || []).map(String);
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Accountability groups ({apGroups.length})</div>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Everyone in a group is a partner of everyone else in it (A&#8596;B for a pair, or a circle like G&#8596;H&#8596;I for three). A Fellow can be in only one group. A Fellow only leaves the unassigned list below once they have both a collab and a group.</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 640, marginBottom: 14 }}>
+        {apGroups.map((g, gi) => {
+          const members = g.map(id => fellowById(people, id)).filter(Boolean);
           return (
-            <div key={f.id} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 8 }}>
-              <span style={{ flex: '1 1 150px', fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-              {[0, 1].map(slot => (
-                <select key={slot} aria-label={'Accountability partner ' + (slot + 1) + ' for ' + f.name} className={inputStyle} style={{ flex: '1 1 150px', fontSize: 12 }}
-                  value={ids[slot] || ''}
-                  onChange={e => {
-                    const next = [...ids];
-                    if (e.target.value) next[slot] = e.target.value; else next.splice(slot, 1);
-                    const cleaned = next.filter((id, i) => id && next.indexOf(id) === i && id !== String(f.id)).slice(0, 2);
-                    onRosterChange(people.map(p => (String(p.id) === String(f.id) ? { ...p, accountabilityIds: cleaned } : p)));
-                  }}>
-                  <option value="">{slot === 0 ? 'Choose partner…' : 'Add another…'}</option>
-                  {people.filter(o => String(o.id) !== String(f.id)).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                </select>
-              ))}
+            <div key={members.map(m => String(m.id)).sort().join('|')} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 10 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: members.length ? 10 : 0 }}>
+                {members.map(m => (
+                  <span key={m.id} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12.5, fontWeight: 600, background: '#1F4A3C', borderRadius: 14, padding: '4px 6px 4px 12px' }}>
+                    {m.name}
+                    <button type="button" aria-label={'Remove ' + m.name + ' from the group'} title="Remove from group"
+                      onClick={() => onRosterChange(setAccountabilityGroup(people, g.filter(id => String(id) !== String(m.id))))}
+                      style={{ background: 'none', border: 'none', color: '#9DB09D', cursor: 'pointer', display: 'inline-flex', padding: 2 }}><X size={13} /></button>
+                  </span>
+                ))}
+                <button type="button" onClick={() => { if (window.confirm('Remove this accountability group (' + members.map(m => m.name).join(', ') + ')? They go back to the free pool.')) onRosterChange(clearAccountabilityGroup(people, g)); }} style={{ ...linkBtn, color: '#D0A023' }}>Remove group</button>
+              </div>
+              {members.length > 1 && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <select aria-label={'Add a Fellow to accountability group ' + (gi + 1)} className={inputStyle} style={{ flex: '1 1 200px', fontSize: 12 }} value=""
+                    onChange={e => { if (e.target.value) onRosterChange(setAccountabilityGroup(people, [...g, e.target.value])); }}>
+                    <option value="">Add another Fellow to this group…</option>
+                    {apPool.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                  <span style={{ fontSize: 11.5, color: '#9DB09D' }}>mutual with all {members.length} members</span>
+                </div>
+              )}
             </div>
           );
         })}
-        {people.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No Fellows on the roster yet.</div>}
+        {apGroups.length === 0 && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No accountability groups yet — build one below.</div>}
+      </div>
+
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>New accountability group</div>
+      <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Tick two or more Fellows who are not in a group, then make them mutual partners.</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, maxWidth: 640 }}>
+        {apPool.map(f => {
+          const on = apSel.includes(String(f.id));
+          return <button key={f.id} type="button" onClick={() => setNewGroupSel(on ? newGroupSel.filter(id => String(id) !== String(f.id)) : [...newGroupSel, String(f.id)])}
+            className={on ? btnPrimary : btnSecondary} style={{ fontSize: 12, padding: '5px 11px', opacity: on ? 1 : 0.9 }}>{f.name}</button>;
+        })}
+        {apPool.length === 0 && <span style={{ fontSize: 12.5, color: '#9DB09D' }}>{people.length ? 'Everyone is already in a group.' : 'No Fellows on the roster yet.'}</span>}
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 26 }}>
+        <button type="button" disabled={apSel.length < 2} onClick={() => { onRosterChange(setAccountabilityGroup(people, apSel)); setNewGroupSel([]); showToast('Accountability group created (' + apSel.length + ' Fellows)'); }}
+          className={btnPrimary} style={{ opacity: apSel.length < 2 ? 0.5 : 1 }}>Make them mutual partners{apSel.length ? ' (' + apSel.length + ')' : ''}</button>
+        {apSel.length > 0 && <button type="button" onClick={() => setNewGroupSel([])} style={linkBtn}>Clear selection</button>}
       </div>
 
       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Unassigned Fellows ({unassigned.length})</div>
@@ -3088,7 +3307,9 @@ function CollabEditor({ draft, setDraft, people, list, onCancel, onSave }) {
   const days = Array.from({ length: draft.days }, (_, i) => i + 1);
   const tally = rotationTallies(draft);
   const members = draft.fellowIds.map(id => fellowById(people, id)).filter(Boolean);
-  const taken = id => list.some(c => String(c.id) !== String(draft.id) && (c.fellowIds || []).some(x => String(x) === String(id)));
+  // The other collab (if any) already holding this Fellow, so a taken member
+  // shows which collaboration blocks them ("in S1").
+  const holder = id => list.find(c => String(c.id) !== String(draft.id) && (c.fellowIds || []).some(x => String(x) === String(id)));
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -3110,11 +3331,12 @@ function CollabEditor({ draft, setDraft, people, list, onCancel, onSave }) {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {people.map(f => {
           const on = draft.fellowIds.includes(String(f.id));
-          const locked = !on && taken(f.id);
+          const blocker = !on ? holder(f.id) : null;
+          const locked = !!blocker;
           return <button key={f.id} type="button" disabled={locked} onClick={() => toggleFellow(f.id)}
             className={on ? btnPrimary : btnSecondary}
             style={{ fontSize: 12, padding: '5px 11px', opacity: locked ? 0.45 : 1 }}
-            title={locked ? 'Already in another collaboration' : ''}>{f.name}</button>;
+            title={locked ? 'Already in another collaboration' : ''}>{f.name}{locked && blocker ? ' (in ' + blocker.code + ')' : ''}</button>;
         })}
         {people.length === 0 && <span style={{ fontSize: 12.5, color: '#9DB09D' }}>No Fellows on the roster yet.</span>}
       </div>
@@ -3201,6 +3423,8 @@ function LearningOutcomesPanel({ learningOutcomes, onChange, showToast }) {
   const [days, setDays] = useState(PRACTICE_DAYS_DEFAULT);
   // One textarea per day: { '1': 'outcome\noutcome', ... }
   const [rows, setRows] = useState({});
+  // Optional per-day chapter/topic + page reference: { '1': { chapter, pages } }
+  const [meta, setMeta] = useState({});
   const key = g => (g || '').trim().toLowerCase();
   const existing = list.find(o => key(o.grade) === key(grade) && o.subject === subject);
   const gradeOptions = [...new Set([...PRACTICE_GRADES, ...list.map(o => o.grade)])];
@@ -3212,19 +3436,33 @@ function LearningOutcomesPanel({ learningOutcomes, onChange, showToast }) {
     // A legacy flat list lands in the day-1 box rather than silently vanishing.
     if (!Object.keys(next).length && hit && (hit.outcomes || []).length) next['1'] = hit.outcomes.join('\n');
     setRows(next);
+    // Chapter/pages meta is optional: absent on older records, so blanks load.
+    const hitMeta = {};
+    Object.entries((hit && hit.chaptersByDay) || {}).forEach(([d, v]) => {
+      hitMeta[d] = { chapter: String((v || {}).chapter || ''), pages: String((v || {}).pages || '') };
+    });
+    setMeta(hitMeta);
   };
   const setDay = (day, value) => setRows(r => ({ ...r, [String(day)]: value }));
+  const setDayMeta = (day, field, value) => setMeta(m => ({
+    ...m, [String(day)]: { chapter: '', pages: '', ...(m[String(day)] || {}), [field]: value },
+  }));
   const dayNumbers = Array.from({ length: days }, (_, i) => String(i + 1));
   const filled = dayNumbers.filter(d => (rows[d] || '').trim()).length;
   const save = () => {
     if (!grade.trim()) { showToast('Pick a grade'); return; }
     const outcomesByDay = {};
+    const chaptersByDay = {};
     dayNumbers.forEach(d => {
       const clean = (rows[d] || '').split('\n').map(x => x.trim()).filter(Boolean);
       if (clean.length) outcomesByDay[d] = clean;
+      const chapter = String((meta[d] || {}).chapter || '').trim();
+      const pages = String((meta[d] || {}).pages || '').trim();
+      if (chapter || pages) chaptersByDay[d] = { chapter, pages };
     });
-    if (!Object.keys(outcomesByDay).length) { showToast('Add at least one outcome'); return; }
-    const entry = { id: existing ? existing.id : 'lo-' + Date.now(), grade: grade.trim(), subject, outcomesByDay };
+    if (!Object.keys(outcomesByDay).length && !Object.keys(chaptersByDay).length) { showToast('Add at least one outcome'); return; }
+    const entry = { id: existing ? existing.id : 'lo-' + Date.now(), grade: grade.trim(), subject, outcomesByDay,
+      ...(Object.keys(chaptersByDay).length ? { chaptersByDay } : {}) };
     const next = existing ? list.map(o => (o.id === existing.id ? entry : o)) : [...list, entry];
     onChange(next);
     showToast(entry.grade + ' · ' + subject + ' saved (' + Object.keys(outcomesByDay).length + ' of ' + days + ' days set)');
@@ -3259,11 +3497,17 @@ function LearningOutcomesPanel({ learningOutcomes, onChange, showToast }) {
           <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Outcomes set for {filled} of {days} days.</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
             {dayNumbers.map(d => (
-              <div key={d} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <div key={d} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                 <span style={{ flex: '0 0 54px', fontSize: 12, fontWeight: 700, paddingTop: 9, color: (rows[d] || '').trim() ? '#9FD9BE' : '#9DB09D' }}>Day {d}</span>
-                <textarea rows={2} className={inputStyle + ' resize-y'} style={{ flex: 1, minWidth: 0 }}
+                <textarea rows={2} className={inputStyle + ' resize-y'} style={{ flex: '1 1 260px', minWidth: 0 }}
                   value={rows[d] || ''} onChange={e => setDay(d, e.target.value)}
                   placeholder="One learning outcome per line" />
+                <div style={{ flex: '0 1 auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input className={inputStyle} style={{ width: 190, fontSize: 12 }} value={(meta[d] || {}).chapter || ''}
+                    onChange={e => setDayMeta(d, 'chapter', e.target.value)} placeholder="Chapter / topic (optional)" aria-label={'Chapter or topic for day ' + d} />
+                  <input className={inputStyle} style={{ width: 96, fontSize: 12 }} value={(meta[d] || {}).pages || ''}
+                    onChange={e => setDayMeta(d, 'pages', e.target.value)} placeholder="Pages" aria-label={'Page number for day ' + d} />
+                </div>
               </div>
             ))}
           </div>
@@ -3281,9 +3525,23 @@ function LearningOutcomesPanel({ learningOutcomes, onChange, showToast }) {
               <button onClick={() => { setGrade(o.grade); setSubject(o.subject); loadRecord(o.grade, o.subject); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ ...linkBtn, marginLeft: 'auto' }}>Edit</button>
               <button onClick={() => { if (window.confirm('Delete ' + o.grade + ' · ' + o.subject + '?')) onChange(list.filter(x => x.id !== o.id)); }} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button>
             </div>
-            <div style={{ fontSize: 12.5, color: '#D5E0D5', lineHeight: 1.5 }}>
-              {Object.keys(o.outcomesByDay || {}).filter(d => d !== ALL_DAYS_KEY).sort((a, b) => Number(a) - Number(b)).slice(0, 3).map(d => 'Day ' + d + ': ' + ((o.outcomesByDay[d] || [])[0] || '')).join(' · ')}
-              {Object.keys(o.outcomesByDay || {}).filter(d => d !== ALL_DAYS_KEY).length > 3 ? ' …' : ''}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {Object.keys(o.outcomesByDay || {}).filter(d => d !== ALL_DAYS_KEY).sort((a, b) => Number(a) - Number(b)).map(d => {
+                const metaInfo = ((o.chaptersByDay || {})[d]) || {};
+                const ref = metaInfo.chapter || metaInfo.pages
+                  ? ' [' + [metaInfo.chapter, metaInfo.pages].filter(Boolean).join(', ') + ']'
+                  : '';
+                return (
+                  <div key={d} style={{ fontSize: 12.5, color: '#D5E0D5', lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 700 }}>Day {d}{ref}:</span>
+                    {(o.outcomesByDay[d] || []).map((t, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 6, paddingLeft: 8 }}>
+                        <span style={{ color: '#D65641', fontWeight: 700, flexShrink: 0 }}>{i + 1}.</span><span>{t}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -3324,11 +3582,13 @@ function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth })
   const mySchool = schoolForMember(collab, auth.fellowId);
   // Each scheduled day becomes one card: day + subject + that day's outcome.
   // A Fellow only ever sees outcomes for the subject they teach that day.
+  // The optional chapter/topic + page reference for that day travels too.
   const mySchedule = days
     .map(d => {
       const subject = (collab.rotation[String(d)] || {})[String(auth.fellowId)];
       if (!subject) return null;
-      return { day: d, subject, outcomes: outcomesForDay(learningOutcomes, collab.grade, subject, d) };
+      const chapterMeta = outcomeMetaForDay(learningOutcomes, collab.grade, subject, d);
+      return { day: d, subject, outcomes: outcomesForDay(learningOutcomes, collab.grade, subject, d), chapter: chapterMeta.chapter, pages: chapterMeta.pages };
     })
     .filter(Boolean);
   const anyOutcomes = mySchedule.some(row => row.outcomes.length > 0);
@@ -3367,9 +3627,14 @@ function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth })
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {mySchedule.map(row => (
             <div key={row.day} style={{ border: '1px solid #2A5C4B', borderRadius: 6, padding: '10px 12px', background: '#00402E' }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: row.outcomes.length ? 6 : 0 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: row.outcomes.length ? 6 : 0, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: '#9DB09D', fontWeight: 700 }}>Day {row.day}</span>
                 <span style={{ fontSize: 13, fontWeight: 700 }}>{row.subject}</span>
+                {(row.chapter || row.pages) && (
+                  <span style={{ fontSize: 11.5, color: '#9FD9BE', fontWeight: 600 }}>
+                    {[row.chapter, row.pages].filter(Boolean).join(' · ')}
+                  </span>
+                )}
               </div>
               {row.outcomes.length > 0 ? row.outcomes.map((text, idx) => (
                 <div key={idx} style={{ display: 'flex', gap: 8, fontSize: 13, marginBottom: 4, lineHeight: 1.5 }}>
@@ -5104,4 +5369,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, outcomeMetaForDay, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };

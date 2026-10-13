@@ -1,0 +1,116 @@
+
+> wa14-curriculum-calendar@1.0.0 test:render
+> node scripts/render-test.mjs
+
+[2026-10-13T09:27:23.512Z]  @firebase/analytics: Analytics: Firebase Analytics is not supported in this environment. Wrap initialization of analytics in analytics.isSupported() to prevent initialization in unsupported environments. Details: (1) Cookies are not available. (analytics/invalid-analytics-context).
+[2026-10-13T09:27:23.513Z]  @firebase/analytics: Analytics: IndexedDB unavailable or restricted in this environment. Wrap initialization of analytics in analytics.isSupported() to prevent initialization in unsupported environments. Details: IndexedDB is not available in this environment. (analytics/indexeddb-unavailable).
+OK    CalendarView (28116 chars)
+OK    CalendarView-fellow (27284 chars)
+OK    CalendarView-overlap (28631 chars)
+OK    PlacementPanel (2719 chars)
+OK    SessionsTable (12292 chars)
+OK    SessionsTable-search (3074 chars)
+OK    AssignmentPanel (1732 chars)
+OK    RoomsPanel (2466 chars)
+OK    PillarsPanel (776 chars)
+OK    SessionTypesPanel (798 chars)
+OK    WorkModesPanel (824 chars)
+OK    TimeSummary (7282 chars)
+OK    ExpandedAnalyticsPanel (2663 chars)
+OK    FellowAttendanceBreakdown (1363 chars)
+OK    ExpandedAnalyticsPanel-attendance (4959 chars)
+OK    ParagraphReviewPanel (758 chars)
+OK    ViewPanel (4455 chars)
+OK    RosterPanel (4947 chars)
+OK    PlannerPanel (6532 chars)
+OK    RolesPanel (4701 chars)
+OK    RequestsPanel (1307 chars)
+OK    LocalAssessmentsPanel (632 chars)
+OK    EditPanel-new (6378 chars)
+OK    EditPanel-legacy (12044 chars)
+OK    EditPanel-nostaff (11569 chars)
+OK    EditPanel-readonly (12174 chars)
+OK    Sidebar (20172 chars)
+OK    Sidebar-fellow (5458 chars)
+OK    Sidebar-derived-fellow (5457 chars)
+OK    StaffCalendar (26224 chars)
+OK    StaffTaskEditor-new (3645 chars)
+OK    StaffTaskEditor-edit (3771 chars)
+OK    TopBar (1751 chars)
+OK    FilterBar (1518 chars)
+OK    MyAttendancePanel (3267 chars)
+OK    AttendanceRecordsPanel (8521 chars)
+OK    AttendanceRecordsPanel-afa (7420 chars)
+OK    SessionMarksPanel (7116 chars)
+OK    SessionMarksPanel-empty (7085 chars)
+OK    FellowGradesPanel-released (692 chars)
+OK    FellowOverview (1117 chars)
+OK    FellowAnalyticsPanel (5634 chars)
+OK    FellowAnalyticsPanel-marks (5634 chars)
+OK    AcademyOverviewPanel (964 chars)
+OK    AcademyOverviewPanel-fellow (716 chars)
+OK    AcademyOverviewPanel-edit (952 chars)
+OK    AcademyOverviewPanel-goals (2201 chars)
+OK    AcademyOverviewPanel-legacy (1669 chars)
+OK    PracticeTeachingPanel-empty (4298 chars)
+OK    PracticeTeachingPanel-assigned (5459 chars)
+OK    CollabEditor (8376 chars)
+OK    LearningOutcomesPanel (4216 chars)
+OK    FellowPracticePanel (4714 chars)
+OK    FellowPracticePanel-unassigned (934 chars)
+OK    HistoricalAcademiesPanel-empty (850 chars)
+OK    ReuseSessionsModal (2036 chars)
+OK    IncidentLogPanel (1588 chars)
+OK    DeviceRequestPanel (2685 chars)
+OK    SessionAssessmentBreakdown (1521 chars)
+OK    ParagraphReviewPanel-pending (1995 chars)
+OK    ParagraphReviewPanel-reviewed-hidden (797 chars)
+OK    ParagraphReviewPanel-reviewed-all (797 chars)
+OK    CityCalendarView-staff (12079 chars)
+OK    CityCalendarView-fellow (8047 chars)
+OK    CityFellowHome (1974 chars)
+OK    CitySpacesReport (27783 chars)
+OK    CitySessionsTable (8887 chars)
+OK    CityStaffCalendar (7179 chars)
+OK    CityTypesModes (6222 chars)
+OK    AdminPanel-full (7252 chars)
+OK    AdminPanel-afa (3521 chars)
+OK    CityItemEditorFull (4485 chars)
+OK    StaffTaskEditor (3157 chars)
+OK    SystemGate (784 chars)
+OK    AppShell-injected-auth (983 chars)
+OK    goals hidden from fellows, grouped for staff
+OK    practice teaching panel + fellow gating
+OK    collab codes + free rotation + unassigned rule + per-day outcomes + chapter/pages + cross-school
+OK    normalizeGoals legacy + serial ordering
+OK    computeAttemptScore 5/6 = 83%
+OK    attendancePhase window boundaries
+OK    grade/device helpers
+OK    plan: Main Room + AFA gating + collapsible grades + assign-flow removal
+OK    normalizeHashTab routing rules
+OK    fellow gating: systemAccessFor + deriveRoleFlags + sidebar
+OK    weekForDate 2026-10-18 → 0
+OK    weekForDate 2026-10-24 → 0
+OK    weekForDate 2026-10-25 → 1
+OK    weekForDate 2026-10-31 → 1
+OK    weekForDate 2026-11-01 → 2
+OK    weekForDate 2026-11-07 → 2
+OK    weekForDate 2026-11-08 → 3
+OK    fellow week visibility: date-derived week filters stale sessions
+OK    overlap layout + type/mode colors + fellow visibility
+OK    callSignFromName + getRoleLabel
+OK    cohortRole year boundaries
+OK    cohortAccessEndsAt + cohortAccessRevoked (Dec-31 rule)
+OK    cityItemsForCohort targeting
+OK    citySpaceCounts type×mode per cohort/month/YTD
+OK    cityItemsForFellow (cohort + visibility + hidden months)
+OK    systemsForStaff (role map + explicit systems)
+OK    canOpenAdminPanel (AFA/Coach/full/fellows/superadmin)
+OK    City access levels (calendar/fellows editing rights)
+OK    Per-system access (City access vs WA access)
+OK    WA AFA auto-cohort (next year) + isWinterAcademyAfa
+OK    cityUpcomingBuckets 24h/week/month
+OK    cityUpcomingBuckets respects hidden months
+OK    cohortAccessRevoked ( alumni blocked, current/future OK )
+OK    session assessment marks (admin + fellow + ViewPanel)
+ALL PANELS RENDER OK

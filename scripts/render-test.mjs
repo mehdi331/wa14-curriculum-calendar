@@ -65,6 +65,8 @@ const ptChecks = [
   ['fellow sees partner name', assignedHtml.includes('Fellow Two')],
   ['fellow sees grade', assignedHtml.includes('Grade 9')],
   ['fellow sees own day-1 outcome', assignedHtml.includes('SECRET_BANGLA_DAY1')],
+  ['fellow sees day-1 chapter + pages', assignedHtml.includes('Chapter 7 · Algebra') && assignedHtml.includes('12-15')],
+  ['unassigned fellow sees NO chapter', !unassignedHtml.includes('Chapter 7 · Algebra')],
   ['fellow sees distinct day-2 outcome', assignedHtml.includes('SECRET_BANGLA_DAY2')],
   ['fellow does not see another subject same-day outcome', !assignedHtml.includes('SECRET_ENGLISH_DAY1')],
   ['fellow does not see another grade\'s outcomes', !assignedHtml.includes('OTHER_GRADE_OUTCOME')],
@@ -76,13 +78,37 @@ const badPt = ptChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (badPt.length === 0) console.log('OK    practice teaching panel + fellow gating');
 else { console.log('FAIL  practice teaching: ' + badPt.join('; ')); failed++; }
 
+// Saved-list preview shows every outcome of every day (regression: used to
+// show only the first outcome and only the first 3 days).
+const loMultiHtml = renderHtml('LearningOutcomesPanel-multi');
+const loPrevChecks = [
+  ['all day-1 outcomes visible', loMultiHtml.includes('MULTI_ONE_A') && loMultiHtml.includes('MULTI_ONE_B')],
+  ['days past the old cut visible', loMultiHtml.includes('MULTI_TWO') && loMultiHtml.includes('MULTI_THREE') && loMultiHtml.includes('MULTI_FOUR')],
+  ['chapter ref visible', loMultiHtml.includes('Ch 1')],
+];
+const badLoPrev = loPrevChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (badLoPrev.length === 0) console.log('OK    outcomes preview shows all outcomes of all days');
+else { console.log('FAIL  outcomes preview: ' + badLoPrev.join('; ')); failed++; }
+
+// Fellow home: accountability partner beside the AFA group; without a roster the
+// line still reads "Not assigned" (backward compatible).
+const fellowHomePartner = renderHtml('FellowOverview-partner');
+const fellowHomeBare = renderHtml('FellowOverview');
+const foChecks = [
+  ['partner beside AFA group', fellowHomePartner.includes('Accountability partner:') && fellowHomePartner.includes('Fellow Two')],
+  ['no roster still Not assigned', fellowHomeBare.includes('Accountability partner:') && fellowHomeBare.includes('Not assigned')],
+];
+const badFo = foChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (badFo.length === 0) console.log('OK    fellow home shows accountability partner');
+else { console.log('FAIL  fellow home partner: ' + badFo.join('; ')); failed++; }
+
 // Score math check: paragraph review (3/4) + correct single answer (2/2) = 5/6
 const mod2 = await vite.ssrLoadModule('/src/App.jsx');
 
 // Practice teaching helpers: S/P code derivation, free-form rotation tallies,
 // the unassigned rule (needs collab AND accountability) and per-day outcome gating.
 try {
-  const { normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, normalizeOutcomeRecord, outcomesForDay, isFellowAssigned, unassignedFellows, learningOutcomesFor } = mod2.__panels;
+  const { normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, normalizeOutcomeRecord, outcomesForDay, isFellowAssigned, unassignedFellows, learningOutcomesFor, outcomeMetaForDay, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup } = mod2.__panels;
   // Deliberately lopsided rotation still counts as-is: no fixed 4/4/4 gate.
   const rot = {};
   for (let day = 1; day <= 7; day++) rot[String(day)] = { a: 'Bangla', b: 'English' };
@@ -116,7 +142,19 @@ try {
     && JSON.stringify(outcomesForDay(loLib, 'Grade 5', 'Bangla', 1)) === '["other"]';
   const legacyNorm = normalizeOutcomeRecord({ grade: 'Grade 9', subject: 'Bangla', outcomes: ['flat'] });
   const legacyOk = legacyNorm.outcomesByDay['*']
-    && JSON.stringify(outcomesForDay([legacyNorm], 'Grade 9', 'Bangla', 4)) === '["flat"]';
+    && JSON.stringify(outcomesForDay([legacyNorm], 'Grade 9', 'Bangla', 4)) === '["flat"]'
+    && !legacyNorm.chaptersByDay;
+  // Optional per-day chapter + pages: present when set, blank strings when not,
+  // and absent/legacy records read back as empty (purely additive field).
+  const metaLib = [
+    { grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['x'] }, chaptersByDay: { 1: { chapter: 'Chapter 7', pages: '12-15' } } },
+    { grade: 'Grade 9', subject: 'English', outcomesByDay: { 1: ['y'] } },
+  ];
+  const metaOk = JSON.stringify(outcomeMetaForDay(metaLib, 'Grade 9', 'Bangla', 1)) === JSON.stringify({ chapter: 'Chapter 7', pages: '12-15' })
+    && JSON.stringify(outcomeMetaForDay(metaLib, 'Grade 9', 'Bangla', 2)) === JSON.stringify({ chapter: '', pages: '' })
+    && JSON.stringify(outcomeMetaForDay(metaLib, 'Grade 9', 'English', 1)) === JSON.stringify({ chapter: '', pages: '' })
+    && JSON.stringify(outcomeMetaForDay([], 'Grade 9', 'Bangla', 1)) === JSON.stringify({ chapter: '', pages: '' })
+    && normalizeOutcomeRecord({ grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['x'] }, chaptersByDay: { 1: { chapter: '', pages: '' } } }).chaptersByDay === undefined;
   const norm = normalizeCollab({ code: 'S3', band: 'primary', fellowIds: [1, 2], rotation: { 1: { 1: 'Bangla', 9: 'Math' }, 2: { 1: 'Paint' } }, days: 0 });
   const normOk = norm.band === 'primary' && JSON.stringify(norm.fellowIds) === '["1","2"]' && !norm.rotation[2] && norm.days === 12;
   // Cross-school collabs: per-member schools override the group school.
@@ -127,9 +165,43 @@ try {
     && schoolForMember(crossCollab, 'm3') === 'Group School'
     && schoolForMember({ school: 'Only School' }, 'm1') === 'Only School'
     && schoolForMember({}, 'm1') === '';
-  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk && schoolOk)
-    console.log('OK    collab codes + free rotation + unassigned rule + per-day outcomes + cross-school');
-  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk, schoolOk })); failed++; }
+  // Mutual accountability groups: pairs and a triple derive as units, a Fellow
+  // is in at most one group, growing a group makes everyone mutual, shrinking
+  // frees the removed Fellow, a grouped Fellow is stripped from their old
+  // group when set elsewhere, and clearing frees the whole group.
+  const grpRoster = [
+    { id: 'a', name: 'A', accountabilityIds: ['b'] },
+    { id: 'b', name: 'B', accountabilityIds: ['a'] },
+    { id: 'c', name: 'C', accountabilityIds: [] },
+    { id: 'g', name: 'G', accountabilityIds: ['h', 'i'] },
+    { id: 'h', name: 'H', accountabilityIds: ['g', 'i'] },
+    { id: 'i', name: 'I', accountabilityIds: ['g', 'h'] },
+    { id: 'x', name: 'X', accountabilityIds: [] },
+  ];
+  const sortIds = arr => JSON.stringify((arr || []).map(g0 => g0.slice().sort()).sort());
+  const deriveOk = sortIds(accountabilityGroups(grpRoster)) === sortIds([['a', 'b'], ['g', 'h', 'i']]);
+  const inOk = inAccountabilityGroup(grpRoster, 'a') === true
+    && inAccountabilityGroup(grpRoster, 'g') === true
+    && inAccountabilityGroup(grpRoster, 'c') === false
+    && inAccountabilityGroup(grpRoster, 'zzz') === false;
+  const grown = setAccountabilityGroup(grpRoster, ['a', 'b', 'c']);
+  const growOk = JSON.stringify(grown.find(f => f.id === 'a').accountabilityIds) === '["b","c"]'
+    && JSON.stringify(grown.find(f => f.id === 'c').accountabilityIds) === '["a","b"]';
+  const shrunk = setAccountabilityGroup(grpRoster, ['b']);
+  const shrinkOk = shrunk.find(f => f.id === 'a').accountabilityIds.length === 0
+    && shrunk.find(f => f.id === 'b').accountabilityIds.length === 0;
+  const moved = setAccountabilityGroup(grpRoster, ['g', 'h', 'i', 'a']);
+  const moveOk = moved.find(f => f.id === 'b').accountabilityIds.length === 0
+    && JSON.stringify(moved.find(f => f.id === 'a').accountabilityIds) === '["g","h","i"]';
+  const groupCleared = clearAccountabilityGroup(grpRoster, ['g', 'h', 'i']);
+  const clearOk = ['g', 'h', 'i'].every(id => groupCleared.find(f => f.id === id).accountabilityIds.length === 0)
+    && groupCleared.find(f => f.id === 'a').accountabilityIds.length === 1;
+  const solo = setAccountabilityGroup(grpRoster, ['c']);
+  const soloOk = solo.find(f => f.id === 'c').accountabilityIds.length === 0;
+  const exclOk = deriveOk && inOk && growOk && shrinkOk && moveOk && clearOk && soloOk;
+  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk && schoolOk && metaOk && exclOk)
+    console.log('OK    collab codes + free rotation + unassigned rule + per-day outcomes + chapter/pages + cross-school + accountability groups');
+  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk, schoolOk, metaOk, exclOk, deriveOk, inOk, growOk, shrinkOk, moveOk, clearOk, soloOk })); failed++; }
 } catch (err) { console.log('FAIL  practice helpers: ' + err.message); failed++; }
 // Goal records: legacy strings convert, serial ordering is honoured, blanks dropped.
 try {
