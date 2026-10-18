@@ -63,11 +63,13 @@ export const storage = {
     await deleteDoc(doc(db, COLLECTION, key));
     return { key, deleted: true };
   },
-  subscribe(key, callback) {
+  subscribe(key, callback, onError) {
     return onSnapshot(doc(db, COLLECTION, key), (snap) => {
       try { callback(snap.exists() ? { key, value: snap.data().value } : null); }
       catch (error) { console.error('subscribe callback failed', key, error); }
-    }, (error) => { console.error('subscribe failed', key, error); });
+    }, (error) => {
+      console.error('subscribe failed', key, error);
+      if (onError) onError(error);
+    });
   },
 };
-

@@ -2,7 +2,7 @@
 // collections through the repo's Firestore-backed storage adapter. The sandbox
 // passes its own store object instead (same shape), so CityShell is identical
 // in both environments.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { storage, CITY_KEYS } from '../storage';
 import { DEFAULT_CITY_TYPES, DEFAULT_CITY_MODES } from './cohort';
 
@@ -22,7 +22,8 @@ async function getJson(key, fallback) {
 }
 
 export function useCityStore() {
-  const [state, setState] = useState({ ready: false, roster: [], planners: [], cityItems: [], cityTasks: [], citySettings: DEFAULT_CITY_SETTINGS, cityTypes: DEFAULT_CITY_TYPES, cityModes: DEFAULT_CITY_MODES });
+  const [state, setState] = useState({ ready: false, roster: [], planners: [], cityItems: [], cityTasks: [], citySettings: DEFAULT_CITY_SETTINGS, cityTypes: DEFAULT_CITY_TYPES, cityModes: DEFAULT_CITY_MODES, persistenceError: '' });
+  const writeVersions = useRef({});
   useEffect(() => {
     let live = true;
     (async () => {
@@ -42,7 +43,20 @@ export function useCityStore() {
     })();
     return () => { live = false; };
   }, []);
-  const persist = (key, value) => { storage.set(key, JSON.stringify(value)).catch(() => { }); };
+  const persist = (key, value) => {
+    const version = (writeVersions.current[key] || 0) + 1;
+    writeVersions.current[key] = version;
+    storage.set(key, JSON.stringify(value)).then(() => {
+      if (writeVersions.current[key] === version) {
+        setState(s => ({ ...s, persistenceError: '' }));
+      }
+    }).catch(error => {
+      console.error('City save failed', key, error);
+      if (writeVersions.current[key] === version) {
+        setState(s => ({ ...s, persistenceError: 'City changes could not be saved. Check your connection and access, then retry.' }));
+      }
+    });
+  };
   const makeSetter = (field, key) => (update) => setState(s => {
     const next = typeof update === 'function' ? update(s[field]) : update;
     persist(key, next);

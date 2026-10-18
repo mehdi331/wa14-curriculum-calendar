@@ -45,6 +45,11 @@ export default function CityShell({ auth, system, setSystem, onLeave, store }) {
           <button onClick={onLeave} className="btn-ghost text-xs">Sign out</button>
         </div>
       </div>
+      {store.persistenceError && (
+        <div role="alert" style={{ padding: '8px 16px', background: '#6B2F1A', color: '#FFF1E8', fontSize: 12.5 }}>
+          {store.persistenceError}
+        </div>
+      )}
       <div className="wa14-content-inner pt-5 px-6 pb-10">
         <CityHome
           tab={active} setTab={setView} auth={auth}

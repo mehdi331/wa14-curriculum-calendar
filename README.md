@@ -33,6 +33,31 @@ Staff can use the **Review** tab to score paragraph responses, add feedback, and
 
 The initial assessment persistence uses aggregate documents for compatibility with the existing app. It is suitable for local/demo testing, but production assessment use still requires stricter per-Fellow Firestore rules, server-authoritative grading/timing, protected answer keys, and per-record response storage.
 
+## Google Calendar publishing
+
+Schedule updates are published by an organization-owned Google Apps Script project. Firebase Google sign-in does not grant browser access to Google Calendar, so calendar credentials never go into the webapp. A time-driven Apps Script trigger reads the canonical Firestore schedules and reconciles Google Calendar every five minutes; updates are automatic but not immediate.
+
+The sync publishes scheduled Winter Academy sessions and Fellow-visible City items only:
+
+- City uses separate Year 1 and Year 2 calendars plus a City Shared calendar for items visible to both cohorts. Cohort-only items go only to their cohort calendar; shared items go only to City Shared, avoiding duplicates for staff who subscribe to all three. Fellows are shared into City Shared and their own cohort calendar, while City staff can access all three.
+- Winter Academy calendars are generated per exact Fellow audience. Room and AFA-group targeting follows the app's existing OR visibility rule, so a Fellow who matches through both routes still sees one copy. WA staff are shared on every applicable WA calendar.
+- Staff-only tasks, WA weeks hidden from Fellows, City items hidden from Fellows, and City months hidden from Fellows are not published.
+- Generated calendars are shared directly with the listed TFB Google accounts. Changes to the Fellow roster, rooms, staff, visibility settings or schedules are reconciled on the next run. Google sends calendar-share notifications when access is first granted.
+- Google event IDs are deterministic. Reconciliation updates changed events and removes events that are deleted, unscheduled, hidden, moved to another audience, or no longer in the cohort.
+
+### Apps Script setup
+
+1. In Google Apps Script, create a project owned by the organization account that will own the generated calendars. Copy `scripts/google-calendar-sync/Code.js` into the project and use the contents of `scripts/google-calendar-sync/appsscript.json` as its manifest. Set the project time zone to `Asia/Dhaka`.
+2. Enable the **Google Calendar API** advanced service (v3) in Apps Script and enable the Calendar API in the script's linked Google Cloud project.
+3. In the Firebase project's Google Cloud IAM, grant the Apps Script owner's account **Cloud Datastore User** (`roles/datastore.user`) so the script can read schedule documents and write its private calendar registry/status. This IAM role bypasses Firestore security rules and can read/write the database, so use a dedicated, tightly controlled organization account, protect Apps Script editor access, and do not grant this role to ordinary staff. The script's Google identity owns all generated calendars. Do not add credentials or tokens to the webapp.
+4. Set the Apps Script project property `FIREBASE_PROJECT_ID` to `wa-14-calendar` if using a different Firebase project. Review the script's requested OAuth scopes, then run `installCalendarSync` once as the owner and approve the Calendar, Firestore and trigger permissions. The first run creates the calendar backfill and installs a five-minute trigger.
+5. Publish the updated `firestore.rules`. The rules allow only a superadmin to queue a manual sync request; the status remains readable to authenticated TFB users.
+6. Sign in to the webapp as the Superadmin and use the **Google Calendar sync** panel's **Sync now** button to queue a reconciliation. Automatic runs continue every five minutes. The panel shows the last result and errors; detailed execution errors are also available in Apps Script **Executions**.
+
+The script stores generated calendar IDs and reader ACLs in the Firestore collection `wa14_calendar_sync_calendars`. If a Fellow's exact WA audience changes, the old generated calendar is emptied and its managed reader access is removed; the calendar record is retained so it can be reused if that audience returns. The Apps Script owner can inspect or delete these generated calendars in Google Calendar. Apps Script checks for source changes every five minutes and reconciles when it detects one; **Sync now** forces a reconciliation. Apps Script and Calendar API quotas apply; a large number of unique WA audiences may require a Cloud Functions/Cloud Run publisher instead.
+
+Run `npm run test:calendar-sync` to test cohort routing, visibility, and duplicate-free WA audience grouping. This local test does not contact Google or Firestore.
+
 ## City system (year-round fellowship calendar)
 
 The app hosts two Training Systems: **Winter Academy** (the 6–7 week academy calendar, sessions and assessments) and **City** (the year-round fellowship calendar of programming spaces, tasks and deadlines). Staff whose Training Systems include both get the picker automatically after sign-in; single-system staff go straight in. Staff systems come from the `systems` field on the staff record (see the City **Admin panel → City staff** tab) or the role defaults in `src/city/cohort.js`.
@@ -76,5 +101,5 @@ GitHub Actions builds and deploys the Vite output to GitHub Pages on pushes to `
 
 - Do not commit passwords, OAuth client secrets, service-account keys, or access tokens.
 - Treat the former superadmin password and all historical PINs as compromised; rotate any real credentials that used them.
-- Firestore rules are the security boundary. UI roles and hidden controls are not authorization.
+- Firestore rules are the authorization boundary for webapp clients; Google Cloud IAM principals such as the Calendar sync account bypass those rules, so restrict database IAM roles. UI roles and hidden controls are not authorization.
 - `xlsx` currently has high-severity advisories with no upstream fix. Treat imported spreadsheets as untrusted and plan to replace or isolate that dependency before processing files from unknown users.

@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:render": "node scripts/render-test.mjs"
+    "test:render": "node scripts/render-test.mjs",
+    "test:calendar-sync": "node scripts/google-calendar-sync/test.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

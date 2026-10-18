@@ -4,6 +4,7 @@ import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, Googl
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
 import { storage, ASSESSMENT_KEYS, ACADEMY_KEYS, parseStoredArray } from './storage';
+import CalendarSyncPanel from './CalendarSyncPanel.jsx';
 // [CITY] City system modules: shell, system picker, data store + cohort helpers.
 import CityShell from './city/CityShell.jsx';
 import SystemGate from './city/SystemGate.jsx';
@@ -474,17 +475,20 @@ export default function App({ injectedAuth = null, onInjectedLogout = null }) {
   const systemAuth = activeAuth ? { ...activeAuth, access: systemAccessFor(activeAuth, activeSystem) } : null;
   const logoutAll = injectedAuth ? (onInjectedLogout || (() => { })) : handleLogoutAll;
   const staffSystems = systemAuth && systemAuth.role !== 'fellow' ? systemsForStaff(systemAuth) : [];
+  const calendarSyncPanel = !injectedAuth && systemAuth && systemAuth.role !== 'fellow'
+    ? <CalendarSyncPanel auth={systemAuth} />
+    : null;
   if (!injectedAuth && !authLoaded) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading…</div>;
   if (!systemAuth) return <LoginGate onLogin={handleLogin} onLocalLogin={handleLocalLogin} onRedirectLogin={handleRedirectLogin} error={authError} busy={authBusy} localTestAccounts={localTestAccounts || []} />;
   if (systemAuth.role === 'fellow') {
     if (systemAuth.cohortRole === 'winter_academy') return <MainApp auth={systemAuth} onLogout={logoutAll} />;
     return <CityShell auth={systemAuth} system="city" setSystem={null} onLeave={logoutAll} store={cityStore} />;
   }
-  if (staffSystems.length > 1 && !system) return <SystemGate auth={systemAuth} onPick={setSystem} onLogout={logoutAll} />;
-  if ((system || staffSystems[0]) === 'city') return <CityShell auth={systemAuth} system={system} setSystem={setSystem} onLeave={logoutAll} store={cityStore} />;
+  if (staffSystems.length > 1 && !system) return <><SystemGate auth={systemAuth} onPick={setSystem} onLogout={logoutAll} />{calendarSyncPanel}</>;
+  if ((system || staffSystems[0]) === 'city') return <><CityShell auth={systemAuth} system={system} setSystem={setSystem} onLeave={logoutAll} store={cityStore} />{calendarSyncPanel}</>;
   // Staff with both systems entered the Winter Academy: they can switch back
   // to the system picker from the TopBar (see MainApp onSwitchSystem).
-  return <MainApp auth={systemAuth} onLogout={logoutAll} onSwitchSystem={staffSystems.length > 1 ? () => setSystem(null) : null} />;
+  return <><MainApp auth={systemAuth} onLogout={logoutAll} onSwitchSystem={staffSystems.length > 1 ? () => setSystem(null) : null} />{calendarSyncPanel}</>;
 }
 
 function getLocalTestUser() {
@@ -874,7 +878,9 @@ function MainApp({ auth, onLogout, onSwitchSystem = null }) {
       catch (e) { console.error('save failed', key, e); if (onError) onError(e); }
     }, 250);
   };
-  const persist = debouncedPersist(setSessions, saveTimer, 'wa14-sessions');
+  const persist = debouncedPersist(setSessions, saveTimer, 'wa14-sessions', error => {
+    if (error) showToast('Schedule save failed; Google Calendar will not receive this change.');
+  });
   const persistStaffTasks = debouncedPersist(setStaffTasks, staffSaveTimer, 'wa14-staff-tasks');
   const persistRoster = debouncedPersist(setRoster, rosterSaveTimer, 'wa14-roster');
   const persistPlanners = debouncedPersist(setPlanners, plannerSaveTimer, 'wa14-planners');
