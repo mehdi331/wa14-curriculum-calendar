@@ -35,28 +35,36 @@ The initial assessment persistence uses aggregate documents for compatibility wi
 
 ## Google Calendar publishing
 
-Schedule updates are published by an organization-owned Google Apps Script project. Firebase Google sign-in does not grant browser access to Google Calendar, so calendar credentials never go into the webapp. A time-driven Apps Script trigger reads the canonical Firestore schedules and reconciles Google Calendar every five minutes; updates are automatic but not immediate.
+Use the **Download Calendar Workbook** button on the Winter Academy **Sessions** page, then import the downloaded `.xlsx` into a Google Sheet and add the repository's Apps Script source as a script bound to that spreadsheet. The script runs only when an authorized editor chooses **Google Calendar → Sync now** from the Sheet menu; there is no automatic timer and no webapp sync button. Anyone who can edit the Sheet can also run its bound script and change the generated calendars, so restrict Sheet and Apps Script editor access.
 
-The sync publishes scheduled Winter Academy sessions and Fellow-visible City items only:
+Running the Sheet menu command creates or updates generated calendars and events in Google Calendar; it does not create another file. The script shows a completion dialog with the number of calendars and events reconciled.
 
-- City uses separate Year 1 and Year 2 calendars plus a City Shared calendar for items visible to both cohorts. Cohort-only items go only to their cohort calendar; shared items go only to City Shared, avoiding duplicates for staff who subscribe to all three. Fellows are shared into City Shared and their own cohort calendar, while City staff can access all three.
-- Winter Academy calendars are generated per exact Fellow audience. Room and AFA-group targeting follows the app's existing OR visibility rule, so a Fellow who matches through both routes still sees one copy. WA staff are shared on every applicable WA calendar.
-- Staff-only tasks, WA weeks hidden from Fellows, City items hidden from Fellows, and City months hidden from Fellows are not published.
-- Generated calendars are shared directly with the listed TFB Google accounts. Changes to the Fellow roster, rooms, staff, visibility settings or schedules are reconciled on the next run. Google sends calendar-share notifications when access is first granted.
-- Google event IDs are deterministic. Reconciliation updates changed events and removes events that are deleted, unscheduled, hidden, moved to another audience, or no longer in the cohort.
+The workbook contains these machine-readable data tabs: `WA Sessions`, `WA Rooms`, `Fellows`, `Staff`, `WA Settings`, `City Items`, and `City Settings`. It includes stable IDs and only the roster/staff fields needed for event targeting and calendar sharing. Do not rename these tabs or their header columns.
 
-### Apps Script setup
+### One-time Google Sheets setup
 
-1. In Google Apps Script, create a project owned by the organization account that will own the generated calendars. Copy `scripts/google-calendar-sync/Code.js` into the project and use the contents of `scripts/google-calendar-sync/appsscript.json` as its manifest. Set the project time zone to `Asia/Dhaka`.
-2. Enable the **Google Calendar API** advanced service (v3) in Apps Script and enable the Calendar API in the script's linked Google Cloud project.
-3. In the Firebase project's Google Cloud IAM, grant the Apps Script owner's account **Cloud Datastore User** (`roles/datastore.user`) so the script can read schedule documents and write its private calendar registry/status. This IAM role bypasses Firestore security rules and can read/write the database, so use a dedicated, tightly controlled organization account, protect Apps Script editor access, and do not grant this role to ordinary staff. The script's Google identity owns all generated calendars. Do not add credentials or tokens to the webapp.
-4. Set the Apps Script project property `FIREBASE_PROJECT_ID` to `wa-14-calendar` if using a different Firebase project. Review the script's requested OAuth scopes, then run `installCalendarSync` once as the owner and approve the Calendar, Firestore and trigger permissions. The first run creates the calendar backfill and installs a five-minute trigger.
-5. Publish the updated `firestore.rules`. The rules allow only a superadmin to queue a manual sync request; the status remains readable to authenticated TFB users.
-6. Sign in to the webapp as the Superadmin and use the **Google Calendar sync** panel's **Sync now** button to queue a reconciliation. Automatic runs continue every five minutes. The panel shows the last result and errors; detailed execution errors are also available in Apps Script **Executions**.
+1. In the webapp, enter Winter Academy as a full-admin and open **Sessions**. Choose **Download Calendar Workbook**. Wait until the button is enabled if City data is still loading.
+2. Create a Google Sheet owned by the organization account that should own the generated calendars. Choose **File → Import → Upload** and import the downloaded workbook. For the first import, create a new spreadsheet. Keep all workbook tabs.
+3. In that Sheet, choose **Extensions → Apps Script**. Replace the starter code with `scripts/google-calendar-sync/Code.js`. In **Project Settings**, enable “Show `appsscript.json` manifest file” and copy the repository's `scripts/google-calendar-sync/appsscript.json` contents into the manifest. In the Apps Script editor's **Services** list, add the **Google Calendar API** advanced service (v3); enable the Calendar API in the linked Google Cloud project if prompted.
+4. Save and reload the Google Sheet. Choose **Google Calendar → Sync now** and authorize the requested access to Google Calendar and the current spreadsheet. The first successful run creates the generated calendars and events. The script account owns those calendars.
 
-The script stores generated calendar IDs and reader ACLs in the Firestore collection `wa14_calendar_sync_calendars`. If a Fellow's exact WA audience changes, the old generated calendar is emptied and its managed reader access is removed; the calendar record is retained so it can be reused if that audience returns. The Apps Script owner can inspect or delete these generated calendars in Google Calendar. Apps Script checks for source changes every five minutes and reconciles when it detects one; **Sync now** forces a reconciliation. Apps Script and Calendar API quotas apply; a large number of unique WA audiences may require a Cloud Functions/Cloud Run publisher instead.
+### Updating calendars later
 
-Run `npm run test:calendar-sync` to test cohort routing, visibility, and duplicate-free WA audience grouping. This local test does not contact Google or Firestore.
+1. After schedules or visibility change in the webapp, export a fresh Calendar Workbook.
+2. In the existing connected spreadsheet, replace the seven data tabs with the new workbook's versions. Do not delete or replace the spreadsheet itself: its bound script and the generated Calendar records must remain. Retain the `Instructions` tab if desired.
+3. Reload the Sheet if needed, then choose **Google Calendar → Sync now**. A completion dialog reports calendar and event counts. On errors, it reports the failure and the Apps Script **Executions** page contains technical details.
+
+The workbook is a snapshot, not a live connection to Firestore. Webapp edits do not reach Google Calendar until you export/import the updated data and run the Sheet menu command. Re-running with the same workbook is safe: deterministic event IDs update existing events rather than duplicating them. Removed, hidden, or re-targeted managed events are deleted or moved on the next successful run.
+
+### Calendar audience and visibility behavior
+
+- Winter Academy calendars are generated per exact Fellow audience, applying the app's room-membership **or** AFA-group visibility rule. A Fellow matching both routes receives one copy. WA staff are shared on each applicable calendar.
+- City Year 1 and Year 2 events go to the matching cohort calendar; events visible to both cohorts go to City Shared only. City staff can access all three.
+- Hidden WA weeks, staff-only City tasks, hidden City items/months, and items outside Fellow visibility are excluded.
+- Generated calendars are shared directly with the TFB accounts in the workbook. Google may send calendar-share notifications when access is first granted. The workbook contains Fellow and staff email addresses; store it and the connected Sheet with appropriate access controls.
+- The script does not need Firebase credentials, Firebase IAM roles, a web-app deployment, or a background trigger. Google Calendar changes require one-time Apps Script authorization and an explicit Sheet-menu run. Do not share the spreadsheet with people who should not be able to grant/revoke calendar access or publish events.
+
+Run `npm run test:calendar-sync` to test workbook fields, audience routing, ACL changes, and managed-event update/removal behavior. These local tests do not contact Google.
 
 ## City system (year-round fellowship calendar)
 
@@ -101,5 +109,5 @@ GitHub Actions builds and deploys the Vite output to GitHub Pages on pushes to `
 
 - Do not commit passwords, OAuth client secrets, service-account keys, or access tokens.
 - Treat the former superadmin password and all historical PINs as compromised; rotate any real credentials that used them.
-- Firestore rules are the authorization boundary for webapp clients; Google Cloud IAM principals such as the Calendar sync account bypass those rules, so restrict database IAM roles. UI roles and hidden controls are not authorization.
+- Firestore rules are the authorization boundary for webapp clients. Protect exported workbooks and Google Sheets because they contain Fellow/staff email addresses and schedule visibility data. UI roles and hidden controls are not authorization.
 - `xlsx` currently has high-severity advisories with no upstream fix. Treat imported spreadsheets as untrusted and plan to replace or isolate that dependency before processing files from unknown users.

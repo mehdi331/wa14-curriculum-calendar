@@ -4,7 +4,7 @@ import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, Googl
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
 import { storage, ASSESSMENT_KEYS, ACADEMY_KEYS, parseStoredArray } from './storage';
-import CalendarSyncPanel from './CalendarSyncPanel.jsx';
+import { buildCalendarWorkbookSheets } from './calendarWorkbook.js';
 // [CITY] City system modules: shell, system picker, data store + cohort helpers.
 import CityShell from './city/CityShell.jsx';
 import SystemGate from './city/SystemGate.jsx';
@@ -475,20 +475,17 @@ export default function App({ injectedAuth = null, onInjectedLogout = null }) {
   const systemAuth = activeAuth ? { ...activeAuth, access: systemAccessFor(activeAuth, activeSystem) } : null;
   const logoutAll = injectedAuth ? (onInjectedLogout || (() => { })) : handleLogoutAll;
   const staffSystems = systemAuth && systemAuth.role !== 'fellow' ? systemsForStaff(systemAuth) : [];
-  const calendarSyncPanel = !injectedAuth && systemAuth && systemAuth.role !== 'fellow'
-    ? <CalendarSyncPanel auth={systemAuth} />
-    : null;
   if (!injectedAuth && !authLoaded) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px', color: '#9DB09D', fontFamily: FONT }}>Loading…</div>;
   if (!systemAuth) return <LoginGate onLogin={handleLogin} onLocalLogin={handleLocalLogin} onRedirectLogin={handleRedirectLogin} error={authError} busy={authBusy} localTestAccounts={localTestAccounts || []} />;
   if (systemAuth.role === 'fellow') {
     if (systemAuth.cohortRole === 'winter_academy') return <MainApp auth={systemAuth} onLogout={logoutAll} />;
     return <CityShell auth={systemAuth} system="city" setSystem={null} onLeave={logoutAll} store={cityStore} />;
   }
-  if (staffSystems.length > 1 && !system) return <><SystemGate auth={systemAuth} onPick={setSystem} onLogout={logoutAll} />{calendarSyncPanel}</>;
-  if ((system || staffSystems[0]) === 'city') return <><CityShell auth={systemAuth} system={system} setSystem={setSystem} onLeave={logoutAll} store={cityStore} />{calendarSyncPanel}</>;
+  if (staffSystems.length > 1 && !system) return <SystemGate auth={systemAuth} onPick={setSystem} onLogout={logoutAll} />;
+  if ((system || staffSystems[0]) === 'city') return <CityShell auth={systemAuth} system={system} setSystem={setSystem} onLeave={logoutAll} store={cityStore} />;
   // Staff with both systems entered the Winter Academy: they can switch back
   // to the system picker from the TopBar (see MainApp onSwitchSystem).
-  return <><MainApp auth={systemAuth} onLogout={logoutAll} onSwitchSystem={staffSystems.length > 1 ? () => setSystem(null) : null} />{calendarSyncPanel}</>;
+  return <MainApp auth={systemAuth} onLogout={logoutAll} onSwitchSystem={staffSystems.length > 1 ? () => setSystem(null) : null} cityStore={cityStore} />;
 }
 
 function getLocalTestUser() {
@@ -648,7 +645,7 @@ export function deriveRoleFlags(auth = {}) {
   };
 }
 
-function MainApp({ auth, onLogout, onSwitchSystem = null }) {
+function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
   const {
     isSuperadmin, access, isFullControl, isAssessmentsEditor,
     isAdmin, isFullAdmin, isFellow, isViewer, canEditAssessments,
@@ -1144,9 +1141,36 @@ const saveStaffTask = (t) => {
 const deleteStaffTask = (id) => { persistStaffTasks(staffTasks.filter(x => String(x.id) !== String(id))); setStaffEditing(null); showToast('Staff task removed'); };
 const exportSheetFile = (filename, sheets) => {
   const wb = XLSX.utils.book_new();
-  (sheets || []).forEach(({ name, rows }) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows || []), name));
+  (sheets || []).forEach(({ name, rows, headers }) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows || [], headers ? { header: headers } : undefined), name));
   XLSX.writeFile(wb, filename);
   showToast('Exported ' + filename);
+};
+const exportCalendarWorkbook = async () => {
+  if (cityStore?.loadError) {
+    showToast(cityStore.loadError);
+    return;
+  }
+  if (!cityStore?.ready) {
+    showToast('City schedule data is still loading. Try the workbook export again shortly.');
+    return;
+  }
+  try {
+    const accountRecord = await storage.get('wa14-accounts');
+    const sheets = buildCalendarWorkbookSheets({
+      sessions,
+      rooms,
+      roster,
+      planners,
+      accounts: parseStoredArray(accountRecord),
+      waSettings: academySettings || {},
+      cityItems: cityStore.cityItems,
+      citySettings: cityStore.citySettings,
+    });
+    exportSheetFile('Fellow_Training_System_Calendar_Sync.xlsx', sheets);
+  } catch (error) {
+    console.error('Calendar workbook export failed', error);
+    showToast('Calendar workbook could not be exported. Check access and try again.');
+  }
 };
 const sessionRows = () => {
   const rows = sessions.map(s => ({
@@ -1378,6 +1402,12 @@ return (
                   <button onClick={resetSeed} className={btnGhost}><RotateCcw size={14} /> Reset</button>
                 </div>
               )}
+              {tab === 'sessions' && (
+                <button onClick={exportCalendarWorkbook} className={btnSecondary} disabled={!cityStore?.ready} title="Exports the WA and City data needed by the Google Sheets calendar script">
+                  <Download size={14} /> Download Calendar Workbook
+                </button>
+              )}
+              {tab === 'sessions' && cityStore?.loadError && <span role="alert" style={{ color: '#F4A261', fontSize: 12 }}>{cityStore.loadError}</span>}
               <button onClick={pageExportFor(tab)} className={btnSecondary}><Download size={14} /> Export Excel</button>
             </div>
           )}

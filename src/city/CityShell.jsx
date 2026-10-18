@@ -45,6 +45,11 @@ export default function CityShell({ auth, system, setSystem, onLeave, store }) {
           <button onClick={onLeave} className="btn-ghost text-xs">Sign out</button>
         </div>
       </div>
+      {store.loadError && (
+        <div role="alert" style={{ padding: '8px 16px', background: '#6B2F1A', color: '#FFF1E8', fontSize: 12.5 }}>
+          {store.loadError}
+        </div>
+      )}
       {store.persistenceError && (
         <div role="alert" style={{ padding: '8px 16px', background: '#6B2F1A', color: '#FFF1E8', fontSize: 12.5 }}>
           {store.persistenceError}

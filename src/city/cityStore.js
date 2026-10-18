@@ -15,31 +15,34 @@ export const DEFAULT_CITY_SETTINGS = {
 };
 
 async function getJson(key, fallback) {
-  try {
-    const r = await storage.get(key);
-    return r && r.value ? JSON.parse(r.value) : fallback;
-  } catch (e) { return fallback; }
+  const r = await storage.get(key);
+  return r && r.value ? JSON.parse(r.value) : fallback;
 }
 
 export function useCityStore() {
-  const [state, setState] = useState({ ready: false, roster: [], planners: [], cityItems: [], cityTasks: [], citySettings: DEFAULT_CITY_SETTINGS, cityTypes: DEFAULT_CITY_TYPES, cityModes: DEFAULT_CITY_MODES, persistenceError: '' });
+  const [state, setState] = useState({ ready: false, loadError: '', roster: [], planners: [], cityItems: [], cityTasks: [], citySettings: DEFAULT_CITY_SETTINGS, cityTypes: DEFAULT_CITY_TYPES, cityModes: DEFAULT_CITY_MODES, persistenceError: '' });
   const writeVersions = useRef({});
   useEffect(() => {
     let live = true;
     (async () => {
-      const [roster, planners, items, tasks, settings, types, modes] = await Promise.all([
-        getJson('wa14-roster', []), getJson('wa14-planners', []),
-        getJson(CITY_KEYS.citySessions, []), getJson(CITY_KEYS.cityStaffTasks, []),
-        getJson(CITY_KEYS.citySettings, DEFAULT_CITY_SETTINGS),
-        getJson(CITY_KEYS.cityTypes, DEFAULT_CITY_TYPES), getJson(CITY_KEYS.cityModes, DEFAULT_CITY_MODES),
-      ]);
-      if (!live) return;
-      setState({
-        ready: true, roster, planners, cityItems: items, cityTasks: tasks,
-        citySettings: { ...DEFAULT_CITY_SETTINGS, ...(settings || {}) },
-        cityTypes: Array.isArray(types) && types.length ? types : DEFAULT_CITY_TYPES,
-        cityModes: Array.isArray(modes) && modes.length ? modes : DEFAULT_CITY_MODES,
-      });
+      try {
+        const [roster, planners, items, tasks, settings, types, modes] = await Promise.all([
+          getJson('wa14-roster', []), getJson('wa14-planners', []),
+          getJson(CITY_KEYS.citySessions, []), getJson(CITY_KEYS.cityStaffTasks, []),
+          getJson(CITY_KEYS.citySettings, DEFAULT_CITY_SETTINGS),
+          getJson(CITY_KEYS.cityTypes, DEFAULT_CITY_TYPES), getJson(CITY_KEYS.cityModes, DEFAULT_CITY_MODES),
+        ]);
+        if (!live) return;
+        setState({
+          ready: true, loadError: '', roster, planners, cityItems: items, cityTasks: tasks,
+          citySettings: { ...DEFAULT_CITY_SETTINGS, ...(settings || {}) },
+          cityTypes: Array.isArray(types) && types.length ? types : DEFAULT_CITY_TYPES,
+          cityModes: Array.isArray(modes) && modes.length ? modes : DEFAULT_CITY_MODES,
+        });
+      } catch (error) {
+        console.error('City data load failed', error);
+        if (live) setState(s => ({ ...s, ready: false, loadError: 'City data could not be loaded. Calendar export is unavailable until access or connectivity is restored.' }));
+      }
     })();
     return () => { live = false; };
   }, []);

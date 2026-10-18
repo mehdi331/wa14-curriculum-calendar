@@ -1,13 +1,7 @@
 const CALENDAR_SYNC = {
-  projectId: 'wa-14-calendar',
-  firestoreCollection: 'wa14',
-  stateCollection: 'wa14_calendar_sync_calendars',
-  statusKey: 'wa14-calendar-sync-status',
-  requestKey: 'wa14-calendar-sync-request',
   timezone: 'Asia/Dhaka',
   managedBy: 'wa14-curriculum-calendar',
-  triggerMinutes: 5,
-  superadminEmail: 'mehdi@teachforbangladesh.org',
+  markerPrefix: 'WA14_SYNC_KEY=',
 };
 
 const STAFF_SYSTEMS = {
@@ -24,71 +18,204 @@ const STAFF_SYSTEMS = {
   coach: ['city'],
 };
 
-function installCalendarSync() {
-  getProjectId_();
-  ScriptApp.getProjectTriggers()
-    .filter(trigger => trigger.getHandlerFunction() === 'syncCalendarSchedules')
-    .forEach(trigger => ScriptApp.deleteTrigger(trigger));
-  ScriptApp.newTrigger('syncCalendarSchedules')
-    .timeBased()
-    .everyMinutes(CALENDAR_SYNC.triggerMinutes)
-    .create();
-  syncCalendarSchedules();
+const REQUIRED_HEADERS = {
+  'WA Sessions': ['id', 'name', 'date', 'start', 'end', 'week', 'calendared', 'type', 'pillar', 'mode', 'roomIdsJson', 'roomsJson', 'afaGroup'],
+  'WA Rooms': ['id', 'name', 'fellowIdsJson'],
+  Fellows: ['id', 'email', 'cohort', 'afaGroup'],
+  Staff: ['email', 'role', 'systemsJson'],
+  'WA Settings': ['key', 'value'],
+  'City Items': ['id', 'kind', 'name', 'date', 'start', 'end', 'type', 'mode', 'cohortsJson', 'visibleToFellows', 'fellowNotes'],
+  'City Settings': ['key', 'value'],
+};
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Google Calendar')
+    .addItem('Sync now', 'syncCalendarSchedules')
+    .addToUi();
 }
 
 function syncCalendarSchedules() {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) throw new Error('Another calendar sync is already running.');
   try {
-    const sources = loadSources_();
-    const fingerprint = sha256_(stableStringify_(sources));
-    const requestAt = Number(sources.request && sources.request.updatedAt) || 0;
-    const properties = PropertiesService.getScriptProperties();
-    const lastFingerprint = properties.getProperty('lastSourceFingerprint') || '';
-    const lastRequestAt = Number(properties.getProperty('lastRequestAt')) || 0;
-    const forced = requestAt > lastRequestAt;
-    if (!forced && fingerprint === lastFingerprint) return;
-
-    const startedAt = new Date().toISOString();
+    const sources = readWorkbookSources_();
     const plan = buildCalendarPlan(sources, bangladeshYear_());
-    const registry = loadCalendarRegistry_();
-    const result = applyCalendarPlan_(plan, registry);
-    const status = {
-      status: 'ok',
-      startedAt,
-      completedAt: new Date().toISOString(),
-      calendarCount: Object.keys(plan.calendars).length,
-      eventCount: result.eventCount,
-      error: '',
-    };
-    writeWa14Value_(CALENDAR_SYNC.statusKey, status);
-    properties.setProperties({
-      lastSourceFingerprint: fingerprint,
-      lastRequestAt: String(Math.max(lastRequestAt, requestAt)),
-    });
+    const result = applyCalendarPlan_(plan);
+    SpreadsheetApp.getUi().alert(
+      'Calendar sync complete',
+      'Updated ' + result.calendarCount + ' calendars with ' + result.eventCount + ' events.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
-    try {
-      writeWa14Value_(CALENDAR_SYNC.statusKey, {
-        status: 'error',
-        completedAt: new Date().toISOString(),
-        error: message.slice(0, 1000),
-      });
-    } catch (statusError) {
-      console.error('Could not write calendar sync failure status: ' + statusError.message);
-    }
-    console.error('Google Calendar reconciliation failed: ' + message);
+    console.error('Google Calendar sync failed: ' + message);
+    SpreadsheetApp.getUi().alert(
+      'Calendar sync failed',
+      message + '\n\nNo successful completion was reported. Check the Apps Script Executions log for details.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
     throw error;
-  } finally {
-    lock.releaseLock();
   }
+}
+
+function readWorkbookSources_() {
+  const sessions = readSheetRows_('WA Sessions').map(row => ({
+    id: row.id,
+    name: row.name,
+    date: isoDate_(row.date),
+    start: clockTime_(row.start),
+    end: clockTime_(row.end),
+    week: weekNumber_(row.week),
+    calendared: booleanCell_(row.calendared, true),
+    type: row.type,
+    pillar: row.pillar,
+    mode: row.mode,
+    roomIds: jsonCell_(row.roomIdsJson, []),
+    rooms: jsonCell_(row.roomsJson, []),
+    afaGroup: row.afaGroup,
+  }));
+  const rooms = readSheetRows_('WA Rooms').map(row => ({
+    id: row.id,
+    name: row.name,
+    fellowIds: jsonCell_(row.fellowIdsJson, []),
+  }));
+  const roster = readSheetRows_('Fellows').map(row => ({
+    id: row.id,
+    email: row.email,
+    cohort: Number(row.cohort),
+    afaGroup: row.afaGroup,
+  }));
+  const planners = readSheetRows_('Staff').map(row => ({
+    email: row.email,
+    role: row.role,
+    systems: jsonCell_(row.systemsJson, []),
+  }));
+  const waSettings = settingsObject_(readSheetRows_('WA Settings'));
+  if (!Object.prototype.hasOwnProperty.call(waSettings, 'fellowWeeksJson')) {
+    throw new Error('WA Settings is missing fellowWeeksJson. Re-import the Calendar Sync workbook tabs.');
+  }
+  waSettings.fellowWeeks = jsonCell_(waSettings.fellowWeeksJson, []);
+  const cityItems = readSheetRows_('City Items').map(row => ({
+    id: row.id,
+    kind: row.kind,
+    name: row.name,
+    date: isoDate_(row.date),
+    start: clockTime_(row.start),
+    end: clockTime_(row.end),
+    type: row.type,
+    mode: row.mode,
+    cohorts: jsonCell_(row.cohortsJson, ['all']),
+    visibleToFellows: booleanCell_(row.visibleToFellows, true),
+    fellowNotes: row.fellowNotes,
+  }));
+  const citySettings = settingsObject_(readSheetRows_('City Settings'));
+  if (!Object.prototype.hasOwnProperty.call(citySettings, 'year') ||
+      !Object.prototype.hasOwnProperty.call(citySettings, 'fellowMonthsJson')) {
+    throw new Error('City Settings is missing required rows. Re-import the Calendar Sync workbook tabs.');
+  }
+  citySettings.year = Number(citySettings.year);
+  citySettings.fellowMonths = jsonCell_(citySettings.fellowMonthsJson, []);
+  if (!planners.some(person => validStaffEmail_(person.email))) {
+    throw new Error('Staff has no valid TFB staff emails. Refusing to remove existing calendar access.');
+  }
+  return { sessions, rooms, roster, planners, waSettings, cityItems, citySettings };
+}
+
+function readSheetRows_(name) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  if (!sheet) throw new Error('Required workbook tab "' + name + '" is missing. Re-import the Calendar Sync workbook tabs.');
+  const values = sheet.getDataRange().getValues();
+  if (!values.length) throw new Error('Workbook tab "' + name + '" has no header row.');
+  const headers = values[0].map(value => String(value || '').trim());
+  const missing = (REQUIRED_HEADERS[name] || []).filter(header => !headers.includes(header));
+  if (missing.length) {
+    throw new Error('Workbook tab "' + name + '" is missing columns: ' + missing.join(', ') + '. Re-import the Calendar Sync workbook tabs.');
+  }
+  if (values.length < 2) return [];
+  return values.slice(1).filter(row => row.some(value => value !== '' && value != null)).map(row => {
+    const item = {};
+    headers.forEach((header, index) => {
+      if (header) item[header] = row[index];
+    });
+    return item;
+  });
+}
+
+function settingsObject_(rows) {
+  return rows.reduce((settings, row) => {
+    if (row.key) settings[String(row.key)] = row.value;
+    return settings;
+  }, {});
+}
+
+function jsonCell_(value, fallback) {
+  if (value == null || value === '') return fallback;
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(String(value));
+  } catch (error) {
+    throw new Error('Invalid JSON in workbook cell: ' + String(value).slice(0, 100));
+  }
+}
+
+function booleanCell_(value, fallback) {
+  if (value === '' || value == null) return fallback;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', 'yes', '1'].includes(normalized)) return true;
+  if (['false', 'no', '0'].includes(normalized)) return false;
+  throw new Error('Invalid boolean value in workbook cell: ' + String(value));
+}
+
+function isoDate_(value) {
+  if (!value) return '';
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return Utilities.formatDate(value, CALENDAR_SYNC.timezone, 'yyyy-MM-dd');
+  }
+  if (typeof value === 'number' && value > 0) {
+    const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000);
+    return Utilities.formatDate(date, 'UTC', 'yyyy-MM-dd');
+  }
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = new Date(text);
+  if (!Number.isFinite(parsed.getTime())) throw new Error('Invalid date in workbook: ' + text);
+  return Utilities.formatDate(parsed, CALENDAR_SYNC.timezone, 'yyyy-MM-dd');
+}
+
+function clockTime_(value) {
+  if (value == null || value === '') return '';
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return Utilities.formatDate(value, CALENDAR_SYNC.timezone, 'HH:mm');
+  }
+  if (typeof value === 'number') {
+    const minutes = Math.round(value * 1440) % 1440;
+    return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
+  }
+  const text = String(value).trim();
+  const match = /^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?\s*(AM|PM)?$/i.exec(text);
+  if (!match) throw new Error('Invalid time in workbook: ' + text);
+  let hour = Number(match[1]);
+  const suffix = (match[3] || '').toUpperCase();
+  if (suffix) {
+    if (hour < 1 || hour > 12) throw new Error('Invalid time in workbook: ' + text);
+    hour = (hour % 12) + (suffix === 'PM' ? 12 : 0);
+  }
+  if (hour > 23) throw new Error('Invalid time in workbook: ' + text);
+  return String(hour).padStart(2, '0') + ':' + match[2];
+}
+
+function weekNumber_(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return value;
+  const match = /(\d+)/.exec(String(value));
+  return match ? Number(match[1]) : null;
 }
 
 function buildCalendarPlan(sources, currentYear) {
   const year = Number(currentYear) || new Date().getFullYear();
   const planners = Array.isArray(sources.planners) ? sources.planners : [];
-  const accounts = Array.isArray(sources.accounts) ? sources.accounts : [];
-  const staff = mergeStaff_(planners, accounts);
+  const staff = mergeStaff_(planners);
   const roster = Array.isArray(sources.roster) ? sources.roster : [];
   const rooms = Array.isArray(sources.rooms) ? sources.rooms : [];
   const waSettings = sources.waSettings || {};
@@ -163,13 +290,13 @@ function buildCalendarPlan(sources, currentYear) {
 
 function sessionVisibleToFellow_(session, fellow, rooms) {
   const isMainRoom = room => String(room && room.name || '').trim().toLowerCase() === 'main room';
-  const targetedRoomIds = (session.roomIds || []).filter(id => !isMainRoom(rooms.find(room => room.id === id)));
+  const targetedRoomIds = (session.roomIds || []).filter(id => !isMainRoom(rooms.find(room => String(room.id) === String(id))));
   const legacyTargets = (session.rooms || []).filter(room => !isMainRoom(room));
   const hasTargeting = targetedRoomIds.length > 0 || legacyTargets.length > 0 || Boolean(session.afaGroup);
   if (!hasTargeting) return true;
   const roomMatch = targetedRoomIds.some(id => {
-    const room = rooms.find(candidate => candidate.id === id);
-    return room && (room.fellowIds || []).includes(fellow.id);
+    const room = rooms.find(candidate => String(candidate.id) === String(id));
+    return room && (room.fellowIds || []).map(String).includes(String(fellow.id));
   });
   const groupMatch = Boolean(fellow.afaGroup && session.afaGroup && fellow.afaGroup === session.afaGroup);
   return roomMatch || groupMatch;
@@ -228,152 +355,49 @@ function ensurePlanCalendar_(calendars, key, summary, readers) {
   return calendars[key];
 }
 
-function effectiveWeek_(session, startDate) {
-  if (session.date && startDate) {
-    const start = new Date(startDate + 'T00:00:00');
-    start.setDate(start.getDate() - start.getDay() - 7);
-    const date = new Date(session.date + 'T00:00:00');
-    if (!Number.isFinite(start.getTime()) || !Number.isFinite(date.getTime())) throw new Error('Invalid Winter Academy start or session date.');
-    return Math.floor((date.getTime() - start.getTime()) / 604800000);
-  }
-  return session.week == null ? null : Number(session.week);
-}
-
-function mergeStaff_(planners, accounts) {
-  const byEmail = {};
-  accounts.forEach(person => {
-    const email = String(person.email || '').trim().toLowerCase();
-    if (validStaffEmail_(email)) byEmail[email] = Object.assign({}, person, { email });
-  });
-  planners.forEach(person => {
-    const email = String(person.email || '').trim().toLowerCase();
-    if (validStaffEmail_(email)) byEmail[email] = Object.assign({}, byEmail[email] || {}, person, { email });
-  });
-  return Object.keys(byEmail).map(email => byEmail[email]);
-}
-
-function hasSystem_(person, system) {
-  if (person.role === 'superadmin') return true;
-  const explicit = Array.isArray(person.systems) ? person.systems.filter(Boolean) : [];
-  if (explicit.length) return explicit.includes(system);
-  return (STAFF_SYSTEMS[person.role] || ['winter_academy']).includes(system);
-}
-
-function validEmail_(email) {
-  return /^[^@\s]+@teachforbangladesh\.org$/i.test(String(email || ''));
-}
-
-function validFellowEmail_(email) {
-  return /^[a-z]+\.[a-z]+@teachforbangladesh\.org$/i.test(String(email || ''));
-}
-
-function validStaffEmail_(email) {
-  return /^[a-z]+@teachforbangladesh\.org$/i.test(String(email || ''));
-}
-
-function loadSources_() {
-  return {
-    sessions: readArray_(readWa14Value_('wa14-sessions')),
-    rooms: readArray_(readWa14Value_('wa14-rooms')),
-    roster: readArray_(readWa14Value_('wa14-roster')),
-    planners: readArray_(readWa14Value_('wa14-planners')),
-    accounts: readArray_(readWa14Value_('wa14-accounts')),
-    waSettings: readObject_(readWa14Value_('wa14-settings')),
-    cityItems: readArray_(readWa14Value_('wa14-city-sessions')),
-    citySettings: readObject_(readWa14Value_('wa14-city-settings')),
-    request: readWa14Value_(CALENDAR_SYNC.requestKey),
-  };
-}
-
-function readArray_(record) {
-  if (!record || !record.value) return [];
-  const value = JSON.parse(record.value);
-  if (!Array.isArray(value)) throw new Error('Expected an array in a calendar source document.');
-  return value;
-}
-
-function readObject_(record) {
-  if (!record || !record.value) return {};
-  const value = JSON.parse(record.value);
-  if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('Expected an object in a calendar settings document.');
-  return value;
-}
-
-function loadCalendarRegistry_() {
-  const projectId = getProjectId_();
-  const registry = {};
-  let pageToken = '';
-  do {
-    const query = pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '';
-    const response = firestoreFetch_(
-      'https://firestore.googleapis.com/v1/projects/' + projectId +
-      '/databases/(default)/documents/' + CALENDAR_SYNC.stateCollection + '?pageSize=500' + query
-    );
-    const body = JSON.parse(response.getContentText() || '{}');
-    (body.documents || []).forEach(document => {
-      const id = document.name.split('/').pop();
-      const raw = document.fields && document.fields.value && document.fields.value.stringValue;
-      if (raw) registry[id] = JSON.parse(raw);
-    });
-    pageToken = body.nextPageToken || '';
-  } while (pageToken);
-  return registry;
-}
-
-function applyCalendarPlan_(plan, registry) {
+function applyCalendarPlan_(plan) {
   const desiredKeys = Object.keys(plan.calendars);
-  const allKeys = [...new Set(desiredKeys.concat(Object.keys(registry)))];
+  const managed = listManagedCalendars_();
+  const knownByKey = {};
+  managed.forEach(calendar => { knownByKey[calendar.key] = calendar; });
+  const allKeys = [...new Set(desiredKeys.concat(Object.keys(knownByKey)))];
   let eventCount = 0;
   allKeys.forEach(key => {
     const desired = plan.calendars[key] || {
       key,
-      summary: registry[key].summary || 'Inactive WA14 generated calendar',
+      summary: knownByKey[key].summary || 'Inactive WA14 generated calendar',
       readers: new Set(),
       events: {},
     };
-    const prior = registry[key] || {};
-    const calendarId = prior.calendarId && calendarExists_(prior.calendarId)
-      ? prior.calendarId
-      : findOrCreateCalendar_(key, desired.summary);
-    syncCalendarReaders_(calendarId, Array.from(desired.readers));
-    syncCalendarEvents_(calendarId, desired.events);
-    const count = Object.keys(desired.events).length;
-    eventCount += count;
-    writeRegistry_(key, {
-      calendarId,
-      summary: desired.summary,
-      readers: Array.from(desired.readers),
-      active: desiredKeys.includes(key),
-    });
+    const calendar = knownByKey[key] || createManagedCalendar_(key, desired.summary);
+    syncCalendarReaders_(calendar.id, Array.from(desired.readers));
+    syncCalendarEvents_(calendar.id, desired.events);
+    eventCount += Object.keys(desired.events).length;
   });
-  return { eventCount };
+  return { calendarCount: desiredKeys.length, eventCount };
 }
 
-function findOrCreateCalendar_(key, summary) {
-  const marker = 'WA14_SYNC_KEY=' + key;
+function listManagedCalendars_() {
+  const result = [];
   let pageToken = '';
   do {
     const response = Calendar.CalendarList.list({ maxResults: 250, pageToken: pageToken || undefined });
-    const match = (response.items || []).find(item => String(item.description || '').includes(marker));
-    if (match) return match.id;
+    (response.items || []).forEach(calendar => {
+      const match = new RegExp(CALENDAR_SYNC.markerPrefix + '([a-z0-9-]+)').exec(String(calendar.description || ''));
+      if (match) result.push({ id: calendar.id, key: match[1], summary: calendar.summary });
+    });
     pageToken = response.nextPageToken || '';
   } while (pageToken);
-  const calendar = Calendar.Calendars.insert({
-    summary,
-    description: marker,
-    timeZone: CALENDAR_SYNC.timezone,
-  });
-  return calendar.id;
+  return result;
 }
 
-function calendarExists_(calendarId) {
-  try {
-    Calendar.CalendarList.get(calendarId);
-    return true;
-  } catch (error) {
-    if (isNotFound_(error)) return false;
-    throw error;
-  }
+function createManagedCalendar_(key, summary) {
+  const calendar = Calendar.Calendars.insert({
+    summary,
+    description: CALENDAR_SYNC.markerPrefix + key,
+    timeZone: CALENDAR_SYNC.timezone,
+  });
+  return { id: calendar.id, key, summary };
 }
 
 function syncCalendarReaders_(calendarId, nextReaders) {
@@ -395,12 +419,8 @@ function syncCalendarReaders_(calendarId, nextReaders) {
     }
   });
   desired.forEach(email => {
-    const current = currentByEmail.get(email);
-    if (current) return;
-    Calendar.Acl.insert({
-      scope: { type: 'user', value: email },
-      role: 'reader',
-    }, calendarId, { sendNotifications: true });
+    if (currentByEmail.has(email)) return;
+    Calendar.Acl.insert({ scope: { type: 'user', value: email }, role: 'reader' }, calendarId, { sendNotifications: true });
   });
 }
 
@@ -428,7 +448,6 @@ function syncCalendarEvents_(calendarId, desiredEvents) {
     if (existing) Calendar.Events.update(event, calendarId, id);
     else Calendar.Events.insert(event, calendarId);
   });
-
   listManagedEvents_(calendarId).forEach(event => {
     if (!desiredIds.has(event.id)) Calendar.Events.remove(calendarId, event.id);
   });
@@ -450,58 +469,43 @@ function listManagedEvents_(calendarId) {
   return result;
 }
 
-function writeRegistry_(key, value) {
-  writeJsonDocument_(CALENDAR_SYNC.stateCollection, key, value);
+function effectiveWeek_(session, startDate) {
+  if (session.date && startDate) {
+    const start = new Date(startDate + 'T00:00:00');
+    start.setDate(start.getDate() - start.getDay() - 7);
+    const date = new Date(session.date + 'T00:00:00');
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(date.getTime())) throw new Error('Invalid Winter Academy start or session date.');
+    return Math.floor((date.getTime() - start.getTime()) / 604800000);
+  }
+  return session.week == null ? null : Number(session.week);
 }
 
-function readWa14Value_(key) {
-  const projectId = getProjectId_();
-  const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
-    '/databases/(default)/documents/' + CALENDAR_SYNC.firestoreCollection + '/' + encodeURIComponent(key);
-  const response = firestoreFetch_(url, true);
-  if (response.getResponseCode() === 404) return null;
-  const document = JSON.parse(response.getContentText());
-  const value = document.fields && document.fields.value && document.fields.value.stringValue;
-  const updatedAt = document.fields && document.fields.updatedAt && document.fields.updatedAt.integerValue;
-  return { value: value || '', updatedAt: Number(updatedAt) || 0 };
-}
-
-function writeWa14Value_(key, value) {
-  writeJsonDocument_(CALENDAR_SYNC.firestoreCollection, key, value);
-}
-
-function writeJsonDocument_(collection, id, value) {
-  const projectId = getProjectId_();
-  const url = 'https://firestore.googleapis.com/v1/projects/' + projectId +
-    '/databases/(default)/documents/' + collection + '/' + encodeURIComponent(id) +
-    '?updateMask.fieldPaths=value&updateMask.fieldPaths=updatedAt';
-  const fields = {
-    value: { stringValue: JSON.stringify(value) },
-    updatedAt: { integerValue: String(Date.now()) },
-  };
-  firestoreFetch_(url, false, {
-    method: 'patch',
-    contentType: 'application/json',
-    payload: JSON.stringify({ fields }),
+function mergeStaff_(planners) {
+  const byEmail = {};
+  planners.forEach(person => {
+    const email = String(person.email || '').trim().toLowerCase();
+    if (validStaffEmail_(email)) byEmail[email] = Object.assign({}, person, { email });
   });
+  return Object.keys(byEmail).map(email => byEmail[email]);
 }
 
-function firestoreFetch_(url, allowNotFound, options) {
-  const response = UrlFetchApp.fetch(url, Object.assign({
-    method: 'get',
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    muteHttpExceptions: true,
-  }, options || {}));
-  const code = response.getResponseCode();
-  if (code >= 200 && code < 300) return response;
-  if (allowNotFound && code === 404) return response;
-  throw new Error('Firestore API request failed (' + code + '): ' + response.getContentText().slice(0, 500));
+function hasSystem_(person, system) {
+  if (person.role === 'superadmin') return true;
+  const explicit = Array.isArray(person.systems) ? person.systems.filter(Boolean) : [];
+  if (explicit.length) return explicit.includes(system);
+  return (STAFF_SYSTEMS[person.role] || ['winter_academy']).includes(system);
 }
 
-function getProjectId_() {
-  const value = PropertiesService.getScriptProperties().getProperty('FIREBASE_PROJECT_ID') || CALENDAR_SYNC.projectId;
-  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(value)) throw new Error('Invalid FIREBASE_PROJECT_ID script property.');
-  return value;
+function validEmail_(email) {
+  return /^[^@\s]+@teachforbangladesh\.org$/i.test(String(email || ''));
+}
+
+function validFellowEmail_(email) {
+  return /^[a-z]+\.[a-z]+@teachforbangladesh\.org$/i.test(String(email || ''));
+}
+
+function validStaffEmail_(email) {
+  return /^[a-z]+@teachforbangladesh\.org$/i.test(String(email || ''));
 }
 
 function bangladeshYear_() {
@@ -512,15 +516,13 @@ function bangladeshDateTime_(date, time, nextDay) {
   if (!validIsoDate_(date) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(time))) {
     throw new Error('Invalid calendar date/time: ' + date + ' ' + time);
   }
-  const d = nextDay ? datePlusOne_(date) : date;
-  return d + 'T' + time + ':00+06:00';
+  return (nextDay ? datePlusOne_(date) : date) + 'T' + time + ':00+06:00';
 }
 
 function datePlusOne_(date) {
   if (!validIsoDate_(date)) throw new Error('Invalid calendar date: ' + date);
   const parts = date.split('-').map(Number);
-  const next = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1));
-  return next.toISOString().slice(0, 10);
+  return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + 1)).toISOString().slice(0, 10);
 }
 
 function validIsoDate_(date) {
@@ -538,22 +540,8 @@ function addMinutes_(time, minutes) {
 }
 
 function sha256_(value) {
-  const bytes = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    value,
-    Utilities.Charset.UTF_8
-  );
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8);
   return bytes.map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
-}
-
-function stableStringify_(value) {
-  if (Array.isArray(value)) return '[' + value.map(stableStringify_).join(',') + ']';
-  if (value && typeof value === 'object') {
-    return '{' + Object.keys(value).sort().map(key =>
-      JSON.stringify(key) + ':' + stableStringify_(value[key])
-    ).join(',') + '}';
-  }
-  return JSON.stringify(value);
 }
 
 function isNotFound_(error) {

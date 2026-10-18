@@ -21,6 +21,7 @@ const plan = context.buildCalendarPlan({
   sessions: [
     { id: 'all', name: 'All WA', date: '2026-10-25', start: '09:00', end: '10:00', week: 1, calendared: true },
     { id: 'targeted', name: 'Room + group', date: '2026-10-26', start: '09:00', end: '10:00', week: 1, calendared: true, roomIds: ['r1'], afaGroup: 'AFA A' },
+    { id: 'legacy-target', name: 'Legacy room target', date: '2026-10-27', start: '09:00', end: '10:00', week: 1, calendared: true, rooms: [{ id: 'r1', name: 'Room 1' }] },
     { id: 'hidden-week', name: 'Hidden week', date: '2026-11-01', start: '09:00', end: '10:00', week: 2, calendared: true },
   ],
   rooms: [{ id: 'r1', name: 'Room 1', fellowIds: ['f1'] }],
@@ -58,6 +59,9 @@ assert.deepEqual([...targetedMatches[0].readers].sort(), [
   'fellow.two@teachforbangladesh.org',
   'wastaff@teachforbangladesh.org',
 ]);
+const legacyTargetCalendar = calendars.find(calendar => Object.values(calendar.events).some(event => event.summary === 'Legacy room target'));
+assert.ok(legacyTargetCalendar);
+assert.deepEqual([...legacyTargetCalendar.readers], ['wastaff@teachforbangladesh.org']);
 
 assert.equal(calendars.some(calendar => Object.values(calendar.events).some(event => event.summary === 'Hidden week')), false);
 assert.equal(calendars.some(calendar => Object.values(calendar.events).some(event => event.summary === 'Hidden city item')), false);
@@ -107,4 +111,76 @@ assert.deepEqual(aclCalls, [
   ['insert', 'new@teachforbangladesh.org', 'calendar-1', true],
 ]);
 
-console.log('Google Calendar sync audience tests passed.');
+const workbookSheets = {
+  'WA Sessions': [
+    ['id', 'name', 'date', 'start', 'end', 'week', 'calendared', 'type', 'pillar', 'mode', 'roomIdsJson', 'roomsJson', 'afaGroup'],
+    ['session-1', 'Workbook session', '2026-10-25', '09:00', '10:00', 'Week 01', true, 'Workshop', 'Pillar 1', 'Sync', '["r1"]', '[]', 'AFA A'],
+  ],
+  'WA Rooms': [['id', 'name', 'fellowIdsJson'], ['r1', 'Room 1', '["f1"]']],
+  Fellows: [['id', 'email', 'cohort', 'afaGroup'], ['f1', 'fellow.one@teachforbangladesh.org', 2027, 'AFA A']],
+  Staff: [['email', 'role', 'systemsJson'], ['staff@teachforbangladesh.org', 'academy_lead', '["winter_academy"]']],
+  'WA Settings': [['key', 'value'], ['startDate', '2026-10-25'], ['fellowWeeksJson', '[0,1]']],
+  'City Items': [['id', 'kind', 'name', 'date', 'start', 'end', 'type', 'mode', 'cohortsJson', 'visibleToFellows', 'fellowNotes']],
+  'City Settings': [['key', 'value'], ['year', 2026], ['fellowMonthsJson', '[0,1]']],
+};
+context.SpreadsheetApp = {
+  getActiveSpreadsheet() {
+    return {
+      getSheetByName(name) {
+        const values = workbookSheets[name];
+        return values ? { getDataRange: () => ({ getValues: () => values }) } : null;
+      },
+    };
+  },
+};
+const imported = context.readWorkbookSources_();
+assert.equal(imported.sessions[0].id, 'session-1');
+assert.equal(imported.sessions[0].week, 1);
+assert.deepEqual(Array.from(imported.sessions[0].roomIds), ['r1']);
+assert.deepEqual(Array.from(imported.waSettings.fellowWeeks), [0, 1]);
+assert.equal(imported.citySettings.year, 2026);
+const citySheet = workbookSheets['City Items'];
+workbookSheets['City Items'] = [['id', 'name']];
+assert.throws(() => context.readWorkbookSources_(), /missing columns/);
+workbookSheets['City Items'] = citySheet;
+const menuCalls = [];
+context.SpreadsheetApp.getUi = () => ({
+  createMenu(name) {
+    menuCalls.push(['menu', name]);
+    return {
+      addItem(label, handler) { menuCalls.push(['item', label, handler]); return this; },
+      addToUi() { menuCalls.push(['add']); },
+    };
+  },
+});
+context.onOpen();
+assert.deepEqual(menuCalls, [
+  ['menu', 'Google Calendar'],
+  ['item', 'Sync now', 'syncCalendarSchedules'],
+  ['add'],
+]);
+
+const eventCalls = [];
+const existingEvents = new Map([
+  ['desired-id', { id: 'desired-id' }],
+  ['stale-id', { id: 'stale-id' }],
+]);
+context.Calendar.Events = {
+  get(_calendarId, id) {
+    if (!existingEvents.has(id)) throw new Error('404 Not Found');
+    return existingEvents.get(id);
+  },
+  update(event, _calendarId, id) { eventCalls.push(['update', id, event.summary]); },
+  insert(event, _calendarId) { eventCalls.push(['insert', event.id]); },
+  list() { return { items: [...existingEvents.values()] }; },
+  remove(_calendarId, id) { eventCalls.push(['remove', id]); },
+};
+context.syncCalendarEvents_('calendar-1', {
+  'desired-id': { id: 'desired-id', summary: 'Updated title' },
+});
+assert.deepEqual(eventCalls, [
+  ['update', 'desired-id', 'Updated title'],
+  ['remove', 'stale-id'],
+]);
+
+console.log('Spreadsheet calendar sync tests passed.');

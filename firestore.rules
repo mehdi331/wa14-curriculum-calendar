@@ -49,12 +49,6 @@ service cloud.firestore {
         && docId in ['wa14-assessment-attempts', 'wa14-attendance'];
       allow create, update, delete: if isSuperadmin()
         && docId in ['wa14-accounts', 'wa14-planners'];
-      allow create, update: if isSuperadmin()
-        && docId == 'wa14-calendar-sync-request'
-        && request.resource.data.keys().hasOnly(['value', 'updatedAt'])
-        && request.resource.data.keys().hasAll(['value', 'updatedAt'])
-        && request.resource.data.value is string
-        && request.resource.data.updatedAt is number;
     }
   }
 }
