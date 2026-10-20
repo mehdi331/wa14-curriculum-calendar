@@ -77,6 +77,7 @@ export function FellowsAdmin({ roster, setRoster, canManage, auth, planners, set
       cohort: Number(form.cohort) || autoCohort,
       track: form.track.trim().toLowerCase(), grade: form.grade.trim(),
       placementCity: form.placementCity.trim(), afaGroup: form.afaGroup.trim(),
+      excludeFromAnalysis: false,
       coachId: coach ? coach.id : '', coachName: coach ? coach.name : '', roomIds: [],
     }]);
     setForm(blankFellowForm(auth)); setError('');
@@ -128,6 +129,7 @@ export function FellowsAdmin({ roster, setRoster, canManage, auth, planners, set
         grade: grade || '',
         placementCity: placementCity || '',
         afaGroup: afaGroup || '',
+        excludeFromAnalysis: false,
         coachId: coach ? coach.id : '',
         coachName: coach ? coach.name : '',
         roomIds: [],

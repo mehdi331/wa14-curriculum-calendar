@@ -11,7 +11,7 @@ export function FellowRow({ fellow, canManage, setRoster, onRemove, planners }) 
   const [form, setForm] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const start = () => {
-    setForm({ name: fellow.name || '', email: fellow.email || '', cohort: String(fellow.cohort || ''), track: fellow.track || '', grade: fellow.grade || '', placementCity: fellow.placementCity || '', coachId: fellow.coachId || '', afaGroup: fellow.afaGroup || '' });
+    setForm({ name: fellow.name || '', email: fellow.email || '', cohort: String(fellow.cohort || ''), track: fellow.track || '', grade: fellow.grade || '', placementCity: fellow.placementCity || '', coachId: fellow.coachId || '', afaGroup: fellow.afaGroup || '', excludeFromAnalysis: fellow.excludeFromAnalysis === true });
     setOpen(true);
   };
   const save = () => {
@@ -26,6 +26,7 @@ export function FellowRow({ fellow, canManage, setRoster, onRemove, planners }) 
       grade: String(form.grade || '').trim(),
       placementCity: String(form.placementCity || '').trim(),
       afaGroup: String(form.afaGroup || '').trim(),
+      excludeFromAnalysis: form.excludeFromAnalysis === true,
       coachId: coach ? coach.id : '',
       coachName: coach ? coach.name : '',
     } : r));
@@ -61,6 +62,10 @@ export function FellowRow({ fellow, canManage, setRoster, onRemove, planners }) 
                 {coachOptions(planners).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, paddingBottom: 8 }}>
+              <input type="checkbox" checked={form.excludeFromAnalysis} onChange={e => set('excludeFromAnalysis', e.target.checked)} />
+              Don't include in analysis
+            </label>
             <button onClick={save} className={btnSecondary} style={{ fontSize: 12 }}>Save</button>
             <button onClick={() => setOpen(false)} className={btnGhost} style={{ fontSize: 12 }}>Cancel</button>
           </div>
@@ -70,7 +75,7 @@ export function FellowRow({ fellow, canManage, setRoster, onRemove, planners }) 
   }
   return (
     <tr style={{ borderBottom: '1px solid #1F4A3C' }}>
-      <td style={{ padding: '8px 12px' }}>{fellow.name}<div style={{ fontSize: 11, color: '#9DB09D' }}>{fellow.email}</div></td>
+      <td style={{ padding: '8px 12px' }}>{fellow.name}<div style={{ fontSize: 11, color: '#9DB09D' }}>{fellow.email}</div>{fellow.excludeFromAnalysis === true && <div style={{ fontSize: 11, color: '#D0A023' }}>Excluded from analysis</div>}</td>
       <td style={{ padding: '8px 12px' }}>{fellow.cohort || '—'} · {COHORT_ROLE_LABEL[cohortRole(fellow.cohort)]}</td>
       <td style={{ padding: '8px 12px' }}>{fellow.grade || '—'}{fellow.track ? ` · ${fellow.track}` : ''}</td>
       <td style={{ padding: '8px 12px' }}>{fellow.placementCity || '—'}{fellow.afaGroup ? ' · ' + fellow.afaGroup : ''}</td>

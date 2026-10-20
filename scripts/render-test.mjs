@@ -53,6 +53,19 @@ const badVis = fellowChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (badVis.length === 0) console.log('OK    goals hidden from fellows, grouped for staff');
 else { console.log('FAIL  goals visibility: ' + badVis.join('; ')); failed++; }
 
+// Analytics opt-outs must disappear from staff aggregates and Fellow-level
+// breakdowns while the roster still exposes an explicit management control.
+const optedOutAnalyticsHtml = renderHtml('ExpandedAnalyticsPanel-opt-out');
+const rosterAdminHtml = renderHtml('RosterPanel');
+const analyticsOptOutChecks = [
+  ['opted-out Fellow excluded from analytics breakdown', !optedOutAnalyticsHtml.includes('Fellow Two')],
+  ['included Fellow remains in analytics breakdown', optedOutAnalyticsHtml.includes('Fellow One')],
+  ['existing Fellows have an opt-out control', rosterAdminHtml.includes('Don&#x27;t include in analysis')],
+];
+const badAnalyticsOptOut = analyticsOptOutChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (badAnalyticsOptOut.length === 0) console.log('OK    analytics opt-out filtering and roster control');
+else { console.log('FAIL  analytics opt-out: ' + badAnalyticsOptOut.join('; ')); failed++; }
+
 // Practice teaching: rotation math, S/P code derivation, unassigned rule, and
 // the Fellow-facing gating (grade/school/partners/outcomes by assignment only).
 const assignedHtml = renderHtml('FellowPracticePanel');

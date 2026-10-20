@@ -90,6 +90,7 @@ export const cases = [
   ['WorkModesPanel', () => <P.WorkModesPanel modes={null} onChange={noop} showToast={noop} />],
   ['TimeSummary', () => <P.TimeSummary sessions={sessions} modes={null} />],
   ['ExpandedAnalyticsPanel', () => <P.ExpandedAnalyticsPanel sessions={sessions} attendance={[]} attempts={[]} assessments={[]} roster={roster} afaGroups={afaGroups} onSeedDemo={noop} onDeleteDemo={noop} />],
+  ['ExpandedAnalyticsPanel-opt-out', () => <P.ExpandedAnalyticsPanel sessions={sessions} attendance={[{ sessionId: 1, fellowId: 'fe1', status: 'on_time' }, { sessionId: 1, fellowId: 'fe2', status: 'late' }]} attempts={[]} assessments={[]} roster={[roster[0], { ...roster[1], excludeFromAnalysis: true }]} afaGroups={afaGroups} onSeedDemo={noop} onDeleteDemo={noop} />],
   ['FellowAttendanceBreakdown', () => <P.FellowAttendanceBreakdown sessions={sessions} attendance={[{ id: 'a1', sessionId: 1, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T09:05:00.000Z' }, { id: 'a2', sessionId: 1, fellowId: 'fe2', status: 'late', recordedAt: '2026-10-25T09:20:00.000Z' }]} fellows={roster} roster={roster} />],
   ['ExpandedAnalyticsPanel-attendance', () => <P.ExpandedAnalyticsPanel sessions={sessions} attendance={[{ id: 'a1', sessionId: 1, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T09:05:00.000Z' }, { id: 'a2', sessionId: 1, fellowId: 'fe2', status: 'late', recordedAt: '2026-10-25T09:20:00.000Z' }, { id: 'a3', sessionId: 2, fellowId: 'fe1', status: 'on_time', recordedAt: '2026-10-25T10:05:00.000Z' }]} attempts={[]} assessments={[]} roster={roster} afaGroups={afaGroups} onSeedDemo={noop} onDeleteDemo={noop} />],
   ['ParagraphReviewPanel', () => <P.ParagraphReviewPanel attempts={[]} assessments={[]} roster={roster} sessions={sessions} auth={auth} onAttemptsChange={noop} />],
@@ -207,5 +208,4 @@ const attempts = [
 const reviewedAttempts = [
   { ...attempts[0], reviews: { q1: { status: 'reviewed', score: 3, answer: 'My paragraph answer', questionId: 'q1' } } },
 ];
-
 
