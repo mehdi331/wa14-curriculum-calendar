@@ -9,6 +9,10 @@ npm run dev
 
 During local development only, the sign-in screen includes **Test superuser** and **Test Fellow** buttons. These identities are stored in local browser storage and are removed from production builds. They are useful for checking role-based layouts and workflows, but they do not bypass Firestore security rules; use an authenticated Firebase account when testing live data reads and writes.
 
+### Local TnDOS desktop experiment
+
+Start the Vite server as usual, then open `http://localhost:5173/wa14-curriculum-calendar/?tndos=1`. This development-only experiment uses a Windows 98-inspired desktop and beveled application-window controls with the existing app palette. The desktop wallpaper features a glowing TnDOS logo; role-appropriate Winter Academy or City menu items are arranged across the desktop. The bottom taskbar shows the signed-in profile, available systems, open sections, and clock. The profile button opens the Start menu with **Sleep** and **Log out**; click or press a key on the glowing TnDOS sleep screen to wake. The sign-in screen also features the TnDOS glow above the existing sign-in options. Select a system on the taskbar to switch its desktop icons. Selecting an icon opens that section in a titled app window. Use **Desktop** (or Escape) to return to the workspace; windows can also be moved, minimized, maximized, and closed. Authentication and calendar data flows remain unchanged. Without `?tndos=1`, the normal application opens; production builds always use the normal application.
+
 The app uses Firebase Authentication and Cloud Firestore. The Firebase web configuration is public client configuration and is bundled into the browser app; it must not be treated as a secret. Restrict the Firebase API key to the production domain and enable only the APIs this project uses.
 
 ## Firebase setup
@@ -20,6 +24,8 @@ The app uses Firebase Authentication and Cloud Firestore. The Firebase web confi
 5. Confirm Firestore usage stays within the Spark quota: 50,000 reads/day, 20,000 writes/day, 20,000 deletes/day, 1 GiB storage, and 10 GiB/month outbound transfer.
 
 The current rules include a temporary transition bridge for the existing planning-team email addresses. Replace that bridge with Firebase custom claims managed by a trusted administrator before adding more privileged users. Never restore password or PIN authentication in the browser.
+
+The City Admin panel and the Winter Academy **Who's online** tab use short-lived Firestore presence records to show staff and Fellows across both systems. Signed-in users can write and clear only their own session records; the list is readable only to accounts whose Firebase custom claims identify them as planners, AFA/Coach, full/fellows access, or `adminPanel: true`. Ensure those claims are assigned to the same staff who can open the Admin panel, then publish the updated rules. A session is considered online for two minutes after its last heartbeat, so a closed browser or lost connection may remain listed briefly.
 
 ## Assessments and attendance
 
@@ -97,9 +103,9 @@ Types, modes and Fellow visibility are staff-controlled: an individual item can 
 
 ### Admin panel
 
-The **Admin panel** (`#admin`) is a separate access point that Fellows can never reach. Its **Fellows** tab is open to AFA, Coach, Admin and Superadmin accounts and manages the full Fellow profile (cohort, grade, track, placement city, coach, AFA group); a Winter Academy AFA's new Fellows are pre-assigned next year's cohort. The **City staff** tab manages staff roles and Training Systems and requires full access.
+The **Admin panel** (`#admin`) is a separate access point that Fellows can never reach. Its **Fellows** tab is open to AFA, Coach, Admin and Superadmin accounts and manages the full Fellow profile (cohort, grade, track, placement city, coach, AFA group); a Winter Academy AFA's new Fellows are pre-assigned next year's cohort. The **City staff** tab manages staff roles and Training Systems and requires full access. The cross-system **Who's online** view is available from City Admin and the Winter Academy sidebar to full-access staff.
 
-Run `npm run test:render` to render every panel (Winter Academy **and** City) and to assert the cohort, visibility and reporting helpers.
+Run `npm run test:render` to render every panel (Winter Academy **and** City) and to assert the cohort, visibility and reporting helpers. Run `npm run test:tndos` to verify the local-only desktop URL gate.
 
 ## Deployment
 

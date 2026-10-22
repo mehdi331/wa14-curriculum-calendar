@@ -6,7 +6,8 @@ import React, { useState } from 'react';
 import { ShieldCheck } from '@phosphor-icons/react';
 import { FellowsAdmin } from './cityAdminFellows.jsx';
 import { StaffAdmin } from './cityAdminStaff.jsx';
-import { canManageCityFellows, canOpenAdminPanel } from './cohort';
+import { canManageCityFellows } from './cohort';
+import OnlineUsersPanel from './OnlineUsersPanel.jsx';
 
 const tabBtn = on => ({ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (on ? '#1F6F78' : '#2A5C4B'), background: on ? '#1F6F78' : 'transparent', color: on ? '#fff' : '#9DB09D' });
 
@@ -25,7 +26,12 @@ export default function AdminPanel({ auth, roster, setRoster, planners, setPlann
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <button onClick={() => setTab('fellows')} style={tabBtn(active === 'fellows')}>Fellows</button>
         {full && <button onClick={() => setTab('staff')} style={tabBtn(active === 'staff')}>City staff</button>}
+        <button onClick={() => setTab('online')} style={tabBtn(active === 'online')}>Who's online</button>
       </div>
+      {active === 'online' ? (
+        <OnlineUsersPanel roster={roster} planners={planners} />
+      ) : (
+        <>
       <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <ShieldCheck size={16} color="#D65641" />
         <div style={{ fontSize: 12.5 }}>{active === 'staff' ? 'Full control: add, edit and remove City staff and set their Training Systems.' : 'Staff with Fellows access can add, edit and remove Fellows here. Staff changes need full control.'}</div>
@@ -33,7 +39,8 @@ export default function AdminPanel({ auth, roster, setRoster, planners, setPlann
       {active === 'fellows'
         ? <FellowsAdmin roster={roster} setRoster={setRoster} canManage={canManageFellows} auth={auth} planners={planners} settings={settings} />
         : <StaffAdmin planners={planners} setPlanners={setPlanners} canManageStaff={full} />}
+        </>
+      )}
     </div>
   );
 }
-

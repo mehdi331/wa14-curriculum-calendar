@@ -304,6 +304,9 @@ try {
     ['', true, true, true, false, 'dashboard'],
     ['academyArchives', true, true, true, false, 'academyArchives'],
     ['overview', true, true, true, false, 'overview'],
+    ['onlineUsers', true, true, true, false, 'onlineUsers'],
+    ['onlineUsers', true, false, false, false, 'dashboard'],
+    ['onlineUsers', false, false, false, true, 'overview'],
     ['bogus', true, false, false, false, 'dashboard'],
     ['bogus', false, false, false, true, 'overview'],
     ['bogus', false, false, false, false, 'calendar'],
@@ -312,6 +315,23 @@ try {
   if (!nhtBad.length) console.log('OK    normalizeHashTab routing rules');
   else { console.log('FAIL  normalizeHashTab got ' + JSON.stringify(nhtBad)); failed++; }
 } catch (err) { console.log('FAIL  normalizeHashTab: ' + err.message); failed++; }
+
+// TnDOS desktop icons must preserve the existing role-based navigation.
+try {
+  const getTabs = mod2.__panels.getSidebarTabs;
+  const adminTabs = getTabs({ isAdmin: true, isFullAdmin: true, isSuperadmin: true, isFellow: false, openRequests: 2 });
+  const fellowTabs = getTabs({ isAdmin: false, isFullAdmin: false, isSuperadmin: false, isFellow: true });
+  const tabChecks = [
+    ['every admin menu item has an icon', adminTabs.every(item => !!item.icon)],
+    ['admin menu retains online users', adminTabs.some(item => item.id === 'onlineUsers')],
+    ['admin menu retains request count', adminTabs.some(item => item.id === 'requests' && item.label.includes('(2)'))],
+    ['fellow menu excludes staff-only modules', !fellowTabs.some(item => ['planners', 'onlineUsers', 'fellows'].includes(item.id))],
+    ['fellow menu items all have icons', fellowTabs.every(item => !!item.icon)],
+  ];
+  const tabFailures = tabChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  if (!tabFailures.length) console.log('OK    TnDOS icon navigation keeps existing role access');
+  else { console.log('FAIL  TnDOS navigation: ' + tabFailures.join('; ')); failed++; }
+} catch (err) { console.log('FAIL  TnDOS navigation: ' + err.message); failed++; }
 
 // Fellow gating: systemAccessFor must not stamp the legacy 'full' onto Fellows,
 // and deriveRoleFlags must keep Fellows out of isAdmin/isFullAdmin even when an

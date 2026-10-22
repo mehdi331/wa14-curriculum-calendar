@@ -1,13 +1,35 @@
 // [CITY] Training System picker: shown automatically after sign-in to staff
 // whose Training Systems include both Winter Academy and City. Fellows never
 // see it -- their system derives from their cohort.
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Buildings, GraduationCap } from '@phosphor-icons/react';
 import { SYSTEMS, systemsForStaff } from './cohort';
 
 const FONT = "-apple-system, 'Inter', 'Segoe UI', sans-serif";
 
 export default function SystemGate({ auth, onPick, onLogout }) {
   const systems = systemsForStaff(auth);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tndos') !== '1') return undefined;
+    const icons = { winter_academy: GraduationCap, city: Buildings };
+    window.dispatchEvent(new CustomEvent('tndos:navigation-menu', {
+      detail: systems.map(id => ({
+        id: `system:${id}`,
+        label: SYSTEMS[id].label,
+        icon: icons[id],
+        system: id,
+      })),
+    }));
+    return undefined;
+  }, [systems.join('|')]);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tndos') !== '1') return undefined;
+    const selectSystem = event => {
+      if (systems.includes(event.detail)) onPick(event.detail);
+    };
+    window.addEventListener('tndos:select-system', selectSystem);
+    return () => window.removeEventListener('tndos:select-system', selectSystem);
+  }, [systems.join('|'), onPick]);
   return (
     <div className="wa14-app min-h-[480px] flex items-center justify-center bg-wa-bg" style={{ fontFamily: FONT }}>
       <div className="wa-card p-8 w-[460px] max-w-[92vw]">

@@ -1,7 +1,16 @@
 // City shell: the system-scoped City nav from the plan. Fellows see only
 // home + calendar; the Admin panel appears only for AFA / Coach / full-access
 // staff (auth.adminPanel). Everything else is behind the staff roles.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import {
+  Briefcase,
+  CalendarBlank,
+  ChartBar,
+  House,
+  ShieldCheck,
+  SlidersHorizontal,
+  Table,
+} from '@phosphor-icons/react';
 import CityHome from './CityHome.jsx';
 
 const FONT = "-apple-system, 'Inter', 'Segoe UI', sans-serif";
@@ -9,13 +18,13 @@ const FONT = "-apple-system, 'Inter', 'Segoe UI', sans-serif";
 import { canOpenAdminPanel } from './cohort';
 
 const CITY_TABS = [
-  { id: 'home', label: 'City home' },
-  { id: 'calendar', label: 'City calendar' },
-  { id: 'sessions', label: 'Spaces & tasks' },
-  { id: 'types', label: 'Types & modes' },
-  { id: 'staff', label: 'Staff calendar & tasks' },
-  { id: 'report', label: 'Spaces report' },
-  { id: 'admin', label: 'Admin panel' },
+  { id: 'home', label: 'City home', icon: House },
+  { id: 'calendar', label: 'City calendar', icon: CalendarBlank },
+  { id: 'sessions', label: 'Spaces & tasks', icon: Table },
+  { id: 'types', label: 'Types & modes', icon: SlidersHorizontal },
+  { id: 'staff', label: 'Staff calendar & tasks', icon: Briefcase },
+  { id: 'report', label: 'Spaces report', icon: ChartBar },
+  { id: 'admin', label: 'Admin panel', icon: ShieldCheck },
 ];
 
 export default function CityShell({ auth, system, setSystem, onLeave, store }) {
@@ -29,17 +38,32 @@ export default function CityShell({ auth, system, setSystem, onLeave, store }) {
     if (t.id === 'admin') return canOpenAdminPanel(auth);
     return true;
   });
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tndos') !== '1') return undefined;
+    window.dispatchEvent(new CustomEvent('tndos:navigation-menu', {
+      detail: visible.map(({ id, label, icon }) => ({ id: `city:${id}`, label, icon: icon || House, system: 'city' })),
+    }));
+    return undefined;
+  }, [visible.map(item => item.id).join('|')]);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('tndos') !== '1') return undefined;
+    const selectCityTab = event => {
+      if (visible.some(item => item.id === event.detail)) setView(event.detail);
+    };
+    window.addEventListener('tndos:select-city-tab', selectCityTab);
+    return () => window.removeEventListener('tndos:select-city-tab', selectCityTab);
+  }, [visible.map(item => item.id).join('|')]);
   const active = visible.some(t => t.id === view) ? view : 'home';
   return (
     <div className="wa14-app min-h-screen flex flex-col" style={{ fontFamily: FONT, background: '#252625', color: '#D5E0D5' }}>
-      <div className="bg-wa-container/95 border-b border-wa-border px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3">
+      <div className="tndos-city-navigation bg-wa-container/95 border-b border-wa-border px-4 sm:px-6 flex items-center justify-between flex-wrap gap-3">
         <div className="py-2.5">
           <div className="font-extrabold text-lg leading-tight text-white">Fellow Training System · City</div>
           <div className="text-[11.5px] text-wa-muted mt-[2px] font-medium">{auth.name} · {auth.roleLabel}</div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           {visible.map(t => (
-            <button key={t.id} onClick={() => setView(t.id)} className={active === t.id ? 'btn-primary text-xs' : 'btn-ghost text-xs'}>{t.label}</button>
+            <button key={t.id} onClick={() => setView(t.id)} className={`tndos-city-menu-button ${active === t.id ? 'btn-primary text-xs' : 'btn-ghost text-xs'}`}>{t.label}</button>
           ))}
           {auth.role !== 'fellow' && system && <button onClick={() => setSystem(null)} className="btn-ghost text-xs">Switch system</button>}
           <button onClick={onLeave} className="btn-ghost text-xs">Sign out</button>

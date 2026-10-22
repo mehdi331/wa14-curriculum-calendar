@@ -11,6 +11,8 @@ import AdminPanel from '../src/city/AdminPanel.jsx';
 import CityItemEditorFull from '../src/city/CityItemEditorFull.jsx';
 import { StaffTaskEditor } from '../src/city/CityStaffTaskEditor.jsx';
 import CityTypesModes from '../src/city/CityTypesModes.jsx';
+import OnlineUsersPanel from '../src/city/OnlineUsersPanel.jsx';
+import TnDOSDesktop from '../src/tndos/TnDOSDesktop.jsx';
 
 // --- city/cohort helpers (loaded from the src/city barrel) ---
 import * as city from '../src/city/index.js';
@@ -164,6 +166,8 @@ export const cases = [
   ['CityTypesModes', () => <CityTypesModes types={cityTypes} setTypes={noop} modes={cityModes} setModes={noop} />],
   ['AdminPanel-full', () => <AdminPanel auth={cityStaffAuth} roster={cityRoster} setRoster={noop} planners={planners} setPlanners={noop} settings={citySettings} />],
   ['AdminPanel-afa', () => <AdminPanel auth={{ ...cityStaffAuth, role: 'afa', roleLabel: 'AFA', access: 'resources' }} roster={cityRoster} setRoster={noop} planners={planners} setPlanners={noop} settings={citySettings} />],
+  ['OnlineUsersPanel', () => <OnlineUsersPanel roster={cityRoster} planners={planners} />],
+  ['TnDOSDesktop', () => <TnDOSDesktop />],
   ['CityItemEditorFull', () => <CityItemEditorFull item={null} settings={citySettings} planners={planners} types={cityTypes} modes={cityModes} onSave={noop} onDelete={null} onClose={noop} />],
   ['StaffTaskEditor', () => <StaffTaskEditor task={null} onSave={noop} onDelete={null} onClose={noop} types={cityTypes} modes={cityModes} />],
   ['SystemGate', () => <SystemGate auth={cityStaffAuth} onPick={noop} onLeave={noop} />],
@@ -208,4 +212,3 @@ const attempts = [
 const reviewedAttempts = [
   { ...attempts[0], reviews: { q1: { status: 'reviewed', score: 3, answer: 'My paragraph answer', questionId: 'q1' } } },
 ];
-

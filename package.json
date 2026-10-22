@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:render": "node scripts/render-test.mjs",
+    "test:presence": "node scripts/calendar-presence-test.mjs",
+    "test:tndos": "node scripts/tndos-test.mjs",
     "test:calendar-sync": "node scripts/google-calendar-sync/test.mjs && node scripts/google-calendar-sync/workbook-test.mjs"
   },
   "dependencies": {
