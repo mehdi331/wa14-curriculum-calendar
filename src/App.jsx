@@ -11,6 +11,7 @@ import SystemGate from './city/SystemGate.jsx';
 import OnlineUsersPanel from './city/OnlineUsersPanel.jsx';
 import { useCityStore } from './city/cityStore.js';
 import { useCalendarPresence } from './city/calendarPresence.js';
+import { recordLoginAudit } from './city/loginAudit.js';
 import { systemsForStaff, canOpenAdminPanel, cohortRole, cohortAccessRevoked, defaultCohortForCreator, accessForSystem } from './city/cohort';
 import TnDOSGlow from './tndos/TnDOSGlow.jsx';
 
@@ -377,6 +378,8 @@ export default function App({ injectedAuth = null, onInjectedLogout = null }) {
   const [authBusy, setAuthBusy] = useState(false);
   const [system, setSystem] = useState(null); // [CITY] staff Training System choice
   const presenceClearRef = useRef(null);
+  const auditedSessionUidRef = useRef(null);
+  const auditedSystemRef = useRef(null);
   const cityStore = useCityStore();           // [CITY] City collections (roster, items, tasks, settings, types, modes)
 
   useEffect(() => {
@@ -440,8 +443,16 @@ export default function App({ injectedAuth = null, onInjectedLogout = null }) {
   // [CITY] with a host-managed identity, logout is delegated to the host.
   const handleLogout = async () => {
     if (injectedAuth) { if (onInjectedLogout) onInjectedLogout(); return undefined; }
+    const user = firebaseAuth?.currentUser;
+    if (user) {
+      try {
+        await recordLoginAudit(user, 'sign_out', auditedSystemRef.current || 'unknown');
+      } catch (error) {
+        console.error('Sign-out audit event could not be recorded', error);
+      }
+    }
     await presenceClearRef.current?.();
-    return signOut(firebaseAuth);
+    return firebaseAuth ? signOut(firebaseAuth) : undefined;
   };
   const [localTestAccounts, setLocalTestAccounts] = useState(null);
   useEffect(() => {
@@ -493,6 +504,37 @@ export default function App({ injectedAuth = null, onInjectedLogout = null }) {
   const presenceSystem = !systemAuth ? null : systemAuth.role === 'fellow'
     ? (systemAuth.cohortRole === 'winter_academy' ? 'winter_academy' : 'city')
     : (staffSystems.length > 1 && !system ? 'system_picker' : system || staffSystems[0] || 'winter_academy');
+  const isFirebaseSession = !injectedAuth
+    && Boolean(systemAuth?.uid)
+    && firebaseAuth?.currentUser?.uid === systemAuth.uid;
+  useEffect(() => {
+    if (!systemAuth || !isFirebaseSession) {
+      if (!systemAuth) {
+        auditedSessionUidRef.current = null;
+        auditedSystemRef.current = null;
+      }
+      return;
+    }
+    const uid = systemAuth.uid;
+    const previousSystem = auditedSystemRef.current;
+    if (auditedSessionUidRef.current !== uid) {
+      auditedSessionUidRef.current = uid;
+      auditedSystemRef.current = presenceSystem === 'system_picker' ? null : presenceSystem;
+      recordLoginAudit(firebaseAuth.currentUser, 'session_start', presenceSystem)
+        .catch(error => console.error('Sign-in audit session event could not be recorded', error));
+      if (presenceSystem && presenceSystem !== 'system_picker') {
+        recordLoginAudit(firebaseAuth.currentUser, 'system_enter', presenceSystem)
+          .catch(error => console.error('Sign-in audit system event could not be recorded', error));
+      }
+      return;
+    }
+    if (presenceSystem && presenceSystem !== 'system_picker' && previousSystem !== presenceSystem) {
+      auditedSystemRef.current = presenceSystem;
+      const type = previousSystem ? 'system_switch' : 'system_enter';
+      recordLoginAudit(firebaseAuth.currentUser, type, presenceSystem)
+        .catch(error => console.error('Sign-in audit system event could not be recorded', error));
+    }
+  }, [systemAuth?.uid, presenceSystem, isFirebaseSession]);
   useEffect(() => {
     if (!import.meta.env.DEV || new URLSearchParams(window.location.search).get('tndos') !== '1') return undefined;
     const systems = !systemAuth

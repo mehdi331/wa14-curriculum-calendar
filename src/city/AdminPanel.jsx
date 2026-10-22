@@ -8,6 +8,7 @@ import { FellowsAdmin } from './cityAdminFellows.jsx';
 import { StaffAdmin } from './cityAdminStaff.jsx';
 import { canManageCityFellows } from './cohort';
 import OnlineUsersPanel from './OnlineUsersPanel.jsx';
+import LoginAuditPanel from './LoginAuditPanel.jsx';
 
 const tabBtn = on => ({ padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid ' + (on ? '#1F6F78' : '#2A5C4B'), background: on ? '#1F6F78' : 'transparent', color: on ? '#fff' : '#9DB09D' });
 
@@ -27,9 +28,12 @@ export default function AdminPanel({ auth, roster, setRoster, planners, setPlann
         <button onClick={() => setTab('fellows')} style={tabBtn(active === 'fellows')}>Fellows</button>
         {full && <button onClick={() => setTab('staff')} style={tabBtn(active === 'staff')}>City staff</button>}
         <button onClick={() => setTab('online')} style={tabBtn(active === 'online')}>Who's online</button>
+        <button onClick={() => setTab('history')} style={tabBtn(active === 'history')}>Login history</button>
       </div>
       {active === 'online' ? (
         <OnlineUsersPanel roster={roster} planners={planners} />
+      ) : active === 'history' ? (
+        <LoginAuditPanel />
       ) : (
         <>
       <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>

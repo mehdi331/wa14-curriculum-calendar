@@ -12,6 +12,7 @@ import CityItemEditorFull from '../src/city/CityItemEditorFull.jsx';
 import { StaffTaskEditor } from '../src/city/CityStaffTaskEditor.jsx';
 import CityTypesModes from '../src/city/CityTypesModes.jsx';
 import OnlineUsersPanel from '../src/city/OnlineUsersPanel.jsx';
+import LoginAuditPanel from '../src/city/LoginAuditPanel.jsx';
 import TnDOSDesktop from '../src/tndos/TnDOSDesktop.jsx';
 
 // --- city/cohort helpers (loaded from the src/city barrel) ---
@@ -165,6 +166,7 @@ export const cases = [
   ['CityStaffCalendar', () => <CityStaffCalendar items={cityItems} staffTasks={[{ id: 'sbt1', kind: 'task', name: 'Prep deck', date: '2026-09-19', start: '14:00', end: '15:00', type: 'PD Session', mode: 'Sync', owner: 'City Lead', status: 'todo' }]} setStaffTasks={noop} settings={citySettings} canEdit types={cityTypes} modes={cityModes} />],
   ['CityTypesModes', () => <CityTypesModes types={cityTypes} setTypes={noop} modes={cityModes} setModes={noop} />],
   ['AdminPanel-full', () => <AdminPanel auth={cityStaffAuth} roster={cityRoster} setRoster={noop} planners={planners} setPlanners={noop} settings={citySettings} />],
+  ['LoginAuditPanel', () => <LoginAuditPanel />],
   ['AdminPanel-afa', () => <AdminPanel auth={{ ...cityStaffAuth, role: 'afa', roleLabel: 'AFA', access: 'resources' }} roster={cityRoster} setRoster={noop} planners={planners} setPlanners={noop} settings={citySettings} />],
   ['OnlineUsersPanel', () => <OnlineUsersPanel roster={cityRoster} planners={planners} />],
   ['TnDOSDesktop', () => <TnDOSDesktop />],

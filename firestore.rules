@@ -76,5 +76,26 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
       allow delete: if isTfbUser() && resource.data.uid == request.auth.uid;
     }
+
+    match /loginAudit/{eventId} {
+      allow create: if isTfbUser()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'type', 'system', 'deviceType', 'browser', 'platform', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'type', 'system', 'deviceType', 'browser', 'platform', 'createdAt'
+        ])
+        && request.resource.data.type in ['session_start', 'system_enter', 'system_switch', 'sign_out']
+        && request.resource.data.system in ['winter_academy', 'city', 'system_picker', 'unknown']
+        && request.resource.data.deviceType in ['desktop', 'tablet', 'mobile', 'unknown']
+        && request.resource.data.browser in ['Chrome', 'Edge', 'Firefox', 'Safari', 'Opera', 'Other']
+        && request.resource.data.platform in ['Windows', 'macOS', 'iOS', 'Android', 'ChromeOS', 'Linux', 'Other']
+        && request.resource.data.createdAt == request.time;
+      allow get, list: if isPresenceAdmin();
+      allow update: if false;
+      allow delete: if isPresenceAdmin();
+    }
   }
 }

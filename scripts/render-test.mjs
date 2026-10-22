@@ -34,6 +34,15 @@ for (const [name, factory] of cases) {
 // Goals visibility: fellows (canEdit=false) must never receive goal text;
 // staff (canEdit=true) must see goals grouped under their pillar with serials.
 const renderHtml = name => { const c = cases.find(x => x[0] === name); return c ? renderToString(c[1]()) : ''; };
+const adminPanelHtml = renderHtml('AdminPanel-full');
+const loginAuditHtml = renderHtml('LoginAuditPanel');
+const auditViewChecks = [
+  ['Admin panel exposes Login history', adminPanelHtml.includes('Login history')],
+  ['history explains approximate device data and no location tracking', loginAuditHtml.includes('approximate') && loginAuditHtml.includes('does not collect IP address or location')],
+];
+const badAuditView = auditViewChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (badAuditView.length === 0) console.log('OK    login audit admin tab + privacy disclosure');
+else { console.log('FAIL  login audit view: ' + badAuditView.join('; ')); failed++; }
 const fellowHtml = renderHtml('AcademyOverviewPanel-fellow');
 const staffHtml = renderHtml('AcademyOverviewPanel-goals');
 const editHtml = renderHtml('AcademyOverviewPanel-edit');
