@@ -48,6 +48,11 @@ const learningOutcomes = [
   { id: 'lo2', grade: 'Grade 9', subject: 'English', outcomesByDay: { 1: ['SECRET_ENGLISH_DAY1'] } },
   { id: 'lo3', grade: 'Grade 5', subject: 'Math', outcomesByDay: { 1: ['OTHER_GRADE_OUTCOME'] } },
 ];
+const individualCollab = {
+  id: 'col-individual', code: 'S2', band: 'secondary', grade: 'Grade 9', school: 'Dhaka Collegiate School',
+  days: 1, fellowIds: ['fe1', 'fe2'], subjectsByDay: { 1: 'Bangla' }, outcomeAssignmentVersion: 1,
+  outcomeAssignments: { 1: { fe1: ['FELLOW_ONE_OUTCOME'], fe2: ['FELLOW_TWO_OUTCOME'] } },
+};
 
 const planners = [
   { id: 'p1', name: 'Nusrat Jahan', email: 'n@x.dev', role: 'afa', group: 'AFA 1', access: 'full' },
@@ -118,7 +123,7 @@ export const cases = [
   ['TopBar', () => <P.TopBar tab="calendar" isFullAdmin auth={auth} onLogout={noop} onExport={noop} onImport={noop} onReset={noop} onAdd={noop} />],
   ['FilterBar', () => <P.FilterBar typeFilter="all" setTypeFilter={noop} pillarTagFilter="all" setPillarTagFilter={noop} modeFilter="all" setModeFilter={noop} sessionTypes={null} pillarTags={null} modes={null} />],
   ['MyAttendancePanel', () => <P.MyAttendancePanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} />],
-  ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={auth} onExport={noop} onSaveAttendance={noop} />],
+  ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={auth} academySettings={{}} onSaveAttendanceTiming={noop} onExport={noop} onSaveAttendance={noop} />],
   // AFA staff edit attendance only inside their own group (approved plan item).
   ['AttendanceRecordsPanel-afa', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={{ email: 'n@x.dev', role: 'afa', afaGroup: 'AFA 1', access: 'full' }} onExport={noop} onSaveAttendance={noop} />],
 
@@ -141,13 +146,16 @@ export const cases = [
   ['AcademyOverviewPanel-legacy', () => <P.AcademyOverviewPanel overview={{ academyName: 'Winter Academy 14', theme: '', vision: 'V', goals: ['Legacy goal one'], outcomes: [], pillars: ['Pillar A'] }} onChange={noop} canEdit />],
   ['PracticeTeachingPanel-empty', () => <P.PracticeTeachingPanel roster={roster} collaborations={[]} onChange={noop} onRosterChange={noop} showToast={noop} />],
   ['PracticeTeachingPanel-assigned', () => <P.PracticeTeachingPanel roster={roster} collaborations={[collab]} onChange={noop} onRosterChange={noop} showToast={noop} />],
-  ['CollabEditor', () => <P.CollabEditor draft={collab} setDraft={noop} people={roster} list={[collab]} onCancel={noop} onSave={noop} />],
+  ['CollabEditor', () => <P.CollabEditor draft={P.normalizeCollab(collab, learningOutcomes)} setDraft={noop} people={roster} list={[collab]} learningOutcomes={learningOutcomes} onCancel={noop} onSave={noop} />],
+  ['CollabEditor-individual-outcomes', () => <P.CollabEditor draft={individualCollab} setDraft={noop} people={roster} list={[individualCollab]} learningOutcomes={[{ grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['FELLOW_ONE_OUTCOME', 'FELLOW_TWO_OUTCOME'] } }]} onCancel={noop} onSave={noop} />],
   ['LearningOutcomesPanel', () => <P.LearningOutcomesPanel learningOutcomes={learningOutcomes} onChange={noop} showToast={noop} />],
   // Saved-list preview: every day shows ALL of its outcomes (no first-only,
   // no 3-day cut). Day 1 has two outcomes; day 4 sits past the old cut.
   ['LearningOutcomesPanel-multi', () => <P.LearningOutcomesPanel learningOutcomes={[{ id: 'lom', grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['MULTI_ONE_A', 'MULTI_ONE_B'], 2: ['MULTI_TWO'], 3: ['MULTI_THREE'], 4: ['MULTI_FOUR'] }, chaptersByDay: { 1: { chapter: 'Ch 1', pages: '1-2' } } }]} onChange={noop} showToast={noop} />],
   // Fellows see grade/school/partners/schedule/outcomes once assigned...
   ['FellowPracticePanel', () => <P.FellowPracticePanel roster={roster} collaborations={[collab]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
+  ['FellowPracticePanel-individual-fe1', () => <P.FellowPracticePanel roster={roster} collaborations={[individualCollab]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
+  ['FellowPracticePanel-individual-fe2', () => <P.FellowPracticePanel roster={roster} collaborations={[individualCollab]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe2' }} />],
   // ...and only a gated message when unassigned (no outcome text may leak).
   ['FellowPracticePanel-unassigned', () => <P.FellowPracticePanel roster={roster} collaborations={[]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
   ['HistoricalAcademiesPanel-empty', () => <P.HistoricalAcademiesPanel current={{ academyName: 'Winter Academy 14', sessions: [], attendance: [], assessments: [], questions: [], attempts: [], rooms: [], staff: [], roster: [] }} onImportSessions={noop} showToast={noop} />],

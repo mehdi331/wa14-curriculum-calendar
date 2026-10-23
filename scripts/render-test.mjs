@@ -80,6 +80,8 @@ else { console.log('FAIL  analytics opt-out: ' + badAnalyticsOptOut.join('; '));
 const assignedHtml = renderHtml('FellowPracticePanel');
 const unassignedHtml = renderHtml('FellowPracticePanel-unassigned');
 const adminHtml = renderHtml('PracticeTeachingPanel-assigned');
+const fellowOnePracticeHtml = renderHtml('FellowPracticePanel-individual-fe1');
+const fellowTwoPracticeHtml = renderHtml('FellowPracticePanel-individual-fe2');
 const ptChecks = [
   ['admin panel shows S1 + school', adminHtml.includes('S1') && adminHtml.includes('Dhaka Collegiate School')],
   ['admin panel shows unassigned section', adminHtml.includes('Unassigned Fellows')],
@@ -92,6 +94,9 @@ const ptChecks = [
   ['fellow sees distinct day-2 outcome', assignedHtml.includes('SECRET_BANGLA_DAY2')],
   ['fellow does not see another subject same-day outcome', !assignedHtml.includes('SECRET_ENGLISH_DAY1')],
   ['fellow does not see another grade\'s outcomes', !assignedHtml.includes('OTHER_GRADE_OUTCOME')],
+  ['individual outcome is visible only to its assigned Fellow', fellowOnePracticeHtml.includes('FELLOW_ONE_OUTCOME') && !fellowOnePracticeHtml.includes('FELLOW_TWO_OUTCOME')],
+  ['second Fellow sees their own distinct outcome', fellowTwoPracticeHtml.includes('FELLOW_TWO_OUTCOME') && !fellowTwoPracticeHtml.includes('FELLOW_ONE_OUTCOME')],
+  ['shared daily subject is shown', fellowOnePracticeHtml.includes('Bangla') && fellowTwoPracticeHtml.includes('Bangla')],
   ['unassigned fellow sees gate message', unassignedHtml.includes('once your practice teaching assignment is set')],
   ['unassigned fellow sees NO outcomes', !unassignedHtml.includes('SECRET_BANGLA_DAY1') && !unassignedHtml.includes('SECRET_ENGLISH_DAY1')],
   ['unassigned fellow sees NO school', !unassignedHtml.includes('Dhaka Collegiate School')],
@@ -99,6 +104,16 @@ const ptChecks = [
 const badPt = ptChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (badPt.length === 0) console.log('OK    practice teaching panel + fellow gating');
 else { console.log('FAIL  practice teaching: ' + badPt.join('; ')); failed++; }
+
+const attendanceSettingsHtml = renderHtml('AttendanceRecordsPanel');
+const sessionEditHtml = renderHtml('EditPanel-new');
+const attendanceUiChecks = [
+  ['full admin can configure attendance windows', attendanceSettingsHtml.includes('Attendance window settings') && attendanceSettingsHtml.includes('Save attendance window')],
+  ['session editor exposes per-session attendance option', sessionEditHtml.includes('Count attendance for this session')],
+];
+const badAttendanceUi = attendanceUiChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (!badAttendanceUi.length) console.log('OK    attendance settings and session eligibility controls render');
+else { console.log('FAIL  attendance controls: ' + badAttendanceUi.join('; ')); failed++; }
 
 // Saved-list preview shows every outcome of every day (regression: used to
 // show only the first outcome and only the first 3 days).
@@ -127,20 +142,20 @@ else { console.log('FAIL  fellow home partner: ' + badFo.join('; ')); failed++; 
 // Score math check: paragraph review (3/4) + correct single answer (2/2) = 5/6
 const mod2 = await vite.ssrLoadModule('/src/App.jsx');
 
-// Practice teaching helpers: S/P code derivation, free-form rotation tallies,
-// the unassigned rule (needs collab AND accountability) and per-day outcome gating.
+// Practice teaching helpers: shared subject tallies, legacy migration,
+// individual outcomes, and the unassigned rule (collab AND accountability).
 try {
   const { normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, normalizeOutcomeRecord, outcomesForDay, isFellowAssigned, unassignedFellows, learningOutcomesFor, outcomeMetaForDay, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup } = mod2.__panels;
-  // Deliberately lopsided rotation still counts as-is: no fixed 4/4/4 gate.
-  const rot = {};
-  for (let day = 1; day <= 7; day++) rot[String(day)] = { a: 'Bangla', b: 'English' };
-  rot['8'] = { a: 'Math', b: 'Math' };
-  const t = rotationTallies({ fellowIds: ['a', 'b'], rotation: rot });
+  // The shared schedule remains free-form; no fixed subject balance is required.
+  const subjectsByDay = {};
+  for (let day = 1; day <= 7; day++) subjectsByDay[String(day)] = 'Bangla';
+  subjectsByDay['8'] = 'Math';
+  const t = rotationTallies({ fellowIds: ['a', 'b'], subjectsByDay });
   const codesOk = nextCollabCode([{ code: 'S1', band: 'secondary' }], 'secondary') === 'S2'
     && nextCollabCode([{ code: 'S1', band: 'secondary' }], 'primary') === 'P1'
     && nextCollabCode([], 'secondary') === 'S1';
-  const tallyOk = t.a.Bangla === 7 && t.a.Math === 1 && t.b.English === 7 && t.b.Math === 1
-    && scheduledDays({ rotation: rot }) === 8;
+  const tallyOk = t.a.Bangla === 7 && t.a.Math === 1 && t.b.Bangla === 7 && t.b.Math === 1
+    && scheduledDays({ subjectsByDay }) === 8;
   const rosterMixed = [{ id: 'a', accountabilityIds: ['b'] }, { id: 'b', accountabilityIds: [] }, { id: 'c', accountabilityIds: ['a'] }];
   const collabs = [{ id: 'x', fellowIds: ['a'] }];
   const assignOk = isFellowAssigned(rosterMixed[0], collabs) === true
@@ -178,7 +193,25 @@ try {
     && JSON.stringify(outcomeMetaForDay([], 'Grade 9', 'Bangla', 1)) === JSON.stringify({ chapter: '', pages: '' })
     && normalizeOutcomeRecord({ grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['x'] }, chaptersByDay: { 1: { chapter: '', pages: '' } } }).chaptersByDay === undefined;
   const norm = normalizeCollab({ code: 'S3', band: 'primary', fellowIds: [1, 2], rotation: { 1: { 1: 'Bangla', 9: 'Math' }, 2: { 1: 'Paint' } }, days: 0 });
-  const normOk = norm.band === 'primary' && JSON.stringify(norm.fellowIds) === '["1","2"]' && !norm.rotation[2] && norm.days === 12;
+  const normOk = norm.band === 'primary' && JSON.stringify(norm.fellowIds) === '["1","2"]'
+    && norm.subjectsByDay['1'] === 'Bangla' && !norm.subjectsByDay['2'] && norm.days === 12;
+  const migratedLegacy = normalizeCollab({
+    id: 'legacy', grade: 'Grade 9', days: 2, fellowIds: ['a', 'b'],
+    rotation: { 1: { a: 'Bangla', b: 'English' } },
+  }, loLib);
+  const normalizedAgain = normalizeCollab(migratedLegacy, loLib);
+  const migrationOk = migratedLegacy.subjectsByDay['1'] === 'Bangla'
+    && JSON.stringify(migratedLegacy.outcomeAssignments['1'].a) === '["day1"]'
+    && JSON.stringify(migratedLegacy.outcomeAssignments['1'].b) === '["day1"]'
+    && JSON.stringify(normalizedAgain.outcomeAssignments) === JSON.stringify(migratedLegacy.outcomeAssignments)
+    && migratedLegacy.outcomeAssignmentVersion === 1;
+  const assignedIndividually = normalizeCollab({
+    id: 'individual', grade: 'Grade 9', days: 1, fellowIds: ['a', 'b'],
+    subjectsByDay: { 1: 'Bangla' }, outcomeAssignmentVersion: 1,
+    outcomeAssignments: { 1: { a: ['Chosen A'], b: ['Chosen B'] } },
+  }, loLib);
+  const individualOk = assignedIndividually.outcomeAssignments['1'].a[0] === 'Chosen A'
+    && assignedIndividually.outcomeAssignments['1'].b[0] === 'Chosen B';
   // Cross-school collabs: per-member schools override the group school.
   const schoolForMember = mod2.__panels.schoolForMember;
   const crossCollab = { id: 'cx', code: 'S9', band: 'secondary', grade: 'Grade 8', school: 'Group School', days: 12, fellowIds: ['m1', 'm2', 'm3'], schools: { m2: 'Other School' }, rotation: {} };
@@ -221,9 +254,9 @@ try {
   const solo = setAccountabilityGroup(grpRoster, ['c']);
   const soloOk = solo.find(f => f.id === 'c').accountabilityIds.length === 0;
   const exclOk = deriveOk && inOk && growOk && shrinkOk && moveOk && clearOk && soloOk;
-  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk && schoolOk && metaOk && exclOk)
-    console.log('OK    collab codes + free rotation + unassigned rule + per-day outcomes + chapter/pages + cross-school + accountability groups');
-  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk, schoolOk, metaOk, exclOk, deriveOk, inOk, growOk, shrinkOk, moveOk, clearOk, soloOk })); failed++; }
+  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk && migrationOk && individualOk && schoolOk && metaOk && exclOk)
+    console.log('OK    collaboration subjects + legacy migration + individual outcomes + accountability groups');
+  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk, migrationOk, individualOk, schoolOk, metaOk, exclOk, deriveOk, inOk, growOk, shrinkOk, moveOk, clearOk, soloOk })); failed++; }
 } catch (err) { console.log('FAIL  practice helpers: ' + err.message); failed++; }
 // Goal records: legacy strings convert, serial ordering is honoured, blanks dropped.
 try {
@@ -252,18 +285,27 @@ else { console.log('FAIL  computeAttemptScore got ' + JSON.stringify(sc) + ' pct
 try {
   const phase = mod2.__panels.attendancePhase;
   const elig = mod2.__panels.attendanceEligible;
+  const timing = mod2.__panels.attendanceTimingFromSettings;
   const syncSession = { mode: 'Sync', date: '2026-10-25', start: '09:00', end: '10:00' };
-  // The window opens 3 minutes early: 02:56:59 is upcoming, 02:57:00 is on time.
+  // Defaults: opens at -5, on time through +5, late through +15.
   const phaseChecks = [
-    ['upcoming', phase(syncSession, new Date('2026-10-25T02:56:59Z'))],
-    ['on_time', phase(syncSession, new Date('2026-10-25T02:57:00Z'))],
+    ['upcoming', phase(syncSession, new Date('2026-10-25T02:54:59Z'))],
+    ['on_time', phase(syncSession, new Date('2026-10-25T02:55:00Z'))],
     ['on_time', phase(syncSession, new Date('2026-10-25T03:04:59Z'))],
     ['late', phase(syncSession, new Date('2026-10-25T03:05:00Z'))],
     ['closed', phase(syncSession, new Date('2026-10-25T03:15:00Z'))],
   ];
   const asyncNull = phase({ mode: 'Async', date: '2026-10-25', start: '09:00', end: '10:00' }, new Date('2026-10-25T03:04:59Z')) === null;
-  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && elig(syncSession) === true && elig({ mode: 'Async' }) === false) console.log('OK    attendancePhase window boundaries');
-  else { console.log('FAIL  attendancePhase got ' + JSON.stringify(phaseChecks) + ' asyncNull=' + asyncNull); failed++; }
+  const custom = { openBeforeStartMinutes: 10, onTimeUntilMinutes: 2, lateUntilMinutes: 8 };
+  const customChecks = phase(syncSession, new Date('2026-10-25T02:50:00Z'), custom) === 'on_time'
+    && phase(syncSession, new Date('2026-10-25T03:02:00Z'), custom) === 'late'
+    && phase(syncSession, new Date('2026-10-25T03:08:00Z'), custom) === 'closed';
+  const overrideChecks = elig({ mode: 'Async', attendanceRequired: true }) === true
+    && elig({ mode: 'Sync', attendanceRequired: false }) === false
+    && elig({ mode: 'Sync' }) === true && elig({ mode: 'Async' }) === false;
+  const timingDefaults = JSON.stringify(timing({})) === JSON.stringify({ openBeforeStartMinutes: 5, onTimeUntilMinutes: 5, lateUntilMinutes: 15 });
+  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && customChecks && overrideChecks && timingDefaults) console.log('OK    configurable attendance boundaries + per-session eligibility');
+  else { console.log('FAIL  attendance timing got ' + JSON.stringify({ phaseChecks, asyncNull, customChecks, overrideChecks, timingDefaults })); failed++; }
   const released = mod2.__panels.isGradeReleased({ gradesReleased: true });
   const hidden = mod2.__panels.isGradeReleased({ gradesReleased: false });
   const submittedUngraded = mod2.__panels.attemptGradeStatus({ status: 'submitted', questionOrder: ['q1'], answers: { q1: 'x' }, reviews: {} }, mockAssessment);

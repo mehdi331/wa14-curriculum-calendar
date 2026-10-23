@@ -43,6 +43,10 @@ Staff can use the **Review** tab to score paragraph responses, add feedback, and
 
 The initial assessment persistence uses aggregate documents for compatibility with the existing app. It is suitable for local/demo testing, but production assessment use still requires stricter per-Fellow Firestore rules, server-authoritative grading/timing, protected answer keys, and per-record response storage.
 
+Fellow attendance opens 5 minutes before a session by default, is recorded as on time through 5 minutes after the scheduled start, and remains open for late check-in through 15 minutes after start. Full admins can change these three thresholds at the top of the Winter Academy **Attendance records** page. In **Edit session**, staff can include or exclude each session from attendance; the default is enabled for Sync, Workshop, and Clinic modes and disabled for other modes. Excluded sessions do not appear in attendance records or Fellow attendance totals.
+
+Practice Teaching collaborations now share one subject per day, with learning outcomes assigned separately to each Fellow for that collaboration day. Fellows see only their own selected outcomes. Existing collaborations are migrated by choosing the first assigned subject in collaboration-member order when members previously had different subjects, then copying that grade/subject/day's current learning outcomes to each member as the initial assignment.
+
 ## Google Calendar publishing
 
 Use the **Download Calendar Workbook** button on the Winter Academy **Sessions** page, then import the downloaded `.xlsx` into a Google Sheet and add the repository's Apps Script source as a script bound to that spreadsheet. The script runs only when an authorized editor chooses **Google Calendar → Sync now** from the Sheet menu; there is no automatic timer and no webapp sync button. Anyone who can edit the Sheet can also run its bound script and change the generated calendars, so restrict Sheet and Apps Script editor access.
