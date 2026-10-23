@@ -62,6 +62,10 @@ service cloud.firestore {
         && docId in ['wa14-accounts', 'wa14-planners'];
     }
 
+    match /wa14Attendance/{recordId} {
+      allow read, create, update, delete: if isTfbUser();
+    }
+
     match /calendarPresence/{presenceId} {
       allow get, list: if isPresenceAdmin()
         || (isTfbUser() && resource.data.uid == request.auth.uid);

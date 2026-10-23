@@ -3,7 +3,7 @@ import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as R
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, GoogleAuthProvider } from 'firebase/auth';
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
-import { storage, ASSESSMENT_KEYS, ACADEMY_KEYS, parseStoredArray } from './storage';
+import { storage, ASSESSMENT_KEYS, ACADEMY_KEYS, parseStoredArray, getAttendanceRecords, saveAttendanceRecord, deleteAttendanceRecord } from './storage';
 import { buildCalendarWorkbookSheets } from './calendarWorkbook.js';
 // [CITY] City system modules: shell, system picker, data store + cohort helpers.
 import CityShell from './city/CityShell.jsx';
@@ -799,7 +799,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
   const attemptsSaveTimer = useRef(null);
   const collabSaveTimer = useRef(null);
   const outcomeSaveTimer = useRef(null);
-  const attendanceSaveTimer = useRef(null);
+  const attendanceWrites = useRef(new Set());
   
   const incidentsSaveTimer = useRef(null);
   const deviceRequestsSaveTimer = useRef(null);
@@ -891,8 +891,12 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
       catch (e) { setAssessments([]); }
       try { setAssessmentAttempts(parseStoredArray(await storage.get(ASSESSMENT_KEYS.attempts))); }
       catch (e) { setAssessmentAttempts([]); }
-      try { setAttendance(parseStoredArray(await storage.get(ASSESSMENT_KEYS.attendance))); }
-      catch (e) { setAttendance([]); }
+      try { setAttendance(await getAttendanceRecords()); }
+      catch (error) {
+        console.error('Attendance records could not be loaded', error);
+        setAttendance([]);
+        showToast('Attendance records could not be loaded: ' + (error.code || error.message));
+      }
       
       
       try { setAssessmentIncidents(parseStoredArray(await storage.get(ASSESSMENT_KEYS.incidents))); }
@@ -1008,7 +1012,22 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
   const persistAssessments = debouncedPersist(setAssessments, assessmentsSaveTimer, ASSESSMENT_KEYS.assessments);
   const persistAssessmentQuestions = debouncedPersist(setAssessmentQuestions, questionsSaveTimer, ASSESSMENT_KEYS.questions);
   const persistAssessmentAttempts = debouncedPersist(setAssessmentAttempts, attemptsSaveTimer, ASSESSMENT_KEYS.attempts, err => { if (err) showToast('Save failed: ' + (err.code || err.message) + ' -- check that you are signed in with a Teach For Bangladesh account.'); });
-  const persistAttendance = debouncedPersist(setAttendance, attendanceSaveTimer, ASSESSMENT_KEYS.attendance);
+  const saveAttendanceChanges = next => {
+    const previousRecords = new Map((attendance || []).map(record => [JSON.stringify([String(record.sessionId), String(record.fellowId)]), record]));
+    const nextRecords = new Map((next || []).map(record => [JSON.stringify([String(record.sessionId), String(record.fellowId)]), record]));
+    setAttendance([...nextRecords.values()]);
+    const writes = [];
+    nextRecords.forEach((record, key) => {
+      if (JSON.stringify(previousRecords.get(key)) !== JSON.stringify(record)) writes.push(saveAttendanceRecord(record));
+    });
+    previousRecords.forEach((record, key) => {
+      if (!nextRecords.has(key)) writes.push(deleteAttendanceRecord(record.sessionId, record.fellowId));
+    });
+    Promise.all(writes).then(() => showToast('Attendance updated')).catch(error => {
+      console.error('Attendance changes could not be saved', error);
+      showToast('Attendance changes could not be saved: ' + (error.code || error.message));
+    });
+  };
   const persistManualSessionMarks = debouncedPersist(setManualSessionMarks, sessionMarksSaveTimer, ACADEMY_KEYS.manualSessionMarks);
   
   const persistAssessmentIncidents = debouncedPersist(setAssessmentIncidents, incidentsSaveTimer, ASSESSMENT_KEYS.incidents);
@@ -1039,7 +1058,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
   const entry = { id: 'inc' + Date.now() + Math.floor(Math.random() * 1000), createdAt: new Date().toISOString(), ...(incident || {}) };
   persistAssessmentIncidents([...(assessmentIncidents || []), entry]);
 };
-const recordFellowAttendance = (session) => {
+const recordFellowAttendance = async session => {
   const timing = attendanceTimingFromSession(session?.attendanceTiming);
   const phase = attendancePhase(session, new Date());
   if (!attendanceEligible(session)) { showToast('Attendance is not required for this session.'); return false; }
@@ -1047,11 +1066,26 @@ const recordFellowAttendance = (session) => {
   if (phase === 'closed') { showToast('The attendance window has closed.'); return false; }
   const fellowId = auth.fellowId;
   const fellowName = friendlyFellowName({ ...auth, fellowId }, roster);
-  if ((attendance || []).some(entry => String(entry.sessionId) === String(session.id) && String(entry.fellowId) === String(fellowId))) { showToast('Attendance already recorded for this session.'); return false; }
+  const recordKey = JSON.stringify([String(session.id), String(fellowId)]);
+  if ((attendance || []).some(entry => String(entry.sessionId) === String(session.id) && String(entry.fellowId) === String(fellowId)) || attendanceWrites.current.has(recordKey)) { showToast('Attendance already recorded for this session.'); return false; }
   const status = phase === 'on_time' ? 'on_time' : 'late';
-  persistAttendance([...(attendance || []), { id: 'att' + Date.now(), sessionId: session.id, fellowId, fellowName, status, recordedAt: new Date().toISOString(), method: 'button' }]);
-  showToast(status === 'on_time' ? 'Attendance recorded' : 'Late attendance recorded');
-  return true;
+  const record = { id: 'att-' + recordKey, sessionId: session.id, fellowId, fellowName, status, recordedAt: new Date().toISOString(), method: 'button' };
+  attendanceWrites.current.add(recordKey);
+  try {
+    await saveAttendanceRecord(record);
+    setAttendance(current => {
+      const withoutPrevious = (current || []).filter(entry => JSON.stringify([String(entry.sessionId), String(entry.fellowId)]) !== recordKey);
+      return [...withoutPrevious, record];
+    });
+    showToast(status === 'on_time' ? 'Attendance recorded' : 'Late attendance recorded');
+    return true;
+  } catch (error) {
+    console.error('Attendance check-in could not be saved', error);
+    showToast('Attendance could not be saved: ' + (error.code || error.message));
+    return false;
+  } finally {
+    attendanceWrites.current.delete(recordKey);
+  }
 };
 const exportAttendanceRecords = () => {
   const rows = (attendance || []).filter(entry => {
@@ -1226,7 +1260,7 @@ const deleteSession = (id) => {
   persist(sessions.filter(x => String(x.id) !== String(id)));
   // Purge the session's attendance rows so no orphaned records remain.
   const kept = (attendance || []).filter(r => String(r.sessionId) !== String(id));
-  if (kept.length !== (attendance || []).length) persistAttendance(kept);
+  if (kept.length !== (attendance || []).length) saveAttendanceChanges(kept);
   setEditing(null); showToast('Session removed');
 };
 const duplicateSession = (s) => {
@@ -1378,7 +1412,7 @@ const deleteDemo = () => {
   persistAssessmentQuestions(assessmentQuestions.filter(question => !question.id?.toString().startsWith('demo-')));
   persistAssessments(assessments.filter(assessment => !assessment.id?.toString().startsWith('demo-')));
   persistAssessmentAttempts(assessmentAttempts.filter(attempt => !attempt.id?.toString().startsWith('demo-')));
-  persistAttendance(attendance.filter(entry => !entry.id?.toString().startsWith('demo-')));
+  saveAttendanceChanges(attendance.filter(entry => !entry.id?.toString().startsWith('demo-')));
   showToast('Demo data deleted');
 };
 
@@ -1618,7 +1652,7 @@ return (
             />
           )}
           {tab === 'attendance' && isFullAdmin && (
-            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} auth={auth} onExport={exportAttendanceRecords} onSaveAttendance={records => { setAttendance(records); persistAttendance(records); showToast('Attendance updated'); }} />
+            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} auth={auth} onExport={exportAttendanceRecords} onSaveAttendance={saveAttendanceChanges} />
           )}
           {tab === 'summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} modes={modes} />}
           {tab === 'fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} rooms={rooms} onChange={persistRoster} onRoomsChange={persistRooms} onAccount={addAccount} showToast={showToast} />}
