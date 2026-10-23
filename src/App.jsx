@@ -2305,16 +2305,26 @@ const ATTENDANCE_MODES = ['sync', 'workshop', 'clinic'];
 const DEFAULT_ATTENDANCE_TIMING = {
   openBeforeStartMinutes: 3,
   onTimeUntilMinutes: 2,
-  lateUntilMinutes: 12,
+  lateWindowMinutes: 10,
 };
 const MAX_ATTENDANCE_WINDOW_MINUTES = 120;
 function attendanceTimingFromSession(timingSettings) {
   const configured = timingSettings && typeof timingSettings === 'object' ? timingSettings : {};
-  const timing = Object.fromEntries(Object.entries(DEFAULT_ATTENDANCE_TIMING).map(([key, fallback]) => {
-    const value = Number(configured[key]);
-    return [key, Number.isInteger(value) && value >= 0 && value <= MAX_ATTENDANCE_WINDOW_MINUTES ? value : fallback];
-  }));
-  return timing.lateUntilMinutes > timing.onTimeUntilMinutes ? timing : { ...DEFAULT_ATTENDANCE_TIMING };
+  const openBeforeStartMinutes = Number(configured.openBeforeStartMinutes);
+  const onTimeUntilMinutes = Number(configured.onTimeUntilMinutes);
+  const legacyLateUntilMinutes = Number(configured.lateUntilMinutes);
+  const lateWindowMinutes = configured.lateWindowMinutes == null
+    ? (Number.isInteger(legacyLateUntilMinutes) && legacyLateUntilMinutes > onTimeUntilMinutes ? legacyLateUntilMinutes - onTimeUntilMinutes : DEFAULT_ATTENDANCE_TIMING.lateWindowMinutes)
+    : Number(configured.lateWindowMinutes);
+  const timing = {
+    openBeforeStartMinutes: Number.isInteger(openBeforeStartMinutes) && openBeforeStartMinutes >= 0 && openBeforeStartMinutes <= MAX_ATTENDANCE_WINDOW_MINUTES
+      ? openBeforeStartMinutes : DEFAULT_ATTENDANCE_TIMING.openBeforeStartMinutes,
+    onTimeUntilMinutes: Number.isInteger(onTimeUntilMinutes) && onTimeUntilMinutes >= 0 && onTimeUntilMinutes <= MAX_ATTENDANCE_WINDOW_MINUTES
+      ? onTimeUntilMinutes : DEFAULT_ATTENDANCE_TIMING.onTimeUntilMinutes,
+    lateWindowMinutes: Number.isInteger(lateWindowMinutes) && lateWindowMinutes >= 0 && lateWindowMinutes <= MAX_ATTENDANCE_WINDOW_MINUTES
+      ? lateWindowMinutes : DEFAULT_ATTENDANCE_TIMING.lateWindowMinutes,
+  };
+  return timing;
 }
 function validateAttendanceTiming(timing) {
   const values = timing || {};
@@ -2325,7 +2335,6 @@ function validateAttendanceTiming(timing) {
     return Number.isInteger(value) && value >= 0 && value <= MAX_ATTENDANCE_WINDOW_MINUTES;
   });
   if (!supplied || !valid) return 'Enter whole minutes from 0 to 120.';
-  if (Number(values.lateUntilMinutes) <= Number(values.onTimeUntilMinutes)) return 'The late window must end after the on-time window.';
   return '';
 }
 function normalizeSessionAttendance(session) {
@@ -2342,7 +2351,7 @@ function attendancePhase(session, now = new Date()) {
   const mins = (now.getTime() - start.getTime()) / 60000;
   if (mins < -timing.openBeforeStartMinutes) return 'upcoming';
   if (mins < timing.onTimeUntilMinutes) return 'on_time';
-  if (mins < timing.lateUntilMinutes) return 'late';
+  if (mins < timing.onTimeUntilMinutes + timing.lateWindowMinutes) return 'late';
   return 'closed';
 }
 
@@ -2795,8 +2804,8 @@ function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn, roster }
     const timing = attendanceTimingFromSession(session.attendanceTiming);
     const phase = attendancePhase(session, now);
     if (phase === 'on_time') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnPrimary} style={{ fontWeight: 700 }}><CheckIcon size={14} /> Mark my attendance</button><span style={{ fontSize: 11.5, color: '#9DB09D' }}>{minsLeftTo(session, timing.onTimeUntilMinutes)} min to late window</span></div>;
-    if (phase === 'late') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnSecondary + ' text-wa-warn'} style={{ fontWeight: 700 }}>Mark late attendance</button><span style={{ fontSize: 11.5, color: '#D0A023' }}>{minsLeftTo(session, timing.lateUntilMinutes)} min left</span></div>;
-    if (phase === 'closed') return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance window closed ({timing.lateUntilMinutes} minutes from start)</div>;
+    if (phase === 'late') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnSecondary + ' text-wa-warn'} style={{ fontWeight: 700 }}>Mark late attendance</button><span style={{ fontSize: 11.5, color: '#D0A023' }}>{minsLeftTo(session, timing.onTimeUntilMinutes + timing.lateWindowMinutes)} min left</span></div>;
+    if (phase === 'closed') return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance window closed ({timing.onTimeUntilMinutes + timing.lateWindowMinutes} minutes from start)</div>;
     return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance opens {timing.openBeforeStartMinutes} minutes before the start</div>;
   };
   const card = (label, session) => <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, flex: 1, minWidth: 220 }}><div style={{ fontSize: 11.5, color: '#9DB09D', fontWeight: 600, marginBottom: 6 }}>{label}</div>{session ? <><div style={{ fontWeight: 700, fontSize: 15 }}>{session.name}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{dateLabel(session.date)}{' \u00B7 '}{session.start}{'\u2013'}{session.end}{' \u00B7 '}{fmtDur(durationMin(session))}</div><div style={{ fontSize: 12.5, color: '#D5E0D5', marginTop: 5 }}>{getVisibleRooms(session, auth, [{ id: auth.fellowId, email: auth.email }], rooms).map(room => room.name + ' \u00B7 ' + (room.physicalLocation || room.meetingUrl || 'Location not set')).join(', ') || 'Location not assigned'}</div>{control(session)}</> : <div style={{ fontSize: 13, color: '#9DB09D' }}>No session</div>}</div>;
@@ -5602,11 +5611,11 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
         </label>
         <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12, marginBottom: 14, opacity: canEditSchedule ? 1 : 0.6 }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>Attendance button window</div>
-          <div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 10 }}>Defaults: open 3 minutes before start, on time until the 2-minute mark, then late until the 12-minute mark.</div>
+          <div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 10 }}>Defaults: open 3 minutes before start, on time until +2 minutes, then late for 10 more minutes. Set a longer late duration to keep check-in open for participants who missed it.</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Field label="Open before start (minutes)" style={{ flex: '1 1 150px' }}><input disabled={!canEditSchedule} type="number" min="0" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={form.attendanceTiming.openBeforeStartMinutes} onChange={e => set('attendanceTiming', { ...form.attendanceTiming, openBeforeStartMinutes: e.target.value })} /></Field>
             <Field label="On-time cutoff (minutes after start)" style={{ flex: '1 1 190px' }}><input disabled={!canEditSchedule} type="number" min="0" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={form.attendanceTiming.onTimeUntilMinutes} onChange={e => set('attendanceTiming', { ...form.attendanceTiming, onTimeUntilMinutes: e.target.value })} /></Field>
-            <Field label="Late window ends (minutes after start)" style={{ flex: '1 1 200px' }}><input disabled={!canEditSchedule} type="number" min="1" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={form.attendanceTiming.lateUntilMinutes} onChange={e => set('attendanceTiming', { ...form.attendanceTiming, lateUntilMinutes: e.target.value })} /></Field>
+            <Field label="Late window duration (minutes after on-time cutoff)" style={{ flex: '1 1 220px' }}><input disabled={!canEditSchedule} type="number" min="0" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={form.attendanceTiming.lateWindowMinutes} onChange={e => set('attendanceTiming', { ...form.attendanceTiming, lateWindowMinutes: e.target.value })} /></Field>
           </div>
           {attendanceTimingError && <div role="alert" style={{ color: '#F0A39A', fontSize: 12, marginTop: 4 }}>{attendanceTimingError}</div>}
         </div>

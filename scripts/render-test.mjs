@@ -110,7 +110,7 @@ const sessionEditHtml = renderHtml('EditPanel-new');
 const attendanceUiChecks = [
   ['attendance records do not expose global timing settings', !attendanceSettingsHtml.includes('Attendance window settings') && !attendanceSettingsHtml.includes('Save attendance window')],
   ['session editor exposes per-session attendance inclusion', sessionEditHtml.includes('Count attendance for this session')],
-  ['session editor exposes timing controls and defaults', sessionEditHtml.includes('Attendance button window') && sessionEditHtml.includes('Open before start (minutes)') && sessionEditHtml.includes('On-time cutoff (minutes after start)') && sessionEditHtml.includes('Late window ends (minutes after start)') && sessionEditHtml.includes('value="3"') && sessionEditHtml.includes('value="2"') && sessionEditHtml.includes('value="12"')],
+  ['session editor exposes timing controls and defaults', sessionEditHtml.includes('Attendance button window') && sessionEditHtml.includes('Open before start (minutes)') && sessionEditHtml.includes('On-time cutoff (minutes after start)') && sessionEditHtml.includes('Late window duration (minutes after on-time cutoff)') && sessionEditHtml.includes('value="3"') && sessionEditHtml.includes('value="2"') && sessionEditHtml.includes('value="10"')],
 ];
 const badAttendanceUi = attendanceUiChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (!badAttendanceUi.length) console.log('OK    per-session attendance controls; no global timing form');
@@ -296,7 +296,7 @@ try {
   const validateTiming = mod2.__panels.validateAttendanceTiming;
   const normalizeSessionAttendance = mod2.__panels.normalizeSessionAttendance;
   const syncSession = { mode: 'Sync', date: '2026-10-25', start: '09:00', end: '10:00' };
-  // Defaults: opens at -3, on time until +2, late until +12.
+  // Defaults: opens at -3, on time until +2, then late for 10 more minutes.
   const phaseChecks = [
     ['upcoming', phase(syncSession, new Date('2026-10-25T02:56:59Z'))],
     ['on_time', phase(syncSession, new Date('2026-10-25T02:57:00Z'))],
@@ -305,25 +305,31 @@ try {
     ['closed', phase(syncSession, new Date('2026-10-25T03:12:00Z'))],
   ];
   const asyncNull = phase({ mode: 'Async', date: '2026-10-25', start: '09:00', end: '10:00' }, new Date('2026-10-25T03:01:59Z')) === null;
-  const custom = { openBeforeStartMinutes: 10, onTimeUntilMinutes: 2, lateUntilMinutes: 8 };
+  const custom = { openBeforeStartMinutes: 10, onTimeUntilMinutes: 2, lateWindowMinutes: 6 };
   const customSession = { ...syncSession, attendanceTiming: custom };
   const customChecks = phase(customSession, new Date('2026-10-25T02:50:00Z')) === 'on_time'
     && phase(customSession, new Date('2026-10-25T03:02:00Z')) === 'late'
     && phase(customSession, new Date('2026-10-25T03:08:00Z')) === 'closed';
+  const extendedLateWindow = { ...syncSession, attendanceTiming: { openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateWindowMinutes: 120 } };
+  const extendedChecks = phase(extendedLateWindow, new Date('2026-10-25T05:01:59Z')) === 'late'
+    && phase(extendedLateWindow, new Date('2026-10-25T05:02:00Z')) === 'closed'
+    && !validateTiming(extendedLateWindow.attendanceTiming);
   const individualizedChecks = phase(syncSession, new Date('2026-10-25T03:03:00Z')) === 'late'
-    && phase({ ...syncSession, attendanceTiming: { openBeforeStartMinutes: 1, onTimeUntilMinutes: 5, lateUntilMinutes: 9 } }, new Date('2026-10-25T03:03:00Z')) === 'on_time';
-  const migrationChecks = JSON.stringify(normalizeSessionAttendance({ ...syncSession }).attendanceTiming) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 })
-    && JSON.stringify(normalizeSessionAttendance({ ...syncSession, attendanceTiming: custom }).attendanceTiming) === JSON.stringify(custom)
-    && JSON.stringify(timing({ invalid: true })) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 });
+    && phase({ ...syncSession, attendanceTiming: { openBeforeStartMinutes: 1, onTimeUntilMinutes: 5, lateWindowMinutes: 4 } }, new Date('2026-10-25T03:03:00Z')) === 'on_time';
+  const legacyTiming = { openBeforeStartMinutes: 10, onTimeUntilMinutes: 2, lateUntilMinutes: 8 };
+  const migrationChecks = JSON.stringify(normalizeSessionAttendance({ ...syncSession }).attendanceTiming) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateWindowMinutes: 10 })
+    && JSON.stringify(normalizeSessionAttendance({ ...syncSession, attendanceTiming: legacyTiming }).attendanceTiming) === JSON.stringify({ openBeforeStartMinutes: 10, onTimeUntilMinutes: 2, lateWindowMinutes: 6 })
+    && JSON.stringify(timing({ invalid: true })) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateWindowMinutes: 10 });
   const validationChecks = !validateTiming(custom)
     && Boolean(validateTiming({ ...custom, onTimeUntilMinutes: 2.5 }))
-    && Boolean(validateTiming({ ...custom, lateUntilMinutes: 2 }));
+    && Boolean(validateTiming({ ...custom, lateWindowMinutes: 121 }));
   const overrideChecks = elig({ mode: 'Async', attendanceRequired: true }) === true
     && elig({ mode: 'Sync', attendanceRequired: false }) === false
     && elig({ mode: 'Sync' }) === true && elig({ mode: 'Async' }) === false;
-  const timingDefaults = JSON.stringify(timing({})) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 });
-  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && customChecks && individualizedChecks && migrationChecks && validationChecks && overrideChecks && timingDefaults) console.log('OK    per-session attendance boundaries + defaults + validation + eligibility');
-  else { console.log('FAIL  attendance timing got ' + JSON.stringify({ phaseChecks, asyncNull, customChecks, individualizedChecks, migrationChecks, validationChecks, overrideChecks, timingDefaults })); failed++; }
+  const timingDefaults = JSON.stringify(timing({})) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateWindowMinutes: 10 });
+  const legacyDefaultMigration = JSON.stringify(normalizeSessionAttendance({ ...syncSession, attendanceTiming: { openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 } }).attendanceTiming) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateWindowMinutes: 10 });
+  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && customChecks && extendedChecks && individualizedChecks && migrationChecks && legacyDefaultMigration && validationChecks && overrideChecks && timingDefaults) console.log('OK    per-session attendance boundaries + defaults + validation + eligibility');
+  else { console.log('FAIL  attendance timing got ' + JSON.stringify({ phaseChecks, asyncNull, customChecks, extendedChecks, individualizedChecks, migrationChecks, legacyDefaultMigration, validationChecks, overrideChecks, timingDefaults })); failed++; }
   const released = mod2.__panels.isGradeReleased({ gradesReleased: true });
   const hidden = mod2.__panels.isGradeReleased({ gradesReleased: false });
   const submittedUngraded = mod2.__panels.attemptGradeStatus({ status: 'submitted', questionOrder: ['q1'], answers: { q1: 'x' }, reviews: {} }, mockAssessment);
