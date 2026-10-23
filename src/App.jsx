@@ -810,10 +810,18 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
       try {
         const r = await storage.get('wa14-sessions');
         const raw = r && r.value ? JSON.parse(r.value) : SEED;
-        // Migrate legacy "pillar" field to "type" and ensure pillar tags exist.
-        setSessions(raw.map(s => ({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 })));
+        // Migrate legacy session fields and stamp the current per-session attendance defaults.
+        const normalizedSessions = raw.map(s => normalizeSessionAttendance({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 }));
+        setSessions(normalizedSessions);
+        if (auth.role !== 'fellow' && JSON.stringify(normalizedSessions) !== JSON.stringify(raw)) {
+          try { await storage.set('wa14-sessions', JSON.stringify(normalizedSessions)); }
+          catch (error) {
+            console.error('session attendance timing migration failed', error);
+            showToast('Could not save default session attendance windows: ' + (error.code || error.message));
+          }
+        }
       }
-      catch (e) { setSessions(SEED.map(s => ({ ...s, type: s.pillar || SESSION_TYPES[0], pillarIds: [] }))); }
+      catch (e) { setSessions(SEED.map(s => normalizeSessionAttendance({ ...s, type: s.pillar || SESSION_TYPES[0], pillarIds: [] }))); }
       let loadedQuestions = [];
       let storedCollaborations = [];
       let storedLearningOutcomes = [];
@@ -909,8 +917,16 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
         storedLearningOutcomes = Array.isArray(raw) ? raw : [];
       }
       catch (e) { storedLearningOutcomes = []; }
-      setLearningOutcomes(storedLearningOutcomes);
-      const migratedCollaborations = storedCollaborations.map(collab => normalizeCollab(collab, storedLearningOutcomes)).filter(Boolean);
+      const migratedLearningOutcomes = storedLearningOutcomes.map(outcome => normalizeOutcomeRecord(outcome)).filter(Boolean);
+      setLearningOutcomes(migratedLearningOutcomes);
+      if (auth.role !== 'fellow' && JSON.stringify(migratedLearningOutcomes) !== JSON.stringify(storedLearningOutcomes)) {
+        try { await storage.set(ACADEMY_KEYS.learningOutcomes, JSON.stringify(migratedLearningOutcomes)); }
+        catch (error) {
+          console.error('learning outcomes migration failed', error);
+          showToast('Could not save migrated learning outcomes: ' + (error.code || error.message));
+        }
+      }
+      const migratedCollaborations = storedCollaborations.map(collab => normalizeCollab(collab, migratedLearningOutcomes)).filter(Boolean);
       setCollaborations(migratedCollaborations);
       if (auth.role !== 'fellow' && JSON.stringify(migratedCollaborations) !== JSON.stringify(storedCollaborations)) {
         try { await storage.set(ACADEMY_KEYS.collaborations, JSON.stringify(migratedCollaborations)); }
@@ -943,7 +959,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
       const serialized = JSON.stringify(next);
       if (serialized === lastRemoteSessions.current) return;
       lastRemoteSessions.current = serialized;
-      setSessions(next.map(s => ({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 })));
+      setSessions(next.map(s => normalizeSessionAttendance({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 })));
     });
     const unsubStaff = storage.subscribe('wa14-staff-tasks', (rec) => {
       const next = rec && rec.value ? JSON.parse(rec.value) : [];
@@ -1024,8 +1040,8 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
   persistAssessmentIncidents([...(assessmentIncidents || []), entry]);
 };
 const recordFellowAttendance = (session) => {
-  const timing = attendanceTimingFromSettings(academySettings?.attendanceTiming);
-  const phase = attendancePhase(session, new Date(), timing);
+  const timing = attendanceTimingFromSession(session?.attendanceTiming);
+  const phase = attendancePhase(session, new Date());
   if (!attendanceEligible(session)) { showToast('Attendance is not required for this session.'); return false; }
   if (phase === 'upcoming') { showToast('Attendance opens ' + timing.openBeforeStartMinutes + ' minutes before the session start time.'); return false; }
   if (phase === 'closed') { showToast('The attendance window has closed.'); return false; }
@@ -1192,14 +1208,14 @@ const importExcel = () => {
 const saveSession = (s) => {
   const current = sessionsRef.current;
   const exists = current.find(x => String(x.id) === String(s.id));
-  let toSave = s;
+  let toSave = normalizeSessionAttendance(s);
   let nextRooms = rooms;
   if (!exists) {
     // New sessions default to the Main Room when no room is set; existing
     // sessions are never rewritten (no retroactive room changes).
     const ensured = ensureMainRoom(rooms);
     nextRooms = ensured.rooms;
-    if (!(s.roomIds || []).length && !(s.rooms || []).length) toSave = { ...s, roomIds: [ensured.room.id] };
+    if (!(s.roomIds || []).length && !(s.rooms || []).length) toSave = { ...toSave, roomIds: [ensured.room.id] };
   }
   const next = exists ? current.map(x => String(x.id) === String(s.id) ? toSave : x) : [...current, toSave];
   persist(next);
@@ -1218,7 +1234,7 @@ const duplicateSession = (s) => {
   if (now - duplicateGuard.current < 400) return;
   duplicateGuard.current = now;
   const base = sessionsRef.current;
-  const copy = { ...s, id: 'dup-' + now + '-' + Math.floor(Math.random() * 1000), name: (s.name || 'Untitled session') + ' (copy)' };
+  const copy = normalizeSessionAttendance({ ...s, id: 'dup-' + now + '-' + Math.floor(Math.random() * 1000), name: (s.name || 'Untitled session') + ' (copy)' });
   setSessions(prev => prev ? [...prev, copy] : [copy]);
   persist([...base, copy]);
   showToast('Duplicated as "' + copy.name + '" — ' + (copy.week != null ? 'Week ' + String(copy.week).padStart(2, '0') : 'unscheduled'));
@@ -1314,8 +1330,15 @@ const pageExporters = {
   roles: () => exportSheetFile('Fellow_Training_System_Roles.xlsx', [{ name: 'Roles', rows: roles.map(r => ({ Id: r.id, Label: r.label || '' })) }, { name: 'City codes', rows: (cityCodes || []).map(c => ({ City: c.city, Code: c.code })) }]),
   practiceTeaching: () => exportSheetFile('Fellow_Training_System_Practice_Teaching.xlsx', [
     { name: 'Collaborations', rows: (collaborations || []).map(c => ({ Code: c.code, Band: c.band, Grade: c.grade, Schools: [...new Set(c.fellowIds.map(fid => schoolForMember(c, fid)).filter(Boolean))].join(' + '), Days: c.days, Fellows: c.fellowIds.map(id => (fellowById(roster, id) || {}).name || id).join(', '), DaysScheduled: scheduledDays(c) + ' of ' + c.days })) },
-    { name: 'Rotation', rows: (collaborations || []).flatMap(c => Object.entries(c.subjectsByDay || {}).flatMap(([day, subject]) => c.fellowIds.map(fid => ({ Code: c.code, Day: day, Fellow: (fellowById(roster, fid) || {}).name || fid, School: schoolForMember(c, fid), Subject: subject, Outcomes: (((c.outcomeAssignments || {})[day] || {})[String(fid)] || []).join(' | ') })))) },
-    { name: 'Learning outcomes', rows: (learningOutcomes || []).flatMap(o => Object.entries((o && o.outcomesByDay) || {}).filter(([d]) => d !== ALL_DAYS_KEY).flatMap(([d, rows]) => (rows || []).map(text => { const metaInfo = ((o.chaptersByDay || {})[d]) || {}; return { Grade: o.grade, Subject: o.subject, Day: d, Chapter: metaInfo.chapter || '', Pages: metaInfo.pages || '', Outcome: text }; }))) },
+    { name: 'Rotation', rows: (collaborations || []).flatMap(c => Object.entries(c.subjectsByFellowByDay || {}).flatMap(([day, byFellow]) => Object.entries(byFellow || {}).map(([fid, subject]) => {
+      const outcomeIds = ((c.outcomeAssignments || {})[day] || {})[String(fid)] || [];
+      const catalog = outcomesForSubject(learningOutcomes, c.grade, subject);
+      return { Code: c.code, Day: day, Fellow: (fellowById(roster, fid) || {}).name || fid, School: schoolForMember(c, fid), Subject: subject, Outcomes: outcomeIds.map(id => (catalog.find(outcome => outcome.id === id) || {}).text || id).join(' | ') };
+    }))) },
+    { name: 'Learning outcomes', rows: (learningOutcomes || []).flatMap(raw => {
+      const outcomeRecord = normalizeOutcomeRecord(raw);
+      return (outcomeRecord?.outcomes || []).map(outcome => ({ Grade: outcomeRecord.grade, Subject: outcomeRecord.subject, Chapter: outcome.chapter || '', Pages: outcome.pages || '', Outcome: outcome.text }));
+    }) },
     { name: 'Unassigned', rows: unassignedFellows(roster, collaborations || []).map(f => ({ Name: f.name, Email: f.email, Missing: [collabForFellow(collaborations || [], f.id) ? null : 'collaboration', (f.accountabilityIds || []).length ? null : 'accountability partner'].filter(Boolean).join(' + ') })) },
   ]),
 };
@@ -1360,8 +1383,8 @@ const deleteDemo = () => {
 };
 
 // [DEV-ONLY] Practice-teaching demo: 50 Fellows grouped into collaborations with
-// derived S#/P# codes, accountability partners, a 12-day subject rotation and a
-// small learning-outcome library (with per-day chapter/pages). Everything is
+// derived S#/P# codes, accountability partners, per-Fellow subject schedules and
+// a small subject-level learning-outcome library. Everything is
 // prefixed `demo-practice-` so it can be removed in one pass. Only wired up when
 // import.meta.env.DEV is true, so it never ships to production.
 const chunk = (arr, size) => {
@@ -1407,13 +1430,13 @@ const seedPracticeDemo = () => {
 
   const buildCollabs = (pool, band) => chunk(pool, 3).map((group, gi) => {
     const grade = grades[band === 'primary' ? 4 + (gi % 3) : gi % 4];
-    const rotation = {};
+    const subjectsByFellowByDay = {};
     for (let d = 1; d <= 12; d++) {
       const byFellow = {};
       group.forEach((p, mi) => { byFellow[p.id] = PRACTICE_SUBJECTS[(mi + d) % PRACTICE_SUBJECTS.length]; });
-      rotation[String(d)] = byFellow;
+      subjectsByFellowByDay[String(d)] = byFellow;
     }
-    return { id: `demo-practice-col-${band}-${gi + 1}`, code: '', band, grade, school: schools[gi % schools.length], days: 12, fellowIds: group.map(p => p.id), schools: {}, rotation };
+    return { id: `demo-practice-col-${band}-${gi + 1}`, code: '', band, grade, school: schools[gi % schools.length], days: 12, fellowIds: group.map(p => p.id), schools: {}, subjectsByFellowByDay, outcomeAssignments: {}, outcomeAssignmentVersion: 2 };
   });
   // Derive S#/P# codes against the running list so numbers are sequential.
   const running = [...baseCollabs];
@@ -1422,28 +1445,44 @@ const seedPracticeDemo = () => {
     ...buildCollabs(people.slice(25), 'primary'),
   ].map(c => { const withCode = { ...c, code: nextCollabCode(running, c.band) }; running.push(withCode); return withCode; });
 
-  // Learning outcomes for every grade used, with per-day chapter/pages so the
-  // new Chapter + Pages feature is visible in the demo.
+  // Learning outcome catalogs for every grade used, with per-outcome metadata.
   const gradesUsed = [...new Set(newCollabs.map(c => c.grade))];
   const newLos = [];
   gradesUsed.forEach((grade, gi) => {
     PRACTICE_SUBJECTS.forEach((subject, si) => {
-      const outcomesByDay = {};
-      const chaptersByDay = {};
-      for (let d = 1; d <= 4; d++) {
-        outcomesByDay[String(d)] = [`${subject} outcome ${d}a for ${grade}`, `${subject} outcome ${d}b for ${grade}`];
-        chaptersByDay[String(d)] = { chapter: `Chapter ${gi + 1}.${si + 1}`, pages: `${(d - 1) * 4 + 1}–${d * 4}` };
-      }
+      const outcomes = Array.from({ length: 12 }, (_, index) => ({
+        id: `demo-practice-outcome-${grade.replace(/\s+/g, '-').toLowerCase()}-${subject.toLowerCase()}-${index + 1}`,
+        text: `${subject} outcome ${index + 1} for ${grade}`,
+        chapter: `Chapter ${gi + 1}.${si + 1}`,
+        pages: `${index * 2 + 1}-${index * 2 + 2}`,
+      }));
       newLos.push({
         id: `demo-practice-lo-${grade.replace(/\s+/g, '-').toLowerCase()}-${subject.toLowerCase()}`,
-        grade, subject, outcomesByDay, chaptersByDay,
+        grade, subject, outcomes,
       });
     });
   });
 
+  const demoLearningOutcomes = [...baseLos, ...newLos];
+  const demoCollaborations = running.map(item => normalizeCollab(item, demoLearningOutcomes)).map(collab => {
+    if (!String(collab.id).startsWith('demo-practice-')) return collab;
+    const outcomeAssignments = {};
+    Object.entries(collab.subjectsByFellowByDay).forEach(([day, byFellow]) => {
+      const assigned = {};
+      Object.entries(byFellow).forEach(([fid, subject]) => {
+        const catalog = outcomesForSubject(demoLearningOutcomes, collab.grade, subject);
+        const memberIndex = collab.fellowIds.indexOf(fid);
+        const outcome = catalog[(Number(day) - 1 + Math.max(0, memberIndex)) % catalog.length];
+        if (outcome) assigned[fid] = [outcome.id];
+      });
+      if (Object.keys(assigned).length) outcomeAssignments[day] = assigned;
+    });
+    return { ...collab, outcomeAssignments, outcomeAssignmentVersion: 2 };
+  });
+
   persistRoster([...baseRoster, ...people]);
-  persistCollaborations(running.map(item => normalizeCollab(item, learningOutcomes)));
-  persistLearningOutcomes([...baseLos, ...newLos]);
+  persistCollaborations(demoCollaborations);
+  persistLearningOutcomes(demoLearningOutcomes);
   showToast('Practice-teaching demo created: 50 Fellows, ' + newCollabs.length + ' collaborations');
 };
 const deletePracticeDemo = () => {
@@ -1521,7 +1560,7 @@ return (
 
           {tab === 'calendar' && (
             <>
-              {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} onCheckIn={recordFellowAttendance} roster={roster} attendanceTiming={academySettings?.attendanceTiming} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload) => persistDeviceRequests([...(deviceRequests || []), payload])} showToast={showToast} /></>}
+              {auth.role === 'fellow' && <><FellowOverview sessions={calendarSessions} auth={auth} rooms={rooms} attendance={attendance} onCheckIn={recordFellowAttendance} roster={roster} /><FellowAssessments assessments={assessments} questions={assessmentQuestions} attempts={assessmentAttempts} auth={auth} sessions={sessions} roster={roster} onAttemptsChange={persistAssessmentAttempts} onIncident={recordIncident} deviceRequests={deviceRequests} onDeviceRequest={(payload) => persistDeviceRequests([...(deviceRequests || []), payload])} showToast={showToast} /></>}
               <CalendarView
                 sessions={calendarSessions} activeWeek={activeWeek} setActiveWeek={setActiveWeek}
                 hiddenDays={hiddenDays} setHiddenDays={setHiddenDays}
@@ -1536,7 +1575,7 @@ return (
             </>
           )}
           {tab === 'fellowAnalytics' && auth.role === 'fellow' && (
-            <FellowAnalyticsPanel sessions={sessions} attendance={attendance} auth={auth} assessments={assessments} attempts={assessmentAttempts} roster={roster} manualSessionMarks={manualSessionMarks} attendanceTiming={academySettings?.attendanceTiming} />
+            <FellowAnalyticsPanel sessions={sessions} attendance={attendance} auth={auth} assessments={assessments} attempts={assessmentAttempts} roster={roster} manualSessionMarks={manualSessionMarks} />
           )}
           {tab === 'overview' && (
             <AcademyOverviewPanel overview={academyOverview} onChange={persistAcademyOverview} canEdit={isAdmin && !isFellow} pillarTags={pillarTags} />
@@ -1579,7 +1618,7 @@ return (
             />
           )}
           {tab === 'attendance' && isFullAdmin && (
-            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} auth={auth} academySettings={academySettings} onSaveAttendanceTiming={settings => { persistSettings(settings); showToast('Attendance window settings saved'); }} onExport={exportAttendanceRecords} onSaveAttendance={records => { setAttendance(records); persistAttendance(records); showToast('Attendance updated'); }} />
+            <AttendanceRecordsPanel sessions={sessions} attendance={attendance} roster={roster} auth={auth} onExport={exportAttendanceRecords} onSaveAttendance={records => { setAttendance(records); persistAttendance(records); showToast('Attendance updated'); }} />
           )}
           {tab === 'summary' && isAdmin && <TimeSummary sessions={filtered} weeks={weeks} modes={modes} />}
           {tab === 'fellows' && isFullAdmin && <RosterPanel roster={roster} staff={planners} cityCodes={cityCodes} rooms={rooms} onChange={persistRoster} onRoomsChange={persistRooms} onAccount={addAccount} showToast={showToast} />}
@@ -2264,27 +2303,42 @@ function sessionDateTime(session, field) {
 
 const ATTENDANCE_MODES = ['sync', 'workshop', 'clinic'];
 const DEFAULT_ATTENDANCE_TIMING = {
-  openBeforeStartMinutes: 5,
-  onTimeUntilMinutes: 5,
-  lateUntilMinutes: 15,
+  openBeforeStartMinutes: 3,
+  onTimeUntilMinutes: 2,
+  lateUntilMinutes: 12,
 };
 const MAX_ATTENDANCE_WINDOW_MINUTES = 120;
-function attendanceTimingFromSettings(settings) {
-  const configured = settings && typeof settings === 'object' ? settings : {};
+function attendanceTimingFromSession(timingSettings) {
+  const configured = timingSettings && typeof timingSettings === 'object' ? timingSettings : {};
   const timing = Object.fromEntries(Object.entries(DEFAULT_ATTENDANCE_TIMING).map(([key, fallback]) => {
     const value = Number(configured[key]);
     return [key, Number.isInteger(value) && value >= 0 && value <= MAX_ATTENDANCE_WINDOW_MINUTES ? value : fallback];
   }));
   return timing.lateUntilMinutes > timing.onTimeUntilMinutes ? timing : { ...DEFAULT_ATTENDANCE_TIMING };
 }
+function validateAttendanceTiming(timing) {
+  const values = timing || {};
+  const keys = Object.keys(DEFAULT_ATTENDANCE_TIMING);
+  const supplied = keys.every(key => String(values[key] ?? '').trim() !== '');
+  const valid = keys.every(key => {
+    const value = Number(values[key]);
+    return Number.isInteger(value) && value >= 0 && value <= MAX_ATTENDANCE_WINDOW_MINUTES;
+  });
+  if (!supplied || !valid) return 'Enter whole minutes from 0 to 120.';
+  if (Number(values.lateUntilMinutes) <= Number(values.onTimeUntilMinutes)) return 'The late window must end after the on-time window.';
+  return '';
+}
+function normalizeSessionAttendance(session) {
+  return { ...session, attendanceTiming: attendanceTimingFromSession(session && session.attendanceTiming) };
+}
 function attendanceEligible(session) {
   if (session && typeof session.attendanceRequired === 'boolean') return session.attendanceRequired;
   return ATTENDANCE_MODES.includes(String((session || {}).mode || '').trim().toLowerCase());
 }
-function attendancePhase(session, now = new Date(), settings = DEFAULT_ATTENDANCE_TIMING) {
+function attendancePhase(session, now = new Date()) {
   const start = sessionDateTime(session, 'start');
   if (!attendanceEligible(session) || !start) return null;
-  const timing = attendanceTimingFromSettings(settings);
+  const timing = attendanceTimingFromSession(session && session.attendanceTiming);
   const mins = (now.getTime() - start.getTime()) / 60000;
   if (mins < -timing.openBeforeStartMinutes) return 'upcoming';
   if (mins < timing.onTimeUntilMinutes) return 'on_time';
@@ -2292,7 +2346,7 @@ function attendancePhase(session, now = new Date(), settings = DEFAULT_ATTENDANC
   return 'closed';
 }
 
-function MyAttendancePanel({ sessions, attendance, auth, attendanceTiming = DEFAULT_ATTENDANCE_TIMING }) {
+function MyAttendancePanel({ sessions, attendance, auth }) {
   const mine = (attendance || []).filter(entry => String(entry.fellowId) === String(auth.fellowId));
   const myFor = session => mine.find(entry => String(entry.sessionId) === String(session.id));
   const eligible = sessions.filter(session => attendanceEligible(session) && sessionDateTime(session, 'start'));
@@ -2314,7 +2368,7 @@ function MyAttendancePanel({ sessions, attendance, auth, attendanceTiming = DEFA
   return (
     <div style={{ maxWidth: 960 }}>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>My Attendance</div>
-      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 16 }}>You can mark attendance {attendanceTiming.openBeforeStartMinutes} minutes before the session starts through {attendanceTiming.onTimeUntilMinutes} minutes after it starts (on time), or through {attendanceTiming.lateUntilMinutes} minutes after it starts (late).</div>
+      <div style={{ fontSize: 12.5, color: '#D5E0D5', marginBottom: 16 }}>Attendance windows are set for each session. Your session cards show when check-in opens and when the on-time and late windows close.</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, maxWidth: 780, marginBottom: 18 }}>
         <Metric label="Attendance records" value={attended} />
         <Metric label="On time" value={onTime} />
@@ -2347,7 +2401,7 @@ function MyAttendancePanel({ sessions, attendance, auth, attendanceTiming = DEFA
   );
 }
 
-function AttendanceRecordsPanel({ sessions, attendance, roster, auth = null, onExport, onSaveAttendance, academySettings = {}, onSaveAttendanceTiming }) {
+function AttendanceRecordsPanel({ sessions, attendance, roster, auth = null, onExport, onSaveAttendance }) {
   const records = attendance || [];
   // AFA staffers (afa / afa_lead) may only edit Fellows in their own AFA group.
   const isAfaStaff = Boolean(auth && (auth.role === 'afa' || auth.role === 'afa_lead'));
@@ -2357,23 +2411,6 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, auth = null, onE
   const countedRecords = records.filter(entry => bySession.some(session => String(session.id) === String(entry.sessionId)));
   const [selectedSessionId, setSelectedSessionId] = useState(() => bySession[0]?.id ? String(bySession[0].id) : null);
   const selectedSession = bySession.find(s => String(s.id) === String(selectedSessionId)) || bySession[0];
-  const savedTiming = attendanceTimingFromSettings(academySettings.attendanceTiming);
-  const [timingForm, setTimingForm] = useState(() => Object.fromEntries(Object.entries(savedTiming).map(([key, value]) => [key, String(value)])));
-  const [timingError, setTimingError] = useState('');
-  useEffect(() => {
-    setTimingForm(Object.fromEntries(Object.entries(savedTiming).map(([key, value]) => [key, String(value)])));
-    setTimingError('');
-  }, [academySettings.attendanceTiming?.openBeforeStartMinutes, academySettings.attendanceTiming?.onTimeUntilMinutes, academySettings.attendanceTiming?.lateUntilMinutes]);
-  const saveTiming = () => {
-    const values = Object.fromEntries(Object.entries(timingForm).map(([key, value]) => [key, Number(value)]));
-    const valid = Object.values(timingForm).every(value => String(value).trim() !== '')
-      && Object.values(values).every(value => Number.isInteger(value) && value >= 0 && value <= MAX_ATTENDANCE_WINDOW_MINUTES);
-    if (!valid) { setTimingError('Enter whole minutes from 0 to 120.'); return; }
-    if (values.lateUntilMinutes <= values.onTimeUntilMinutes) { setTimingError('The late window must end after the on-time window.'); return; }
-    setTimingError('');
-    if (onSaveAttendanceTiming) onSaveAttendanceTiming({ ...academySettings, attendanceTiming: values });
-  };
-
   const count = (sessionId, status) => records.filter(entry => String(entry.sessionId) === String(sessionId) && entry.status === status).length;
   const noRecord = session => Math.max(0, (roster || []).length - new Set(records.filter(entry => String(entry.sessionId) === String(session.id) && ['on_time', 'late', 'absent'].includes(entry.status)).map(entry => String(entry.fellowId))).size);
   const pct = session => { const total = (roster || []).length; return total ? Math.round(((count(session.id, 'on_time') + count(session.id, 'late')) / total * 100)) : 0; };
@@ -2432,20 +2469,6 @@ function AttendanceRecordsPanel({ sessions, attendance, roster, auth = null, onE
         <Metric label="Absent" value={countedRecords.filter(entry => entry.status === 'absent').length} />
         <Metric label="Fellows recorded" value={new Set(countedRecords.map(entry => String(entry.fellowId))).size} />
       </div>
-
-      {onSaveAttendanceTiming && (
-        <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 20 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>Attendance window settings</div>
-          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 12 }}>Choose when Fellows can submit their attendance. Settings apply to all sessions that count attendance.</div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'end' }}>
-            <Field label="Open before start (minutes)" style={{ flex: '1 1 170px' }}><input type="number" min="0" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={timingForm.openBeforeStartMinutes} onChange={e => setTimingForm(values => ({ ...values, openBeforeStartMinutes: e.target.value }))} /></Field>
-            <Field label="On time through (minutes after start)" style={{ flex: '1 1 210px' }}><input type="number" min="0" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={timingForm.onTimeUntilMinutes} onChange={e => setTimingForm(values => ({ ...values, onTimeUntilMinutes: e.target.value }))} /></Field>
-            <Field label="Late window ends (minutes after start)" style={{ flex: '1 1 230px' }}><input type="number" min="1" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={timingForm.lateUntilMinutes} onChange={e => setTimingForm(values => ({ ...values, lateUntilMinutes: e.target.value }))} /></Field>
-            <button type="button" onClick={saveTiming} className={btnPrimary} style={{ marginBottom: 14 }}>Save attendance window</button>
-          </div>
-          {timingError && <div role="alert" style={{ color: '#F0A39A', fontSize: 12, marginTop: -8 }}>{timingError}</div>}
-        </div>
-      )}
 
       {onSaveAttendance && (
         <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 16, marginBottom: 20 }}>
@@ -2749,8 +2772,7 @@ function SessionMarksPanel({ sessions, roster, manualSessionMarks, onSaveMarks, 
   );
 }
 
-function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn, roster, attendanceTiming = DEFAULT_ATTENDANCE_TIMING }) {
-  const timing = attendanceTimingFromSettings(attendanceTiming);
+function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn, roster }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 10000);
@@ -2770,7 +2792,8 @@ function FellowOverview({ sessions, auth, rooms, attendance, onCheckIn, roster, 
     const rec = myRecord(session);
     if (rec) return <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: rec.status === 'on_time' ? '#2D7A4F' : '#D0A023' }}>{rec.status === 'on_time' ? 'Attendance recorded \u00B7 on time' : 'Attendance recorded \u00B7 late'}</div>;
     if (!attendanceEligible(session)) return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>No attendance required for this session</div>;
-    const phase = attendancePhase(session, now, timing);
+    const timing = attendanceTimingFromSession(session.attendanceTiming);
+    const phase = attendancePhase(session, now);
     if (phase === 'on_time') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnPrimary} style={{ fontWeight: 700 }}><CheckIcon size={14} /> Mark my attendance</button><span style={{ fontSize: 11.5, color: '#9DB09D' }}>{minsLeftTo(session, timing.onTimeUntilMinutes)} min to late window</span></div>;
     if (phase === 'late') return <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}><button onClick={() => onCheckIn(session)} className={btnSecondary + ' text-wa-warn'} style={{ fontWeight: 700 }}>Mark late attendance</button><span style={{ fontSize: 11.5, color: '#D0A023' }}>{minsLeftTo(session, timing.lateUntilMinutes)} min left</span></div>;
     if (phase === 'closed') return <div style={{ fontSize: 12, color: '#9DB09D', marginTop: 8 }}>Attendance window closed ({timing.lateUntilMinutes} minutes from start)</div>;
@@ -2887,13 +2910,13 @@ function FellowRecentAttempts({ attempts, assessments, auth }) {
   );
 }
 
-function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempts, roster, manualSessionMarks, attendanceTiming = DEFAULT_ATTENDANCE_TIMING }) {
+function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempts, roster, manualSessionMarks }) {
   const assessmentSessions = sessions.filter(s => s.assessmentTotal > 0);
   return (
     <div>
       <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>My analytics</div>
       <div style={{ fontSize: 12.5, color: '#9DB09D', marginBottom: 16 }}>Your attendance, grades, and recent assessment attempts. Expand a grade to see its question-level details.</div>
-      <MyAttendancePanel sessions={sessions} attendance={attendance} auth={auth} attendanceTiming={attendanceTiming} />
+      <MyAttendancePanel sessions={sessions} attendance={attendance} auth={auth} />
       <FellowGradesPanel attempts={attempts} assessments={assessments} auth={auth} roster={roster} onBack={null} />
       <FellowRecentAttempts attempts={attempts} assessments={assessments} auth={auth} />
       {!assessmentSessions.length && <div style={{ fontSize: 12.5, color: '#9DB09D' }}>No session assessments recorded yet.</div>}
@@ -2937,14 +2960,26 @@ function FellowAnalyticsPanel({ sessions, attendance, auth, assessments, attempt
 // ---- Practice teaching ---------------------------------------------------
 // A collaboration is 2-3+ Fellows placed in one school for the practice
 // teaching week, numbered S1.. (secondary / high school) or P1.. (primary).
-// Each day has one shared subject and outcome selections are stored separately
-// for each member. The curriculum library remains keyed by grade + subject + day.
+// Each collaboration member has an independent subject and outcome assignment
+// for each day. The curriculum library is a subject-level outcome catalog.
 const PRACTICE_SUBJECTS = ['Bangla', 'English', 'Math'];
 const PRACTICE_GRADES = ['Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9'];
 const PRACTICE_DAYS_DEFAULT = 12;
-// Reserved outcomesByDay key: a legacy flat outcome list that applies to every
-// day rather than one specific day.
 const ALL_DAYS_KEY = '*';
+
+function stableLegacyOutcomeId(grade, subject, day, index, text) {
+  const source = [String(grade || '').trim().toLowerCase(), subject || '', day, index, text].join('|');
+  let hash = 2166136261;
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return 'lo-' + (hash >>> 0).toString(36);
+}
+
+function newOutcomeId() {
+  return 'lo-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+}
 
 function normalizeCollab(raw, learningOutcomes = []) {
   if (!raw || typeof raw !== 'object') return null;
@@ -2952,31 +2987,55 @@ function normalizeCollab(raw, learningOutcomes = []) {
   const fellowIds = (Array.isArray(raw.fellowIds) ? raw.fellowIds : []).map(String);
   const days = Math.max(1, Number(raw.days) || PRACTICE_DAYS_DEFAULT);
   const rawSubjectsByDay = raw.subjectsByDay && typeof raw.subjectsByDay === 'object' ? raw.subjectsByDay : {};
+  const rawSubjectsByFellowByDay = raw.subjectsByFellowByDay && typeof raw.subjectsByFellowByDay === 'object' ? raw.subjectsByFellowByDay : {};
   const legacyRotation = raw.rotation && typeof raw.rotation === 'object' ? raw.rotation : {};
-  const subjectsByDay = {};
-  const dayKeys = new Set([...Object.keys(rawSubjectsByDay), ...Object.keys(legacyRotation)]);
+  const subjectsByFellowByDay = {};
+  const dayKeys = new Set([...Object.keys(rawSubjectsByDay), ...Object.keys(rawSubjectsByFellowByDay), ...Object.keys(legacyRotation)]);
   dayKeys.forEach(day => {
     const dayNumber = Number(day);
     if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > days) return;
-    const fromNewData = rawSubjectsByDay[String(day)];
+    const dayKey = String(dayNumber);
+    const fromNewData = rawSubjectsByFellowByDay[dayKey] && typeof rawSubjectsByFellowByDay[dayKey] === 'object'
+      ? rawSubjectsByFellowByDay[dayKey] : {};
+    const sharedSubject = rawSubjectsByDay[dayKey];
     const byFellow = legacyRotation[String(day)] || {};
-    const subject = PRACTICE_SUBJECTS.includes(fromNewData)
-      ? fromNewData
-      : fellowIds.map(fid => byFellow[fid]).find(value => PRACTICE_SUBJECTS.includes(value));
-    if (subject) subjectsByDay[String(dayNumber)] = subject;
+    const subjects = {};
+    fellowIds.forEach(fid => {
+      const subject = PRACTICE_SUBJECTS.includes(fromNewData[fid])
+        ? fromNewData[fid]
+        : PRACTICE_SUBJECTS.includes(byFellow[fid])
+          ? byFellow[fid]
+          : PRACTICE_SUBJECTS.includes(sharedSubject) ? sharedSubject : '';
+      if (subject) subjects[fid] = subject;
+    });
+    if (Object.keys(subjects).length) subjectsByFellowByDay[dayKey] = subjects;
   });
-  const assignmentsVersion = Number(raw.outcomeAssignmentVersion) === 1;
+  const assignmentsVersion = Number(raw.outcomeAssignmentVersion) || 0;
   const rawAssignments = raw.outcomeAssignments && typeof raw.outcomeAssignments === 'object' ? raw.outcomeAssignments : {};
   const outcomeAssignments = {};
-  Object.entries(subjectsByDay).forEach(([day, subject]) => {
+  Object.entries(subjectsByFellowByDay).forEach(([day, bySubject]) => {
     const priorByFellow = rawAssignments[day] && typeof rawAssignments[day] === 'object' ? rawAssignments[day] : {};
     const byFellow = {};
     fellowIds.forEach(fid => {
+      const subject = bySubject[fid];
+      if (!subject) return;
       const existing = priorByFellow[fid];
-      const selected = Array.isArray(existing)
-        ? existing.map(value => String(value).trim()).filter(Boolean)
-        : assignmentsVersion ? [] : outcomesForDay(learningOutcomes, raw.grade, subject, day);
-      if (selected.length) byFellow[fid] = [...new Set(selected)];
+      let selected = Array.isArray(existing) ? existing : [];
+      if (!Array.isArray(existing) && assignmentsVersion < 1) {
+        selected = outcomesForSubject(learningOutcomes, raw.grade, subject)
+          .filter(outcome => outcome.legacyDay === day || outcome.legacyDay === ALL_DAYS_KEY)
+          .map(outcome => outcome.id);
+      }
+      const available = outcomesForSubject(learningOutcomes, raw.grade, subject);
+      const resolved = selected.map(value => {
+        const reference = String(value).trim();
+        if (!reference) return '';
+        if (available.some(outcome => outcome.id === reference)) return reference;
+        const exactDay = available.find(outcome => outcome.text === reference && outcome.legacyDay === day);
+        const anyText = exactDay || available.find(outcome => outcome.text === reference);
+        return anyText ? anyText.id : reference;
+      }).filter(Boolean);
+      if (resolved.length) byFellow[fid] = [...new Set(resolved)];
     });
     if (Object.keys(byFellow).length) outcomeAssignments[day] = byFellow;
   });
@@ -2990,7 +3049,7 @@ function normalizeCollab(raw, learningOutcomes = []) {
   });
   return {
     id: raw.id || 'col-' + Date.now(), code: raw.code || '', band, grade: raw.grade || '', school: raw.school || '',
-    days, fellowIds, schools, subjectsByDay, outcomeAssignments, outcomeAssignmentVersion: 1,
+    days, fellowIds, schools, subjectsByFellowByDay, outcomeAssignments, outcomeAssignmentVersion: 2,
   };
 }
 
@@ -3015,21 +3074,21 @@ function nextCollabCode(list, band) {
   return prefix + (max + 1);
 }
 
-// Shared subject totals across each Fellow's collaboration days.
+// Subject totals across each Fellow's collaboration days.
 function rotationTallies(collab) {
   const tally = {};
   ((collab && collab.fellowIds) || []).forEach(fid => { tally[fid] = { Bangla: 0, English: 0, Math: 0 }; });
-  Object.values((collab && collab.subjectsByDay) || {}).forEach(subject => {
-    Object.values(tally).forEach(memberTally => {
-      if (memberTally[subject] != null) memberTally[subject]++;
+  Object.values((collab && collab.subjectsByFellowByDay) || {}).forEach(byFellow => {
+    Object.entries(byFellow || {}).forEach(([fid, subject]) => {
+      if (tally[fid] && tally[fid][subject] != null) tally[fid][subject]++;
     });
   });
   return tally;
 }
 
-// Days with a shared subject assigned to the collaboration.
+// Collaboration days with at least one Fellow assigned a subject.
 function scheduledDays(collab) {
-  return Object.values((collab && collab.subjectsByDay) || {}).filter(subject => PRACTICE_SUBJECTS.includes(subject)).length;
+  return Object.values((collab && collab.subjectsByFellowByDay) || {}).filter(byFellow => Object.values(byFellow || {}).some(subject => PRACTICE_SUBJECTS.includes(subject))).length;
 }
 
 function fellowById(roster, id) {
@@ -3112,63 +3171,76 @@ function clearAccountabilityGroup(people, memberIds) {
   });
 }
 
-// Learning outcomes are stored one record per grade + subject, with outcomes
-// keyed by day: { outcomesByDay: { '1': [...], '2': [...] } }. A legacy record
-// that used a flat `outcomes` array is treated as applying to every day, so
-// nothing already typed is lost.
+// Learning outcomes are stored as an ordered catalog per grade + subject.
+// Legacy day-keyed lists are flattened in day order and retain their source day
+// only long enough to migrate existing collaboration assignments.
 function normalizeOutcomeRecord(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const byDay = {};
-  const write = (day, rows) => {
-    const clean = (Array.isArray(rows) ? rows : []).map(x => String(x).trim()).filter(Boolean);
-    if (clean.length) byDay[String(day)] = clean;
+  const grade = String(raw.grade || '').trim();
+  const subject = String(raw.subject || '').trim();
+  const metadata = raw.chaptersByDay || {};
+  const cleanOutcome = (value, sourceDay, index) => {
+    const isRecord = value && typeof value === 'object';
+    const text = String(isRecord ? value.text || '' : value || '').trim();
+    if (!text) return null;
+    const legacyMeta = sourceDay == null ? {} : metadata[String(sourceDay)] || {};
+    const chapter = String((isRecord ? value.chapter : legacyMeta.chapter) || '').trim();
+    const pages = String((isRecord ? value.pages : legacyMeta.pages) || '').trim();
+    const legacyDay = sourceDay == null ? null : String(sourceDay);
+    return {
+      id: String(isRecord && value.id || stableLegacyOutcomeId(grade, subject, legacyDay || 'catalog', index, text)),
+      text,
+      ...(chapter ? { chapter } : {}),
+      ...(pages ? { pages } : {}),
+      ...(legacyDay != null ? { legacyDay } : {}),
+    };
   };
-  Object.entries(raw.outcomesByDay || {}).forEach(([day, rows]) => write(day, rows));
-  write(ALL_DAYS_KEY, raw.outcomes);
-  // Optional per-day chapter/topic + page reference. Purely additive: records
-  // saved before this field carry no chaptersByDay and read as blanks, so
-  // nothing already typed is lost. A day with neither value is dropped.
-  const chapters = {};
-  Object.entries(raw.chaptersByDay || {}).forEach(([day, meta]) => {
-    const chapter = String((meta || {}).chapter || '').trim();
-    const pages = String((meta || {}).pages || '').trim();
-    if (chapter || pages) chapters[String(day)] = { chapter, pages };
-  });
+  const rawOutcomes = Array.isArray(raw.outcomes) ? raw.outcomes : [];
+  const isCatalog = rawOutcomes.some(value => value && typeof value === 'object');
+  let outcomes = [];
+  if (isCatalog) {
+    outcomes = rawOutcomes.map((value, index) => cleanOutcome(value, null, index)).filter(Boolean);
+  } else {
+    const legacyByDay = raw.outcomesByDay && typeof raw.outcomesByDay === 'object' ? raw.outcomesByDay : {};
+    const days = Object.keys(legacyByDay).sort((a, b) => {
+      if (a === ALL_DAYS_KEY) return -1;
+      if (b === ALL_DAYS_KEY) return 1;
+      return Number(a) - Number(b);
+    });
+    days.forEach(day => {
+      (Array.isArray(legacyByDay[day]) ? legacyByDay[day] : []).forEach((value, index) => {
+        const item = cleanOutcome(value, day, index);
+        if (item) outcomes.push(item);
+      });
+    });
+    if (!legacyByDay[ALL_DAYS_KEY]) {
+      rawOutcomes.forEach((value, index) => {
+        const item = cleanOutcome(value, ALL_DAYS_KEY, index);
+        if (item) outcomes.push(item);
+      });
+    }
+  }
   return {
-    id: raw.id || 'lo-' + Date.now(), grade: raw.grade || '', subject: raw.subject || '',
-    outcomesByDay: byDay,
-    ...(Object.keys(chapters).length ? { chaptersByDay: chapters } : {}),
+    id: raw.id || stableLegacyOutcomeId(grade, subject, 'record', 0, grade + '|' + subject), grade, subject, outcomes,
   };
 }
 
-// Optional chapter/topic + page reference for one grade + subject on one day.
-// Absent or blank meta reads as empty strings so callers can render it
-// unconditionally without null checks.
-function outcomeMetaForDay(list, grade, subject, day) {
-  const g = String(grade || '').trim().toLowerCase();
-  if (!g || !subject) return { chapter: '', pages: '' };
-  const rec = (list || []).find(o => String(o.grade || '').trim().toLowerCase() === g && o.subject === subject);
-  if (!rec) return { chapter: '', pages: '' };
-  const meta = (rec.chaptersByDay || {})[String(day)] || {};
-  return { chapter: String(meta.chapter || '').trim(), pages: String(meta.pages || '').trim() };
-}
-
-// Outcomes for one grade + subject on one day (falls back to the all-days list
-// only when that day has nothing of its own).
-function outcomesForDay(list, grade, subject, day) {
+function outcomesForSubject(list, grade, subject) {
   const g = String(grade || '').trim().toLowerCase();
   if (!g || !subject) return [];
   const rec = (list || []).find(o => String(o.grade || '').trim().toLowerCase() === g && o.subject === subject);
-  if (!rec) return [];
-  const byDay = rec.outcomesByDay || {};
-  const exact = byDay[String(day)];
-  if (exact && exact.length) return exact;
-  const legacy = byDay[ALL_DAYS_KEY];
-  return legacy && legacy.length ? legacy : [];
+  return rec ? normalizeOutcomeRecord(rec).outcomes : [];
 }
 
-// Records for a grade narrowed to the given subjects (grade + subject pairs,
-// day-independent) -- used for the admin list and the empty-state check.
+// Legacy adapter: new catalogs are day-independent.
+function outcomesForDay(list, grade, subject, day) {
+  const outcomes = outcomesForSubject(list, grade, subject);
+  const legacyDay = String(day);
+  const specific = outcomes.filter(outcome => outcome.legacyDay === legacyDay);
+  return (specific.length ? specific : outcomes.filter(outcome => outcome.legacyDay === ALL_DAYS_KEY || !outcome.legacyDay)).map(outcome => outcome.text);
+}
+
+// Records for a grade narrowed to the given subjects -- used by admin lists.
 function learningOutcomesFor(list, grade, subjects) {
   const g = String(grade || '').trim().toLowerCase();
   if (!g) return [];
@@ -3177,7 +3249,7 @@ function learningOutcomesFor(list, grade, subjects) {
     .filter(o => String(o.grade || '').trim().toLowerCase() === g && want.includes(o.subject))
     .map(o => normalizeOutcomeRecord(o))
     .filter(Boolean)
-    .filter(o => Object.values(o.outcomesByDay).some(rows => rows.length))
+    .filter(o => o.outcomes.length > 0)
     .sort((a, b) => want.indexOf(a.subject) - want.indexOf(b.subject));
 }
 
@@ -3343,7 +3415,7 @@ function PracticeTeachingPanel({ roster, collaborations, learningOutcomes, onCha
   // (import.meta.env.DEV), so the panel is unchanged in production and tests.
 
   const startNew = band => {
-    const base = { id: 'col-' + Date.now(), code: nextCollabCode(list, band), band, grade: '', school: '', days: PRACTICE_DAYS_DEFAULT, fellowIds: [], schools: {}, subjectsByDay: {}, outcomeAssignments: {}, outcomeAssignmentVersion: 1 };
+    const base = { id: 'col-' + Date.now(), code: nextCollabCode(list, band), band, grade: '', school: '', days: PRACTICE_DAYS_DEFAULT, fellowIds: [], schools: {}, subjectsByFellowByDay: {}, outcomeAssignments: {}, outcomeAssignmentVersion: 2 };
     setDraft(base); setEditingId(base.id);
   };
   const startEdit = c => { setDraft(normalizeCollab({ ...c }, learningOutcomes)); setEditingId(c.id); };
@@ -3506,13 +3578,20 @@ function CollabEditor({ draft, setDraft, people, list, learningOutcomes, onCance
     if (has) delete schools[sid];
     return { ...d, fellowIds: has ? d.fellowIds.filter(x => x !== sid) : [...d.fellowIds, sid], outcomeAssignments, schools };
   });
-  const setSubject = (day, subject) => setDraft(d => {
+  const setSubject = (day, fellowId, subject) => setDraft(d => {
     const key = String(day);
-    const subjectsByDay = { ...d.subjectsByDay };
-    if (subject) subjectsByDay[key] = subject; else delete subjectsByDay[key];
+    const fid = String(fellowId);
+    const subjectsByFellowByDay = { ...d.subjectsByFellowByDay };
+    const byFellow = { ...(subjectsByFellowByDay[key] || {}) };
+    if (subject) byFellow[fid] = subject; else delete byFellow[fid];
+    if (Object.keys(byFellow).length) subjectsByFellowByDay[key] = byFellow;
+    else delete subjectsByFellowByDay[key];
     const outcomeAssignments = { ...d.outcomeAssignments };
-    delete outcomeAssignments[key];
-    return { ...d, subjectsByDay, outcomeAssignments };
+    const assignedByFellow = { ...(outcomeAssignments[key] || {}) };
+    delete assignedByFellow[fid];
+    if (Object.keys(assignedByFellow).length) outcomeAssignments[key] = assignedByFellow;
+    else delete outcomeAssignments[key];
+    return { ...d, subjectsByFellowByDay, outcomeAssignments };
   });
   const setOutcomeAssignment = (day, fellowId, outcome, selected) => setDraft(d => {
     const key = String(day);
@@ -3597,41 +3676,38 @@ function CollabEditor({ draft, setDraft, people, list, learningOutcomes, onCance
       </div>
 
 
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Subject rotation</div>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Subjects and learning outcomes</div>
       <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>
-        Set one subject for the whole collaboration on each day, then choose each Fellow's individual learning outcomes for that subject.
+        Assign a subject to each Fellow for each day, then manually select one or more outcomes from that grade and subject's full outcome list. Outcomes may be reused.
       </div>
       <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, overflow: 'auto', marginBottom: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 460 }}>
           <thead><tr style={{ background: '#00402E' }}>
             <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #2A5C4B' }}>Day</th>
-            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #2A5C4B' }}>Shared subject</th>
-            {members.map(f => <th key={f.id} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #2A5C4B' }}>{f.name}'s outcomes</th>)}
+            {members.map(f => <th key={f.id} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #2A5C4B', minWidth: 230 }}>{f.name}'s subject + outcomes</th>)}
           </tr></thead>
           <tbody>
             {days.map(day => (
               <tr key={day} style={{ borderBottom: '1px solid #1F4A3C' }}>
                 <td style={{ padding: '6px 10px', fontWeight: 700, whiteSpace: 'nowrap' }}>{day}</td>
-                <td style={{ padding: '5px 6px', minWidth: 120 }}>
-                  <select className={inputStyle} style={{ fontSize: 12, padding: '4px 6px' }} value={draft.subjectsByDay[String(day)] || ''}
-                    onChange={e => setSubject(day, e.target.value)}>
-                    <option value="">--</option>
-                    {PRACTICE_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </td>
                 {members.map(f => {
-                  const subject = draft.subjectsByDay[String(day)];
-                  const available = subject ? outcomesForDay(learningOutcomes, draft.grade, subject, day) : [];
+                  const subject = (draft.subjectsByFellowByDay[String(day)] || {})[String(f.id)] || '';
+                  const available = subject ? outcomesForSubject(learningOutcomes, draft.grade, subject) : [];
                   const selected = ((draft.outcomeAssignments[String(day)] || {})[String(f.id)] || []);
                   return (
                     <td key={f.id} style={{ padding: '5px 8px', minWidth: 180, verticalAlign: 'top' }}>
+                      <select className={inputStyle} style={{ fontSize: 12, padding: '4px 6px', marginBottom: 6 }} value={subject}
+                        onChange={e => setSubject(day, f.id, e.target.value)}>
+                        <option value="">-- Choose subject --</option>
+                        {PRACTICE_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
                       {!subject ? <span style={{ fontSize: 11.5, color: '#9DB09D' }}>Choose a subject first</span>
                         : available.length ? <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                          {available.map(outcome => <label key={outcome} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 11.5, lineHeight: 1.35, cursor: 'pointer' }}>
-                            <input type="checkbox" checked={selected.includes(outcome)} onChange={e => setOutcomeAssignment(day, f.id, outcome, e.target.checked)} />
-                            <span>{outcome}</span>
+                          {available.map(outcome => <label key={outcome.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 11.5, lineHeight: 1.35, cursor: 'pointer' }}>
+                            <input type="checkbox" checked={selected.includes(outcome.id)} onChange={e => setOutcomeAssignment(day, f.id, outcome.id, e.target.checked)} />
+                            <span>{outcome.text}{(outcome.chapter || outcome.pages) ? <span style={{ display: 'block', color: '#9DB09D' }}>{[outcome.chapter, outcome.pages].filter(Boolean).join(' · ')}</span> : null}</span>
                           </label>)}
-                        </div> : <span style={{ fontSize: 11.5, color: '#9DB09D' }}>No outcomes for this grade, subject, and day</span>}
+                        </div> : <span style={{ fontSize: 11.5, color: '#9DB09D' }}>No outcomes for this grade and subject</span>}
                     </td>
                   );
                 })}
@@ -3664,59 +3740,39 @@ function LearningOutcomesPanel({ learningOutcomes, onChange, showToast }) {
   const list = learningOutcomes || [];
   const [grade, setGrade] = useState('');
   const [subject, setSubject] = useState(PRACTICE_SUBJECTS[0]);
-  const [days, setDays] = useState(PRACTICE_DAYS_DEFAULT);
-  // One textarea per day: { '1': 'outcome\noutcome', ... }
-  const [rows, setRows] = useState({});
-  // Optional per-day chapter/topic + page reference: { '1': { chapter, pages } }
-  const [meta, setMeta] = useState({});
+  const [items, setItems] = useState([]);
   const key = g => (g || '').trim().toLowerCase();
   const existing = list.find(o => key(o.grade) === key(grade) && o.subject === subject);
+  const existingId = existing ? existing.id || normalizeOutcomeRecord(existing).id : '';
   const gradeOptions = [...new Set([...PRACTICE_GRADES, ...list.map(o => o.grade)])];
+  const normalizedList = list.map(outcome => normalizeOutcomeRecord(outcome)).filter(Boolean);
   const loadRecord = (g, s) => {
     const hit = list.find(o => key(o.grade) === key(g) && o.subject === s);
-    const next = {};
-    const byDay = (hit && hit.outcomesByDay) || {};
-    Object.keys(byDay).forEach(d => { if (d !== ALL_DAYS_KEY) next[d] = byDay[d].join('\n'); });
-    // A legacy flat list lands in the day-1 box rather than silently vanishing.
-    if (!Object.keys(next).length && hit && (hit.outcomes || []).length) next['1'] = hit.outcomes.join('\n');
-    setRows(next);
-    // Chapter/pages meta is optional: absent on older records, so blanks load.
-    const hitMeta = {};
-    Object.entries((hit && hit.chaptersByDay) || {}).forEach(([d, v]) => {
-      hitMeta[d] = { chapter: String((v || {}).chapter || ''), pages: String((v || {}).pages || '') };
-    });
-    setMeta(hitMeta);
+    setItems(hit ? normalizeOutcomeRecord(hit).outcomes : []);
   };
-  const setDay = (day, value) => setRows(r => ({ ...r, [String(day)]: value }));
-  const setDayMeta = (day, field, value) => setMeta(m => ({
-    ...m, [String(day)]: { chapter: '', pages: '', ...(m[String(day)] || {}), [field]: value },
-  }));
-  const dayNumbers = Array.from({ length: days }, (_, i) => String(i + 1));
-  const filled = dayNumbers.filter(d => (rows[d] || '').trim()).length;
+  const updateItem = (id, field, value) => setItems(current => current.map(item => item.id === id ? { ...item, [field]: value } : item));
+  const addItem = () => setItems(current => [...current, { id: newOutcomeId(), text: '', chapter: '', pages: '' }]);
+  const removeItem = id => setItems(current => current.filter(item => item.id !== id));
   const save = () => {
     if (!grade.trim()) { showToast('Pick a grade'); return; }
-    const outcomesByDay = {};
-    const chaptersByDay = {};
-    dayNumbers.forEach(d => {
-      const clean = (rows[d] || '').split('\n').map(x => x.trim()).filter(Boolean);
-      if (clean.length) outcomesByDay[d] = clean;
-      const chapter = String((meta[d] || {}).chapter || '').trim();
-      const pages = String((meta[d] || {}).pages || '').trim();
-      if (chapter || pages) chaptersByDay[d] = { chapter, pages };
-    });
-    if (!Object.keys(outcomesByDay).length && !Object.keys(chaptersByDay).length) { showToast('Add at least one outcome'); return; }
-    const entry = { id: existing ? existing.id : 'lo-' + Date.now(), grade: grade.trim(), subject, outcomesByDay,
-      ...(Object.keys(chaptersByDay).length ? { chaptersByDay } : {}) };
-    const next = existing ? list.map(o => (o.id === existing.id ? entry : o)) : [...list, entry];
+    const outcomes = items.map(item => ({
+      id: item.id || newOutcomeId(),
+      text: String(item.text || '').trim(),
+      chapter: String(item.chapter || '').trim(),
+      pages: String(item.pages || '').trim(),
+    })).filter(item => item.text);
+    if (!outcomes.length) { showToast('Add at least one outcome'); return; }
+    const entry = { id: existingId || 'lo-' + Date.now(), grade: grade.trim(), subject, outcomes };
+    const next = existing ? list.map(o => ((o.id || normalizeOutcomeRecord(o).id) === existingId ? entry : o)) : [...list, entry];
     onChange(next);
-    showToast(entry.grade + ' · ' + subject + ' saved (' + Object.keys(outcomesByDay).length + ' of ' + days + ' days set)');
+    setItems(outcomes);
+    showToast(entry.grade + ' · ' + subject + ' saved (' + outcomes.length + ' outcomes)');
   };
-  const totalDays = entry => Object.keys((entry && entry.outcomesByDay) || {}).filter(d => d !== ALL_DAYS_KEY).length;
   return (
     <div style={{ maxWidth: 780, marginTop: 30 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Learning outcomes (grade · subject · day)</div>
+      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Learning outcomes (grade · subject)</div>
       <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 12 }}>
-        Set the outcomes available for each day, grade (3-9), and subject. Collaboration members are assigned these outcomes individually.
+        Build an ordered list of outcomes for each grade and subject. Assign these outcomes to individual Fellows and days in the collaboration editor.
       </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
         <Field label="Grade" style={{ flex: '1 1 160px' }}>
@@ -3730,62 +3786,50 @@ function LearningOutcomesPanel({ learningOutcomes, onChange, showToast }) {
             {PRACTICE_SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
-        <Field label="Days" style={{ flex: '0 1 110px' }}>
-          <input type="number" min="1" max="30" className={inputStyle} value={days}
-            onChange={e => setDays(Math.max(1, Math.min(30, parseInt(e.target.value, 10) || PRACTICE_DAYS_DEFAULT)))} />
-        </Field>
       </div>
 
       {grade ? (
         <div>
-          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>Outcomes set for {filled} of {days} days.</div>
+          <div style={{ fontSize: 12, color: '#9DB09D', marginBottom: 8 }}>{items.length} outcomes in this list.</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-            {dayNumbers.map(d => (
-              <div key={d} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                <span style={{ flex: '0 0 54px', fontSize: 12, fontWeight: 700, paddingTop: 9, color: (rows[d] || '').trim() ? '#9FD9BE' : '#9DB09D' }}>Day {d}</span>
-                <textarea rows={2} className={inputStyle + ' resize-y'} style={{ flex: '1 1 260px', minWidth: 0 }}
-                  value={rows[d] || ''} onChange={e => setDay(d, e.target.value)}
-                  placeholder="One learning outcome per line" />
-                <div style={{ flex: '0 1 auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <input className={inputStyle} style={{ width: 190, fontSize: 12 }} value={(meta[d] || {}).chapter || ''}
-                    onChange={e => setDayMeta(d, 'chapter', e.target.value)} placeholder="Chapter / topic (optional)" aria-label={'Chapter or topic for day ' + d} />
-                  <input className={inputStyle} style={{ width: 96, fontSize: 12 }} value={(meta[d] || {}).pages || ''}
-                    onChange={e => setDayMeta(d, 'pages', e.target.value)} placeholder="Pages" aria-label={'Page number for day ' + d} />
-                </div>
+            {items.map((item, index) => (
+              <div key={item.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap', padding: 10, background: '#003223', border: '1px solid #2A5C4B', borderRadius: 6 }}>
+                <span style={{ flex: '0 0 28px', fontSize: 12, fontWeight: 700, paddingTop: 8, color: '#9FD9BE' }}>{index + 1}.</span>
+                <textarea rows={2} className={inputStyle + ' resize-y'} style={{ flex: '1 1 280px', minWidth: 0 }}
+                  value={item.text} onChange={e => updateItem(item.id, 'text', e.target.value)}
+                  placeholder="Learning outcome" aria-label={'Learning outcome ' + (index + 1)} />
+                <input className={inputStyle} style={{ flex: '1 1 170px', fontSize: 12 }} value={item.chapter || ''}
+                  onChange={e => updateItem(item.id, 'chapter', e.target.value)} placeholder="Chapter / topic (optional)" aria-label={'Chapter or topic for outcome ' + (index + 1)} />
+                <input className={inputStyle} style={{ flex: '0 1 100px', fontSize: 12 }} value={item.pages || ''}
+                  onChange={e => updateItem(item.id, 'pages', e.target.value)} placeholder="Pages" aria-label={'Page reference for outcome ' + (index + 1)} />
+                <button type="button" onClick={() => removeItem(item.id)} className={btnGhost + ' text-wa-warn'} aria-label={'Remove outcome ' + (index + 1)}>Remove</button>
               </div>
             ))}
           </div>
-          <button onClick={save} className={btnPrimary}>{existing ? 'Update outcomes' : 'Add outcomes'}</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={addItem} className={btnSecondary}>Add outcome</button>
+            <button onClick={save} className={btnPrimary}>Save outcome list</button>
+          </div>
         </div>
       ) : <div style={{ fontSize: 12.5, color: '#9DB09D' }}>Choose a grade to start entering outcomes.</div>}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 22 }}>
-        {list.map(o => (
+        {normalizedList.map(o => (
           <div key={o.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, fontWeight: 700, background: '#1F4A3C', padding: '3px 10px', borderRadius: 12 }}>{o.grade}</span>
               <span style={{ fontSize: 12, color: '#D5E0D5', fontWeight: 600 }}>{o.subject}</span>
-              <span style={{ fontSize: 11.5, color: '#9DB09D' }}>{totalDays(o)} of {days} days set</span>
+              <span style={{ fontSize: 11.5, color: '#9DB09D' }}>{o.outcomes.length} outcomes</span>
               <button onClick={() => { setGrade(o.grade); setSubject(o.subject); loadRecord(o.grade, o.subject); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ ...linkBtn, marginLeft: 'auto' }}>Edit</button>
-              <button onClick={() => { if (window.confirm('Delete ' + o.grade + ' · ' + o.subject + '?')) onChange(list.filter(x => x.id !== o.id)); }} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button>
+              <button onClick={() => { if (window.confirm('Delete ' + o.grade + ' · ' + o.subject + '?')) onChange(list.filter(x => (x.id || normalizeOutcomeRecord(x).id) !== o.id)); }} style={{ ...linkBtn, color: '#D0A023' }}>Delete</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {Object.keys(o.outcomesByDay || {}).filter(d => d !== ALL_DAYS_KEY).sort((a, b) => Number(a) - Number(b)).map(d => {
-                const metaInfo = ((o.chaptersByDay || {})[d]) || {};
-                const ref = metaInfo.chapter || metaInfo.pages
-                  ? ' [' + [metaInfo.chapter, metaInfo.pages].filter(Boolean).join(', ') + ']'
-                  : '';
-                return (
-                  <div key={d} style={{ fontSize: 12.5, color: '#D5E0D5', lineHeight: 1.5 }}>
-                    <span style={{ fontWeight: 700 }}>Day {d}{ref}:</span>
-                    {(o.outcomesByDay[d] || []).map((t, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 6, paddingLeft: 8 }}>
-                        <span style={{ color: '#D65641', fontWeight: 700, flexShrink: 0 }}>{i + 1}.</span><span>{t}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
+              {o.outcomes.map((outcome, index) => (
+                <div key={outcome.id} style={{ fontSize: 12.5, color: '#D5E0D5', lineHeight: 1.5, display: 'flex', gap: 6 }}>
+                  <span style={{ color: '#D65641', fontWeight: 700, flexShrink: 0 }}>{index + 1}.</span>
+                  <span>{outcome.text}{(outcome.chapter || outcome.pages) ? <span style={{ color: '#9DB09D' }}> · {[outcome.chapter, outcome.pages].filter(Boolean).join(', ')}</span> : null}</span>
+                </div>
+              ))}
             </div>
           </div>
         ))}
@@ -3822,18 +3866,16 @@ function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth })
 
   const partners = collab.fellowIds.filter(id => String(id) !== String(auth.fellowId)).map(id => fellowById(roster, id) || { name: 'Unknown' });
   const days = Array.from({ length: collab.days }, (_, i) => i + 1);
-  const mySubjects = [...new Set(days.map(d => collab.subjectsByDay[String(d)]).filter(Boolean))];
+  const mySubjects = [...new Set(days.map(d => (collab.subjectsByFellowByDay[String(d)] || {})[String(auth.fellowId)]).filter(Boolean))];
   const mySchool = schoolForMember(collab, auth.fellowId);
-  // Each scheduled day becomes one card: day + subject + that day's outcome.
-  // A Fellow only ever sees outcomes for the subject they teach that day.
-  // The optional chapter/topic + page reference for that day travels too.
   const mySchedule = days
     .map(d => {
-      const subject = collab.subjectsByDay[String(d)];
+      const subject = (collab.subjectsByFellowByDay[String(d)] || {})[String(auth.fellowId)];
       if (!subject) return null;
-      const chapterMeta = outcomeMetaForDay(learningOutcomes, collab.grade, subject, d);
-      const outcomes = ((collab.outcomeAssignments[String(d)] || {})[String(auth.fellowId)] || []);
-      return { day: d, subject, outcomes, chapter: chapterMeta.chapter, pages: chapterMeta.pages };
+      const catalog = outcomesForSubject(learningOutcomes, collab.grade, subject);
+      const outcomeIds = ((collab.outcomeAssignments[String(d)] || {})[String(auth.fellowId)] || []);
+      const outcomes = outcomeIds.map(id => catalog.find(outcome => outcome.id === id) || { id, text: id });
+      return { day: d, subject, outcomes };
     })
     .filter(Boolean);
   const anyOutcomes = mySchedule.some(row => row.outcomes.length > 0);
@@ -3875,15 +3917,11 @@ function FellowPracticePanel({ roster, collaborations, learningOutcomes, auth })
               <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: row.outcomes.length ? 6 : 0, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: '#9DB09D', fontWeight: 700 }}>Day {row.day}</span>
                 <span style={{ fontSize: 13, fontWeight: 700 }}>{row.subject}</span>
-                {(row.chapter || row.pages) && (
-                  <span style={{ fontSize: 11.5, color: '#9FD9BE', fontWeight: 600 }}>
-                    {[row.chapter, row.pages].filter(Boolean).join(' · ')}
-                  </span>
-                )}
               </div>
-              {row.outcomes.length > 0 ? row.outcomes.map((text, idx) => (
+              {row.outcomes.length > 0 ? row.outcomes.map((outcome, idx) => (
                 <div key={idx} style={{ display: 'flex', gap: 8, fontSize: 13, marginBottom: 4, lineHeight: 1.5 }}>
-                  <span style={{ color: '#D65641', fontWeight: 700, flexShrink: 0 }}>{idx + 1}.</span><span>{text}</span>
+                  <span style={{ color: '#D65641', fontWeight: 700, flexShrink: 0 }}>{idx + 1}.</span>
+                  <span>{outcome.text}{(outcome.chapter || outcome.pages) ? <span style={{ display: 'block', fontSize: 11.5, color: '#9FD9BE' }}>{[outcome.chapter, outcome.pages].filter(Boolean).join(' · ')}</span> : null}</span>
                 </div>
               )) : <div style={{ fontSize: 12, color: '#9DB09D', fontStyle: 'italic' }}>Outcome not set yet</div>}
             </div>
@@ -5471,7 +5509,8 @@ function QuestionEditor({ question, onSave, onClose }) {
 }
 
 function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessionTypes, pillarTags, modes, rooms, staff, weeks, startDate }) {
-  const [form, setForm] = useState({ ...session, type: session.type || session.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(session.pillarIds) ? session.pillarIds : [], attendanceRequired: typeof session.attendanceRequired === 'boolean' ? session.attendanceRequired : attendanceEligible(session), facilitators: (session.facilitators || []).map(f => typeof f === 'string' ? { id: newResId(), staffName: f, roomId: '' } : { id: f.id || newResId(), staffName: f.staffName || f.name || '', roomId: f.roomId || '', group: f.group || '' }), resources: session.resources ? session.resources.map(r => ({ ...r })) : [], outcomes: (session.outcomes || []).filter(Boolean).map(text => ({ id: newResId(), text })), notes: session.notes || '', fellowNotes: session.fellowNotes || '' });
+  const [form, setForm] = useState({ ...session, type: session.type || session.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(session.pillarIds) ? session.pillarIds : [], attendanceRequired: typeof session.attendanceRequired === 'boolean' ? session.attendanceRequired : attendanceEligible(session), attendanceTiming: attendanceTimingFromSession(session.attendanceTiming), facilitators: (session.facilitators || []).map(f => typeof f === 'string' ? { id: newResId(), staffName: f, roomId: '' } : { id: f.id || newResId(), staffName: f.staffName || f.name || '', roomId: f.roomId || '', group: f.group || '' }), resources: session.resources ? session.resources.map(r => ({ ...r })) : [], outcomes: (session.outcomes || []).filter(Boolean).map(text => ({ id: newResId(), text })), notes: session.notes || '', fellowNotes: session.fellowNotes || '' });
+  const [attendanceTimingError, setAttendanceTimingError] = useState('');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const addResource = () => set('resources', [...form.resources, { id: newResId(), label: RESOURCE_KINDS[0], url: '' }]);
   const updateResource = (id, key, val) => set('resources', form.resources.map(r => r.id === id ? { ...r, [key]: val } : r));
@@ -5512,6 +5551,10 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
   const onEditDurationPreset = (val) => { if (val === 'custom') { setEditCustomMode(true); return; } setEditCustomMode(false); if (form.start) set('end', endFromDuration(form.start, Number(val)) || form.end); };
   const onEditCustomDuration = (raw) => { const v = raw === '' ? 60 : Number(raw); if (form.start) set('end', endFromDuration(form.start, v) || form.end); };
   const handleSave = () => {
+    const timingValues = form.attendanceTiming || DEFAULT_ATTENDANCE_TIMING;
+    const timingError = validateAttendanceTiming(timingValues);
+    if (timingError) { setAttendanceTimingError(timingError); return; }
+    setAttendanceTimingError('');
     const weekday = form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long' }) : '';
     const derivedWeek = form.date && startDate ? weekForDate(form.date, startDate) : null;
     const finalEnd = endFromDuration(form.start, durationBetween(form.start, form.end, 60)) || form.end || null;
@@ -5519,6 +5562,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
       id: form.id, week: derivedWeek != null ? derivedWeek : (form.date ? form.week : (form.week === '' ? null : Number(form.week))),
       date: form.date || null, weekday: form.date ? weekday : null, start: form.start || null, end: finalEnd,
       name: form.name, type: form.type, pillarIds: form.pillarIds || [], mode: form.mode, attendanceRequired: Boolean(form.attendanceRequired),
+      attendanceTiming: Object.fromEntries(Object.entries(timingValues).map(([key, value]) => [key, Number(value)])),
       facilitators: form.facilitators.map(f => { const rec = { id: f.id || newResId(), staffName: (f.staffName || '').trim(), roomId: (f.roomId || '').trim() }; if (f.group) rec.group = f.group; return rec; }).filter(f => f.staffName || f.roomId || f.group),
       roomIds: [...new Set([...(form.roomIds || []), ...form.facilitators.map(f => (f.roomId || '').trim()).filter(Boolean)])],
       resources: form.resources.filter(r => r.url.trim()),
@@ -5556,6 +5600,16 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
           <input type="checkbox" disabled={!canEditSchedule} checked={Boolean(form.attendanceRequired)} onChange={e => set('attendanceRequired', e.target.checked)} />
           Count attendance for this session
         </label>
+        <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 12, marginBottom: 14, opacity: canEditSchedule ? 1 : 0.6 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>Attendance button window</div>
+          <div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 10 }}>Defaults: open 3 minutes before start, on time until the 2-minute mark, then late until the 12-minute mark.</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Field label="Open before start (minutes)" style={{ flex: '1 1 150px' }}><input disabled={!canEditSchedule} type="number" min="0" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={form.attendanceTiming.openBeforeStartMinutes} onChange={e => set('attendanceTiming', { ...form.attendanceTiming, openBeforeStartMinutes: e.target.value })} /></Field>
+            <Field label="On-time cutoff (minutes after start)" style={{ flex: '1 1 190px' }}><input disabled={!canEditSchedule} type="number" min="0" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={form.attendanceTiming.onTimeUntilMinutes} onChange={e => set('attendanceTiming', { ...form.attendanceTiming, onTimeUntilMinutes: e.target.value })} /></Field>
+            <Field label="Late window ends (minutes after start)" style={{ flex: '1 1 200px' }}><input disabled={!canEditSchedule} type="number" min="1" max={MAX_ATTENDANCE_WINDOW_MINUTES} step="1" className={inputStyle} value={form.attendanceTiming.lateUntilMinutes} onChange={e => set('attendanceTiming', { ...form.attendanceTiming, lateUntilMinutes: e.target.value })} /></Field>
+          </div>
+          {attendanceTimingError && <div role="alert" style={{ color: '#F0A39A', fontSize: 12, marginTop: 4 }}>{attendanceTimingError}</div>}
+        </div>
         <Field label="Facilitators">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {form.facilitators.map(f => (
@@ -5621,4 +5675,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceTimingFromSettings, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, learningOutcomesFor, outcomeMetaForDay, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceTimingFromSession, validateAttendanceTiming, normalizeSessionAttendance, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };

@@ -75,8 +75,8 @@ const badAnalyticsOptOut = analyticsOptOutChecks.filter(([, ok]) => !ok).map(([l
 if (badAnalyticsOptOut.length === 0) console.log('OK    analytics opt-out filtering and roster control');
 else { console.log('FAIL  analytics opt-out: ' + badAnalyticsOptOut.join('; ')); failed++; }
 
-// Practice teaching: rotation math, S/P code derivation, unassigned rule, and
-// the Fellow-facing gating (grade/school/partners/outcomes by assignment only).
+// Practice teaching: per-Fellow subjects, unassigned rule, and Fellow-facing
+// gating (grade/school/partners/outcomes by individual assignment only).
 const assignedHtml = renderHtml('FellowPracticePanel');
 const unassignedHtml = renderHtml('FellowPracticePanel-unassigned');
 const adminHtml = renderHtml('PracticeTeachingPanel-assigned');
@@ -89,14 +89,14 @@ const ptChecks = [
   ['fellow sees partner name', assignedHtml.includes('Fellow Two')],
   ['fellow sees grade', assignedHtml.includes('Grade 9')],
   ['fellow sees own day-1 outcome', assignedHtml.includes('SECRET_BANGLA_DAY1')],
-  ['fellow sees day-1 chapter + pages', assignedHtml.includes('Chapter 7 · Algebra') && assignedHtml.includes('12-15')],
-  ['unassigned fellow sees NO chapter', !unassignedHtml.includes('Chapter 7 · Algebra')],
+  ['fellow sees day-1 outcome chapter + pages', assignedHtml.includes('Chapter 7 · Algebra') && assignedHtml.includes('12-15')],
+  ['unassigned fellow sees NO outcome metadata', !unassignedHtml.includes('Chapter 7 · Algebra')],
   ['fellow sees distinct day-2 outcome', assignedHtml.includes('SECRET_BANGLA_DAY2')],
-  ['fellow does not see another subject same-day outcome', !assignedHtml.includes('SECRET_ENGLISH_DAY1')],
+  ['fellow does not see another Fellow subject outcome', !assignedHtml.includes('SECRET_ENGLISH_DAY1')],
   ['fellow does not see another grade\'s outcomes', !assignedHtml.includes('OTHER_GRADE_OUTCOME')],
   ['individual outcome is visible only to its assigned Fellow', fellowOnePracticeHtml.includes('FELLOW_ONE_OUTCOME') && !fellowOnePracticeHtml.includes('FELLOW_TWO_OUTCOME')],
   ['second Fellow sees their own distinct outcome', fellowTwoPracticeHtml.includes('FELLOW_TWO_OUTCOME') && !fellowTwoPracticeHtml.includes('FELLOW_ONE_OUTCOME')],
-  ['shared daily subject is shown', fellowOnePracticeHtml.includes('Bangla') && fellowTwoPracticeHtml.includes('Bangla')],
+  ['Fellows can have different subjects on the same day', fellowOnePracticeHtml.includes('Bangla') && !fellowOnePracticeHtml.includes('English') && fellowTwoPracticeHtml.includes('English') && !fellowTwoPracticeHtml.includes('Bangla')],
   ['unassigned fellow sees gate message', unassignedHtml.includes('once your practice teaching assignment is set')],
   ['unassigned fellow sees NO outcomes', !unassignedHtml.includes('SECRET_BANGLA_DAY1') && !unassignedHtml.includes('SECRET_ENGLISH_DAY1')],
   ['unassigned fellow sees NO school', !unassignedHtml.includes('Dhaka Collegiate School')],
@@ -108,23 +108,22 @@ else { console.log('FAIL  practice teaching: ' + badPt.join('; ')); failed++; }
 const attendanceSettingsHtml = renderHtml('AttendanceRecordsPanel');
 const sessionEditHtml = renderHtml('EditPanel-new');
 const attendanceUiChecks = [
-  ['full admin can configure attendance windows', attendanceSettingsHtml.includes('Attendance window settings') && attendanceSettingsHtml.includes('Save attendance window')],
-  ['session editor exposes per-session attendance option', sessionEditHtml.includes('Count attendance for this session')],
+  ['attendance records do not expose global timing settings', !attendanceSettingsHtml.includes('Attendance window settings') && !attendanceSettingsHtml.includes('Save attendance window')],
+  ['session editor exposes per-session attendance inclusion', sessionEditHtml.includes('Count attendance for this session')],
+  ['session editor exposes timing controls and defaults', sessionEditHtml.includes('Attendance button window') && sessionEditHtml.includes('Open before start (minutes)') && sessionEditHtml.includes('On-time cutoff (minutes after start)') && sessionEditHtml.includes('Late window ends (minutes after start)') && sessionEditHtml.includes('value="3"') && sessionEditHtml.includes('value="2"') && sessionEditHtml.includes('value="12"')],
 ];
 const badAttendanceUi = attendanceUiChecks.filter(([, ok]) => !ok).map(([label]) => label);
-if (!badAttendanceUi.length) console.log('OK    attendance settings and session eligibility controls render');
+if (!badAttendanceUi.length) console.log('OK    per-session attendance controls; no global timing form');
 else { console.log('FAIL  attendance controls: ' + badAttendanceUi.join('; ')); failed++; }
 
-// Saved-list preview shows every outcome of every day (regression: used to
-// show only the first outcome and only the first 3 days).
+// Saved list preview shows all entries and their per-outcome metadata.
 const loMultiHtml = renderHtml('LearningOutcomesPanel-multi');
 const loPrevChecks = [
-  ['all day-1 outcomes visible', loMultiHtml.includes('MULTI_ONE_A') && loMultiHtml.includes('MULTI_ONE_B')],
-  ['days past the old cut visible', loMultiHtml.includes('MULTI_TWO') && loMultiHtml.includes('MULTI_THREE') && loMultiHtml.includes('MULTI_FOUR')],
-  ['chapter ref visible', loMultiHtml.includes('Ch 1')],
+  ['all catalog outcomes visible', loMultiHtml.includes('MULTI_ONE_A') && loMultiHtml.includes('MULTI_ONE_B') && loMultiHtml.includes('MULTI_TWO') && loMultiHtml.includes('MULTI_THREE') && loMultiHtml.includes('MULTI_FOUR')],
+  ['chapter ref stays with outcome', loMultiHtml.includes('Ch 1') && loMultiHtml.includes('1-2')],
 ];
 const badLoPrev = loPrevChecks.filter(([, ok]) => !ok).map(([label]) => label);
-if (badLoPrev.length === 0) console.log('OK    outcomes preview shows all outcomes of all days');
+if (badLoPrev.length === 0) console.log('OK    outcome catalog list preview');
 else { console.log('FAIL  outcomes preview: ' + badLoPrev.join('; ')); failed++; }
 
 // Fellow home: accountability partner beside the AFA group; without a roster the
@@ -142,20 +141,19 @@ else { console.log('FAIL  fellow home partner: ' + badFo.join('; ')); failed++; 
 // Score math check: paragraph review (3/4) + correct single answer (2/2) = 5/6
 const mod2 = await vite.ssrLoadModule('/src/App.jsx');
 
-// Practice teaching helpers: shared subject tallies, legacy migration,
+// Practice teaching helpers: per-Fellow subject tallies, legacy migration,
 // individual outcomes, and the unassigned rule (collab AND accountability).
 try {
-  const { normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, normalizeOutcomeRecord, outcomesForDay, isFellowAssigned, unassignedFellows, learningOutcomesFor, outcomeMetaForDay, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup } = mod2.__panels;
-  // The shared schedule remains free-form; no fixed subject balance is required.
-  const subjectsByDay = {};
-  for (let day = 1; day <= 7; day++) subjectsByDay[String(day)] = 'Bangla';
-  subjectsByDay['8'] = 'Math';
-  const t = rotationTallies({ fellowIds: ['a', 'b'], subjectsByDay });
+  const { normalizeCollab, nextCollabCode, rotationTallies, scheduledDays, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, isFellowAssigned, unassignedFellows, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup } = mod2.__panels;
+  const subjectsByFellowByDay = {};
+  for (let day = 1; day <= 3; day++) subjectsByFellowByDay[String(day)] = { a: 'Bangla', b: 'English' };
+  subjectsByFellowByDay['4'] = { a: 'Math' };
+  const t = rotationTallies({ fellowIds: ['a', 'b'], subjectsByFellowByDay });
   const codesOk = nextCollabCode([{ code: 'S1', band: 'secondary' }], 'secondary') === 'S2'
     && nextCollabCode([{ code: 'S1', band: 'secondary' }], 'primary') === 'P1'
     && nextCollabCode([], 'secondary') === 'S1';
-  const tallyOk = t.a.Bangla === 7 && t.a.Math === 1 && t.b.Bangla === 7 && t.b.Math === 1
-    && scheduledDays({ subjectsByDay }) === 8;
+  const tallyOk = t.a.Bangla === 3 && t.a.Math === 1 && t.b.English === 3
+    && scheduledDays({ subjectsByFellowByDay }) === 4;
   const rosterMixed = [{ id: 'a', accountabilityIds: ['b'] }, { id: 'b', accountabilityIds: [] }, { id: 'c', accountabilityIds: ['a'] }];
   const collabs = [{ id: 'x', fellowIds: ['a'] }];
   const assignOk = isFellowAssigned(rosterMixed[0], collabs) === true
@@ -171,6 +169,7 @@ try {
     && learningOutcomesFor(loLib, 'Grade 9', ['English']).length === 1
     && learningOutcomesFor(loLib, 'Grade 5', ['Bangla']).length === 1
     && learningOutcomesFor(loLib, 'Grade 4', ['Bangla']).length === 0
+    && JSON.stringify(outcomesForSubject(loLib, 'Grade 9', 'Bangla').map(outcome => outcome.text)) === '["day1","day2"]'
     && JSON.stringify(outcomesForDay(loLib, 'Grade 9', 'Bangla', 1)) === '["day1"]'
     && JSON.stringify(outcomesForDay(loLib, 'Grade 9', 'Bangla', 2)) === '["day2"]'
     && outcomesForDay(loLib, 'Grade 9', 'Bangla', 9).length === 0
@@ -178,40 +177,48 @@ try {
     && outcomesForDay(loLib, 'Grade 9', 'Math', 1).length === 0
     && JSON.stringify(outcomesForDay(loLib, 'Grade 5', 'Bangla', 1)) === '["other"]';
   const legacyNorm = normalizeOutcomeRecord({ grade: 'Grade 9', subject: 'Bangla', outcomes: ['flat'] });
-  const legacyOk = legacyNorm.outcomesByDay['*']
+  const legacyOk = legacyNorm.outcomes[0].legacyDay === '*'
     && JSON.stringify(outcomesForDay([legacyNorm], 'Grade 9', 'Bangla', 4)) === '["flat"]'
-    && !legacyNorm.chaptersByDay;
-  // Optional per-day chapter + pages: present when set, blank strings when not,
-  // and absent/legacy records read back as empty (purely additive field).
-  const metaLib = [
-    { grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['x'] }, chaptersByDay: { 1: { chapter: 'Chapter 7', pages: '12-15' } } },
-    { grade: 'Grade 9', subject: 'English', outcomesByDay: { 1: ['y'] } },
-  ];
-  const metaOk = JSON.stringify(outcomeMetaForDay(metaLib, 'Grade 9', 'Bangla', 1)) === JSON.stringify({ chapter: 'Chapter 7', pages: '12-15' })
-    && JSON.stringify(outcomeMetaForDay(metaLib, 'Grade 9', 'Bangla', 2)) === JSON.stringify({ chapter: '', pages: '' })
-    && JSON.stringify(outcomeMetaForDay(metaLib, 'Grade 9', 'English', 1)) === JSON.stringify({ chapter: '', pages: '' })
-    && JSON.stringify(outcomeMetaForDay([], 'Grade 9', 'Bangla', 1)) === JSON.stringify({ chapter: '', pages: '' })
-    && normalizeOutcomeRecord({ grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['x'] }, chaptersByDay: { 1: { chapter: '', pages: '' } } }).chaptersByDay === undefined;
+    && legacyNorm.outcomes[0].text === 'flat';
+  const metaLib = [{ grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['x'], 2: ['y'] }, chaptersByDay: { 1: { chapter: 'Chapter 7', pages: '12-15' } } }];
+  const metaOutcomes = normalizeOutcomeRecord(metaLib[0]).outcomes;
+  const metaOk = metaOutcomes.length === 2
+    && metaOutcomes[0].chapter === 'Chapter 7' && metaOutcomes[0].pages === '12-15'
+    && !metaOutcomes[1].chapter && !metaOutcomes[1].pages
+    && normalizeOutcomeRecord(metaLib[0]).outcomes[0].id === normalizeOutcomeRecord(normalizeOutcomeRecord(metaLib[0])).outcomes[0].id;
   const norm = normalizeCollab({ code: 'S3', band: 'primary', fellowIds: [1, 2], rotation: { 1: { 1: 'Bangla', 9: 'Math' }, 2: { 1: 'Paint' } }, days: 0 });
   const normOk = norm.band === 'primary' && JSON.stringify(norm.fellowIds) === '["1","2"]'
-    && norm.subjectsByDay['1'] === 'Bangla' && !norm.subjectsByDay['2'] && norm.days === 12;
+    && norm.subjectsByFellowByDay['1']['1'] === 'Bangla' && !norm.subjectsByFellowByDay['2'] && norm.days === 12;
   const migratedLegacy = normalizeCollab({
     id: 'legacy', grade: 'Grade 9', days: 2, fellowIds: ['a', 'b'],
     rotation: { 1: { a: 'Bangla', b: 'English' } },
   }, loLib);
   const normalizedAgain = normalizeCollab(migratedLegacy, loLib);
-  const migrationOk = migratedLegacy.subjectsByDay['1'] === 'Bangla'
-    && JSON.stringify(migratedLegacy.outcomeAssignments['1'].a) === '["day1"]'
-    && JSON.stringify(migratedLegacy.outcomeAssignments['1'].b) === '["day1"]'
+  const migrationOk = migratedLegacy.subjectsByFellowByDay['1'].a === 'Bangla'
+    && migratedLegacy.subjectsByFellowByDay['1'].b === 'English'
+    && migratedLegacy.outcomeAssignments['1'].a[0] === outcomesForSubject(loLib, 'Grade 9', 'Bangla')[0].id
+    && migratedLegacy.outcomeAssignments['1'].b[0] === outcomesForSubject(loLib, 'Grade 9', 'English')[0].id
     && JSON.stringify(normalizedAgain.outcomeAssignments) === JSON.stringify(migratedLegacy.outcomeAssignments)
-    && migratedLegacy.outcomeAssignmentVersion === 1;
+    && migratedLegacy.outcomeAssignmentVersion === 2;
   const assignedIndividually = normalizeCollab({
     id: 'individual', grade: 'Grade 9', days: 1, fellowIds: ['a', 'b'],
-    subjectsByDay: { 1: 'Bangla' }, outcomeAssignmentVersion: 1,
+    subjectsByFellowByDay: { 1: { a: 'Bangla', b: 'English' } }, outcomeAssignmentVersion: 2,
     outcomeAssignments: { 1: { a: ['Chosen A'], b: ['Chosen B'] } },
   }, loLib);
-  const individualOk = assignedIndividually.outcomeAssignments['1'].a[0] === 'Chosen A'
+  const individualOk = assignedIndividually.subjectsByFellowByDay['1'].a === 'Bangla'
+    && assignedIndividually.subjectsByFellowByDay['1'].b === 'English'
+    && assignedIndividually.outcomeAssignments['1'].a[0] === 'Chosen A'
     && assignedIndividually.outcomeAssignments['1'].b[0] === 'Chosen B';
+  const banglaCatalog = outcomesForSubject(loLib, 'Grade 9', 'Bangla');
+  const repeatAssignments = normalizeCollab({
+    id: 'repeat', grade: 'Grade 9', days: 2, fellowIds: ['a', 'b'],
+    subjectsByFellowByDay: { 1: { a: 'Bangla', b: 'Bangla' }, 2: { a: 'Bangla' } },
+    outcomeAssignmentVersion: 2,
+    outcomeAssignments: { 1: { a: [banglaCatalog[0].id, banglaCatalog[1].id], b: [banglaCatalog[0].id] }, 2: { a: [banglaCatalog[0].id] } },
+  }, loLib);
+  const reuseOk = repeatAssignments.outcomeAssignments['1'].a.length === 2
+    && repeatAssignments.outcomeAssignments['1'].b[0] === banglaCatalog[0].id
+    && repeatAssignments.outcomeAssignments['2'].a[0] === banglaCatalog[0].id;
   // Cross-school collabs: per-member schools override the group school.
   const schoolForMember = mod2.__panels.schoolForMember;
   const crossCollab = { id: 'cx', code: 'S9', band: 'secondary', grade: 'Grade 8', school: 'Group School', days: 12, fellowIds: ['m1', 'm2', 'm3'], schools: { m2: 'Other School' }, rotation: {} };
@@ -254,9 +261,9 @@ try {
   const solo = setAccountabilityGroup(grpRoster, ['c']);
   const soloOk = solo.find(f => f.id === 'c').accountabilityIds.length === 0;
   const exclOk = deriveOk && inOk && growOk && shrinkOk && moveOk && clearOk && soloOk;
-  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk && migrationOk && individualOk && schoolOk && metaOk && exclOk)
+  if (codesOk && tallyOk && assignOk && loOk && legacyOk && normOk && migrationOk && individualOk && reuseOk && schoolOk && metaOk && exclOk)
     console.log('OK    collaboration subjects + legacy migration + individual outcomes + accountability groups');
-  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk, migrationOk, individualOk, schoolOk, metaOk, exclOk, deriveOk, inOk, growOk, shrinkOk, moveOk, clearOk, soloOk })); failed++; }
+  else { console.log('FAIL  practice helpers ' + JSON.stringify({ codesOk, tallyOk, assignOk, loOk, legacyOk, normOk, migrationOk, individualOk, reuseOk, schoolOk, metaOk, exclOk, deriveOk, inOk, growOk, shrinkOk, moveOk, clearOk, soloOk })); failed++; }
 } catch (err) { console.log('FAIL  practice helpers: ' + err.message); failed++; }
 // Goal records: legacy strings convert, serial ordering is honoured, blanks dropped.
 try {
@@ -285,27 +292,38 @@ else { console.log('FAIL  computeAttemptScore got ' + JSON.stringify(sc) + ' pct
 try {
   const phase = mod2.__panels.attendancePhase;
   const elig = mod2.__panels.attendanceEligible;
-  const timing = mod2.__panels.attendanceTimingFromSettings;
+  const timing = mod2.__panels.attendanceTimingFromSession;
+  const validateTiming = mod2.__panels.validateAttendanceTiming;
+  const normalizeSessionAttendance = mod2.__panels.normalizeSessionAttendance;
   const syncSession = { mode: 'Sync', date: '2026-10-25', start: '09:00', end: '10:00' };
-  // Defaults: opens at -5, on time through +5, late through +15.
+  // Defaults: opens at -3, on time until +2, late until +12.
   const phaseChecks = [
-    ['upcoming', phase(syncSession, new Date('2026-10-25T02:54:59Z'))],
-    ['on_time', phase(syncSession, new Date('2026-10-25T02:55:00Z'))],
-    ['on_time', phase(syncSession, new Date('2026-10-25T03:04:59Z'))],
-    ['late', phase(syncSession, new Date('2026-10-25T03:05:00Z'))],
-    ['closed', phase(syncSession, new Date('2026-10-25T03:15:00Z'))],
+    ['upcoming', phase(syncSession, new Date('2026-10-25T02:56:59Z'))],
+    ['on_time', phase(syncSession, new Date('2026-10-25T02:57:00Z'))],
+    ['on_time', phase(syncSession, new Date('2026-10-25T03:01:59Z'))],
+    ['late', phase(syncSession, new Date('2026-10-25T03:02:00Z'))],
+    ['closed', phase(syncSession, new Date('2026-10-25T03:12:00Z'))],
   ];
-  const asyncNull = phase({ mode: 'Async', date: '2026-10-25', start: '09:00', end: '10:00' }, new Date('2026-10-25T03:04:59Z')) === null;
+  const asyncNull = phase({ mode: 'Async', date: '2026-10-25', start: '09:00', end: '10:00' }, new Date('2026-10-25T03:01:59Z')) === null;
   const custom = { openBeforeStartMinutes: 10, onTimeUntilMinutes: 2, lateUntilMinutes: 8 };
-  const customChecks = phase(syncSession, new Date('2026-10-25T02:50:00Z'), custom) === 'on_time'
-    && phase(syncSession, new Date('2026-10-25T03:02:00Z'), custom) === 'late'
-    && phase(syncSession, new Date('2026-10-25T03:08:00Z'), custom) === 'closed';
+  const customSession = { ...syncSession, attendanceTiming: custom };
+  const customChecks = phase(customSession, new Date('2026-10-25T02:50:00Z')) === 'on_time'
+    && phase(customSession, new Date('2026-10-25T03:02:00Z')) === 'late'
+    && phase(customSession, new Date('2026-10-25T03:08:00Z')) === 'closed';
+  const individualizedChecks = phase(syncSession, new Date('2026-10-25T03:03:00Z')) === 'late'
+    && phase({ ...syncSession, attendanceTiming: { openBeforeStartMinutes: 1, onTimeUntilMinutes: 5, lateUntilMinutes: 9 } }, new Date('2026-10-25T03:03:00Z')) === 'on_time';
+  const migrationChecks = JSON.stringify(normalizeSessionAttendance({ ...syncSession }).attendanceTiming) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 })
+    && JSON.stringify(normalizeSessionAttendance({ ...syncSession, attendanceTiming: custom }).attendanceTiming) === JSON.stringify(custom)
+    && JSON.stringify(timing({ invalid: true })) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 });
+  const validationChecks = !validateTiming(custom)
+    && Boolean(validateTiming({ ...custom, onTimeUntilMinutes: 2.5 }))
+    && Boolean(validateTiming({ ...custom, lateUntilMinutes: 2 }));
   const overrideChecks = elig({ mode: 'Async', attendanceRequired: true }) === true
     && elig({ mode: 'Sync', attendanceRequired: false }) === false
     && elig({ mode: 'Sync' }) === true && elig({ mode: 'Async' }) === false;
-  const timingDefaults = JSON.stringify(timing({})) === JSON.stringify({ openBeforeStartMinutes: 5, onTimeUntilMinutes: 5, lateUntilMinutes: 15 });
-  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && customChecks && overrideChecks && timingDefaults) console.log('OK    configurable attendance boundaries + per-session eligibility');
-  else { console.log('FAIL  attendance timing got ' + JSON.stringify({ phaseChecks, asyncNull, customChecks, overrideChecks, timingDefaults })); failed++; }
+  const timingDefaults = JSON.stringify(timing({})) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 });
+  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && customChecks && individualizedChecks && migrationChecks && validationChecks && overrideChecks && timingDefaults) console.log('OK    per-session attendance boundaries + defaults + validation + eligibility');
+  else { console.log('FAIL  attendance timing got ' + JSON.stringify({ phaseChecks, asyncNull, customChecks, individualizedChecks, migrationChecks, validationChecks, overrideChecks, timingDefaults })); failed++; }
   const released = mod2.__panels.isGradeReleased({ gradesReleased: true });
   const hidden = mod2.__panels.isGradeReleased({ gradesReleased: false });
   const submittedUngraded = mod2.__panels.attemptGradeStatus({ status: 'submitted', questionOrder: ['q1'], answers: { q1: 'x' }, reviews: {} }, mockAssessment);

@@ -50,7 +50,7 @@ const learningOutcomes = [
 ];
 const individualCollab = {
   id: 'col-individual', code: 'S2', band: 'secondary', grade: 'Grade 9', school: 'Dhaka Collegiate School',
-  days: 1, fellowIds: ['fe1', 'fe2'], subjectsByDay: { 1: 'Bangla' }, outcomeAssignmentVersion: 1,
+  days: 1, fellowIds: ['fe1', 'fe2'], subjectsByFellowByDay: { 1: { fe1: 'Bangla', fe2: 'English' } }, outcomeAssignmentVersion: 2,
   outcomeAssignments: { 1: { fe1: ['FELLOW_ONE_OUTCOME'], fe2: ['FELLOW_TWO_OUTCOME'] } },
 };
 
@@ -123,7 +123,7 @@ export const cases = [
   ['TopBar', () => <P.TopBar tab="calendar" isFullAdmin auth={auth} onLogout={noop} onExport={noop} onImport={noop} onReset={noop} onAdd={noop} />],
   ['FilterBar', () => <P.FilterBar typeFilter="all" setTypeFilter={noop} pillarTagFilter="all" setPillarTagFilter={noop} modeFilter="all" setModeFilter={noop} sessionTypes={null} pillarTags={null} modes={null} />],
   ['MyAttendancePanel', () => <P.MyAttendancePanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} />],
-  ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={auth} academySettings={{}} onSaveAttendanceTiming={noop} onExport={noop} onSaveAttendance={noop} />],
+  ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={auth} onExport={noop} onSaveAttendance={noop} />],
   // AFA staff edit attendance only inside their own group (approved plan item).
   ['AttendanceRecordsPanel-afa', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={{ email: 'n@x.dev', role: 'afa', afaGroup: 'AFA 1', access: 'full' }} onExport={noop} onSaveAttendance={noop} />],
 
@@ -147,11 +147,11 @@ export const cases = [
   ['PracticeTeachingPanel-empty', () => <P.PracticeTeachingPanel roster={roster} collaborations={[]} onChange={noop} onRosterChange={noop} showToast={noop} />],
   ['PracticeTeachingPanel-assigned', () => <P.PracticeTeachingPanel roster={roster} collaborations={[collab]} onChange={noop} onRosterChange={noop} showToast={noop} />],
   ['CollabEditor', () => <P.CollabEditor draft={P.normalizeCollab(collab, learningOutcomes)} setDraft={noop} people={roster} list={[collab]} learningOutcomes={learningOutcomes} onCancel={noop} onSave={noop} />],
-  ['CollabEditor-individual-outcomes', () => <P.CollabEditor draft={individualCollab} setDraft={noop} people={roster} list={[individualCollab]} learningOutcomes={[{ grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['FELLOW_ONE_OUTCOME', 'FELLOW_TWO_OUTCOME'] } }]} onCancel={noop} onSave={noop} />],
+  ['CollabEditor-individual-outcomes', () => <P.CollabEditor draft={individualCollab} setDraft={noop} people={roster} list={[individualCollab]} learningOutcomes={[{ grade: 'Grade 9', subject: 'Bangla', outcomes: [{ id: 'one', text: 'FELLOW_ONE_OUTCOME' }] }, { grade: 'Grade 9', subject: 'English', outcomes: [{ id: 'two', text: 'FELLOW_TWO_OUTCOME' }] }]} onCancel={noop} onSave={noop} />],
   ['LearningOutcomesPanel', () => <P.LearningOutcomesPanel learningOutcomes={learningOutcomes} onChange={noop} showToast={noop} />],
   // Saved-list preview: every day shows ALL of its outcomes (no first-only,
   // no 3-day cut). Day 1 has two outcomes; day 4 sits past the old cut.
-  ['LearningOutcomesPanel-multi', () => <P.LearningOutcomesPanel learningOutcomes={[{ id: 'lom', grade: 'Grade 9', subject: 'Bangla', outcomesByDay: { 1: ['MULTI_ONE_A', 'MULTI_ONE_B'], 2: ['MULTI_TWO'], 3: ['MULTI_THREE'], 4: ['MULTI_FOUR'] }, chaptersByDay: { 1: { chapter: 'Ch 1', pages: '1-2' } } }]} onChange={noop} showToast={noop} />],
+  ['LearningOutcomesPanel-multi', () => <P.LearningOutcomesPanel learningOutcomes={[{ id: 'lom', grade: 'Grade 9', subject: 'Bangla', outcomes: [{ id: 'm1', text: 'MULTI_ONE_A', chapter: 'Ch 1', pages: '1-2' }, { id: 'm2', text: 'MULTI_ONE_B' }, { id: 'm3', text: 'MULTI_TWO' }, { id: 'm4', text: 'MULTI_THREE' }, { id: 'm5', text: 'MULTI_FOUR' }] }]} onChange={noop} showToast={noop} />],
   // Fellows see grade/school/partners/schedule/outcomes once assigned...
   ['FellowPracticePanel', () => <P.FellowPracticePanel roster={roster} collaborations={[collab]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
   ['FellowPracticePanel-individual-fe1', () => <P.FellowPracticePanel roster={roster} collaborations={[individualCollab]} learningOutcomes={learningOutcomes} auth={{ ...auth, fellowId: 'fe1' }} />],
