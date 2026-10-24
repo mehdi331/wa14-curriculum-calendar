@@ -18,7 +18,7 @@ const vite = await createServer({
 });
 
 const { cases } = await vite.ssrLoadModule('/scripts/cases.jsx');
-const { attendanceDocumentId, mergeAttendanceRecords } = await vite.ssrLoadModule('/src/storage.js');
+const { mergeAttendanceChanges } = await vite.ssrLoadModule('/src/storage.js');
 
 let failed = 0;
 for (const [name, factory] of cases) {
@@ -116,25 +116,28 @@ const attendanceUiChecks = [
 const badAttendanceUi = attendanceUiChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (!badAttendanceUi.length) console.log('OK    per-session attendance controls; no global timing form');
 else { console.log('FAIL  attendance controls: ' + badAttendanceUi.join('; ')); failed++; }
-const mergedAttendance = mergeAttendanceRecords(
+const attendanceChanges = mergeAttendanceChanges(
+  [
+    { sessionId: 's1', fellowId: 'f1', status: 'late' },
+    { sessionId: 's1', fellowId: 'f2', status: 'on_time' },
+    { sessionId: 's1', fellowId: 'f3', status: 'late' },
+  ],
   [
     { sessionId: 's1', fellowId: 'f1', status: 'late' },
     { sessionId: 's1', fellowId: 'f2', status: 'on_time' },
   ],
   [
     { sessionId: 's1', fellowId: 'f1', status: 'on_time' },
-    { sessionId: 's1', fellowId: 'f2', deleted: true },
-    { sessionId: 's2', fellowId: 'f3', status: 'late' },
+    { sessionId: 's1', fellowId: 'f3', status: 'late' },
   ],
 );
 const attendanceMergeChecks = [
-  ['new records override matching legacy records', mergedAttendance.find(record => record.fellowId === 'f1')?.status === 'on_time'],
-  ['deleted records stay hidden from legacy data', !mergedAttendance.some(record => record.fellowId === 'f2')],
-  ['new records are included alongside legacy data', mergedAttendance.some(record => record.sessionId === 's2' && record.fellowId === 'f3')],
-  ['attendance document IDs avoid ambiguous session/Fellow pairs', attendanceDocumentId({ sessionId: 'a_b', fellowId: 'c' }) !== attendanceDocumentId({ sessionId: 'a', fellowId: 'b_c' })],
+  ['changed record updates target Fellow', attendanceChanges.find(record => record.fellowId === 'f1')?.status === 'on_time'],
+  ['removed record is removed', !attendanceChanges.some(record => record.fellowId === 'f2')],
+  ['unrelated concurrent check-in is preserved', attendanceChanges.some(record => record.fellowId === 'f3' && record.status === 'late')],
 ];
 const badAttendanceMerge = attendanceMergeChecks.filter(([, ok]) => !ok).map(([label]) => label);
-if (!badAttendanceMerge.length) console.log('OK    concurrent attendance storage merge and per-record IDs');
+if (!badAttendanceMerge.length) console.log('OK    transactional attendance update preserves concurrent records');
 else { console.log('FAIL  attendance storage: ' + badAttendanceMerge.join('; ')); failed++; }
 
 // Saved list preview shows all entries and their per-outcome metadata.

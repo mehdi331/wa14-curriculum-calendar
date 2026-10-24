@@ -3,7 +3,7 @@ import { Plus, X, Download, Upload, List as ListIcon, ArrowCounterClockwise as R
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, GoogleAuthProvider } from 'firebase/auth';
 import * as XLSX from 'xlsx';
 import { auth as firebaseAuth } from './firebaseConfig';
-import { storage, ASSESSMENT_KEYS, ACADEMY_KEYS, parseStoredArray, getAttendanceRecords, saveAttendanceRecord, deleteAttendanceRecord } from './storage';
+import { storage, ASSESSMENT_KEYS, ACADEMY_KEYS, parseStoredArray, getAttendanceRecords, createAttendanceRecord, saveAttendanceChanges as persistAttendanceChanges } from './storage';
 import { buildCalendarWorkbookSheets } from './calendarWorkbook.js';
 // [CITY] City system modules: shell, system picker, data store + cohort helpers.
 import CityShell from './city/CityShell.jsx';
@@ -1012,21 +1012,17 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
   const persistAssessments = debouncedPersist(setAssessments, assessmentsSaveTimer, ASSESSMENT_KEYS.assessments);
   const persistAssessmentQuestions = debouncedPersist(setAssessmentQuestions, questionsSaveTimer, ASSESSMENT_KEYS.questions);
   const persistAssessmentAttempts = debouncedPersist(setAssessmentAttempts, attemptsSaveTimer, ASSESSMENT_KEYS.attempts, err => { if (err) showToast('Save failed: ' + (err.code || err.message) + ' -- check that you are signed in with a Teach For Bangladesh account.'); });
-  const saveAttendanceChanges = next => {
-    const previousRecords = new Map((attendance || []).map(record => [JSON.stringify([String(record.sessionId), String(record.fellowId)]), record]));
-    const nextRecords = new Map((next || []).map(record => [JSON.stringify([String(record.sessionId), String(record.fellowId)]), record]));
-    setAttendance([...nextRecords.values()]);
-    const writes = [];
-    nextRecords.forEach((record, key) => {
-      if (JSON.stringify(previousRecords.get(key)) !== JSON.stringify(record)) writes.push(saveAttendanceRecord(record));
-    });
-    previousRecords.forEach((record, key) => {
-      if (!nextRecords.has(key)) writes.push(deleteAttendanceRecord(record.sessionId, record.fellowId));
-    });
-    Promise.all(writes).then(() => showToast('Attendance updated')).catch(error => {
+  const saveAttendanceChanges = async next => {
+    const previous = attendance || [];
+    setAttendance(next);
+    try {
+      await persistAttendanceChanges(previous, next);
+      showToast('Attendance updated');
+    } catch (error) {
       console.error('Attendance changes could not be saved', error);
+      setAttendance(previous);
       showToast('Attendance changes could not be saved: ' + (error.code || error.message));
-    });
+    }
   };
   const persistManualSessionMarks = debouncedPersist(setManualSessionMarks, sessionMarksSaveTimer, ACADEMY_KEYS.manualSessionMarks);
   
@@ -1072,7 +1068,12 @@ const recordFellowAttendance = async session => {
   const record = { id: 'att-' + recordKey, sessionId: session.id, fellowId, fellowName, status, recordedAt: new Date().toISOString(), method: 'button' };
   attendanceWrites.current.add(recordKey);
   try {
-    await saveAttendanceRecord(record);
+    const saved = await createAttendanceRecord(record);
+    if (!saved) {
+      setAttendance(await getAttendanceRecords());
+      showToast('Attendance already recorded for this session.');
+      return false;
+    }
     setAttendance(current => {
       const withoutPrevious = (current || []).filter(entry => JSON.stringify([String(entry.sessionId), String(entry.fellowId)]) !== recordKey);
       return [...withoutPrevious, record];

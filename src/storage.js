@@ -1,10 +1,9 @@
 // Thin wrapper so the rest of the app can keep calling storage.get/set/delete
 // the same way it did inside Claude's artifact environment, but backed by a
 // real, free Firestore database instead of window.storage.
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 const COLLECTION = 'wa14';
-const ATTENDANCE_COLLECTION = 'wa14Attendance';
 
 export const ASSESSMENT_KEYS = {
   assessments: 'wa14-assessments',
@@ -42,55 +41,58 @@ export const CITY_KEYS = {
 };
 
 const attendanceKey = record => JSON.stringify([String(record.sessionId), String(record.fellowId)]);
+const attendanceRef = () => doc(db, COLLECTION, ASSESSMENT_KEYS.attendance);
 
-export function attendanceDocumentId(record) {
-  return encodeURIComponent(attendanceKey(record));
-}
-
-export function mergeAttendanceRecords(legacyRecords, storedRecords) {
-  const records = new Map();
-  (Array.isArray(legacyRecords) ? legacyRecords : []).forEach(record => {
-    if (record?.sessionId == null || record?.fellowId == null) return;
-    records.set(attendanceKey(record), record);
-  });
-  (Array.isArray(storedRecords) ? storedRecords : []).forEach(record => {
-    if (record?.sessionId == null || record?.fellowId == null) return;
-    const key = attendanceKey(record);
-    if (record.deleted) records.delete(key);
-    else records.set(key, record);
-  });
-  return [...records.values()];
+function attendanceFromSnapshot(snapshot) {
+  if (!snapshot.exists() || !snapshot.data().value) return [];
+  const records = JSON.parse(snapshot.data().value);
+  if (!Array.isArray(records)) throw new Error('Stored attendance data is not an array.');
+  return records;
 }
 
 export async function getAttendanceRecords() {
-  const [legacySnapshot, recordsSnapshot] = await Promise.all([
-    getDoc(doc(db, COLLECTION, ASSESSMENT_KEYS.attendance)),
-    getDocs(collection(db, ATTENDANCE_COLLECTION)),
-  ]);
-  let legacyRecords = [];
-  if (legacySnapshot.exists() && legacySnapshot.data().value) {
-    legacyRecords = JSON.parse(legacySnapshot.data().value);
-    if (!Array.isArray(legacyRecords)) throw new Error('Stored attendance data is not an array.');
-  }
-  return mergeAttendanceRecords(legacyRecords, recordsSnapshot.docs.map(snapshot => snapshot.data()));
+  return attendanceFromSnapshot(await getDoc(attendanceRef()));
 }
 
-export async function saveAttendanceRecord(record) {
+export async function createAttendanceRecord(record) {
   if (record?.sessionId == null || record?.fellowId == null) {
     throw new Error('Attendance records require a session ID and Fellow ID.');
   }
-  const { deleted, ...savedRecord } = record;
-  await setDoc(doc(db, ATTENDANCE_COLLECTION, attendanceDocumentId(record)), savedRecord);
+  return runTransaction(db, async transaction => {
+    const ref = attendanceRef();
+    const records = attendanceFromSnapshot(await transaction.get(ref));
+    const key = attendanceKey(record);
+    if (records.some(existing => attendanceKey(existing) === key)) return false;
+    transaction.set(ref, {
+      value: JSON.stringify([...records, record]),
+      updatedAt: Date.now(),
+    });
+    return true;
+  });
 }
 
-export async function deleteAttendanceRecord(sessionId, fellowId) {
-  if (sessionId == null || fellowId == null) {
-    throw new Error('Deleting attendance requires a session ID and Fellow ID.');
-  }
-  const record = { sessionId, fellowId };
-  await setDoc(doc(db, ATTENDANCE_COLLECTION, attendanceDocumentId(record)), {
-    ...record,
-    deleted: true,
+export function mergeAttendanceChanges(currentRecords, previousRecords, nextRecords) {
+  const previousByKey = new Map((previousRecords || []).map(record => [attendanceKey(record), record]));
+  const nextByKey = new Map((nextRecords || []).map(record => [attendanceKey(record), record]));
+  const changed = [...nextByKey].filter(([key, record]) => JSON.stringify(previousByKey.get(key)) !== JSON.stringify(record));
+  const removedKeys = new Set([...previousByKey.keys()].filter(key => !nextByKey.has(key)));
+  const changedByKey = new Map(changed);
+  return [
+    ...(currentRecords || []).filter(record => !changedByKey.has(attendanceKey(record)) && !removedKeys.has(attendanceKey(record))),
+    ...changed.map(([, record]) => record),
+  ];
+}
+
+export async function saveAttendanceChanges(previousRecords, nextRecords) {
+  const previousByKey = new Map((previousRecords || []).map(record => [attendanceKey(record), record]));
+  const nextByKey = new Map((nextRecords || []).map(record => [attendanceKey(record), record]));
+  if (JSON.stringify([...previousByKey]) === JSON.stringify([...nextByKey])) return;
+
+  await runTransaction(db, async transaction => {
+    const ref = attendanceRef();
+    const records = attendanceFromSnapshot(await transaction.get(ref));
+    const merged = mergeAttendanceChanges(records, previousRecords, nextRecords);
+    transaction.set(ref, { value: JSON.stringify(merged), updatedAt: Date.now() });
   });
 }
 
