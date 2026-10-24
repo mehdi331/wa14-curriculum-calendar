@@ -18,6 +18,7 @@ const vite = await createServer({
 });
 
 const { cases } = await vite.ssrLoadModule('/scripts/cases.jsx');
+const { __panels: P } = await vite.ssrLoadModule('/src/App.jsx');
 const { mergeAttendanceChanges } = await vite.ssrLoadModule('/src/storage.js');
 
 let failed = 0;
@@ -75,6 +76,27 @@ const analyticsOptOutChecks = [
 const badAnalyticsOptOut = analyticsOptOutChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (badAnalyticsOptOut.length === 0) console.log('OK    analytics opt-out filtering and roster control');
 else { console.log('FAIL  analytics opt-out: ' + badAnalyticsOptOut.join('; ')); failed++; }
+const fellowEditHtml = renderHtml('FellowProfileEditForm');
+const validFellowEdit = {
+  name: 'Fellow One',
+  email: 'fellow.one@teachforbangladesh.org',
+  cohort: '2026',
+  track: 'primary',
+  grade: '3',
+  placementCity: 'Dhaka',
+  afaGroup: 'AFA 1',
+};
+const fellowEditRoster = [{ id: 'fe2', email: 'second.person@teachforbangladesh.org' }];
+const fellowEditChecks = [
+  ['edit form exposes AFA assignment and other profile fields', fellowEditHtml.includes('AFA group') && fellowEditHtml.includes('AFA 1') && fellowEditHtml.includes('Cohort year') && fellowEditHtml.includes('Placement city')],
+  ['valid profile can be saved', P.fellowEditError(validFellowEdit, fellowEditRoster, 'fe1') === ''],
+  ['duplicate email is rejected', P.fellowEditError({ ...validFellowEdit, email: 'second.person@teachforbangladesh.org' }, fellowEditRoster, 'fe1') === 'That email is already on the roster.'],
+  ['invalid email is rejected', P.fellowEditError({ ...validFellowEdit, email: 'not-an-email' }, fellowEditRoster, 'fe1').startsWith('Email must look like')],
+  ['invalid cohort year is rejected', P.fellowEditError({ ...validFellowEdit, cohort: 'abc' }, fellowEditRoster, 'fe1') === 'Enter a valid cohort year.'],
+];
+const badFellowEdit = fellowEditChecks.filter(([, ok]) => !ok).map(([label]) => label);
+if (badFellowEdit.length === 0) console.log('OK    Fellow editor profile fields, AFA assignment, and validation');
+else { console.log('FAIL  Fellow editor: ' + badFellowEdit.join('; ')); failed++; }
 
 // Practice teaching: per-Fellow subjects, unassigned rule, and Fellow-facing
 // gating (grade/school/partners/outcomes by individual assignment only).

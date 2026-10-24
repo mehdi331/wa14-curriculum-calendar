@@ -5097,9 +5097,50 @@ function DetailRow({ label, children }) {
   return (<div style={{ marginBottom: 12 }}><div style={{ fontSize: 11.5, color: '#9DB09D', marginBottom: 2 }}>{label}</div><div style={{ fontSize: 13.5, color: '#D5E0D5' }}>{children}</div></div>);
 }
 
+function fellowEditError(form, roster, editingId) {
+  const name = String(form.name || '').trim();
+  const email = String(form.email || '').trim().toLowerCase();
+  const cohort = Number(form.cohort);
+  if (!name) return 'Enter a name.';
+  if (!FELLOW_EMAIL_RE.test(email)) return 'Email must look like firstname.lastname@teachforbangladesh.org';
+  if (roster.some(fellow => String(fellow.id) !== String(editingId) && String(fellow.email || '').toLowerCase() === email)) return 'That email is already on the roster.';
+  if (!Number.isInteger(cohort) || cohort < 1) return 'Enter a valid cohort year.';
+  return '';
+}
+
+function FellowProfileEditForm({ form, setForm, groupOptions, groupLabel, error, onSave, onCancel }) {
+  const field = (label, key, control) => (
+    <label style={{ fontSize: 11.5, fontWeight: 600 }}>
+      {label}
+      {control || <input className={inputStyle} value={form[key]} onChange={event => setForm(current => ({ ...current, [key]: event.target.value }))} />}
+    </label>
+  );
+  return (
+    <form onSubmit={onSave}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, alignItems: 'end' }}>
+        {field('Name', 'name')}
+        {field('Email', 'email', <input type="email" className={inputStyle} value={form.email} onChange={event => setForm(current => ({ ...current, email: event.target.value }))} />)}
+        {field('Cohort year', 'cohort', <input type="number" min="1" step="1" className={inputStyle} value={form.cohort} onChange={event => setForm(current => ({ ...current, cohort: event.target.value }))} />)}
+        {field('Track', 'track', <select className={inputStyle} value={form.track} onChange={event => setForm(current => ({ ...current, track: event.target.value }))}><option value="">Select track…</option><option value="primary">Primary</option><option value="secondary">Secondary</option></select>)}
+        {field('Grade', 'grade')}
+        {field('Placement city', 'placementCity')}
+        {field('AFA group', 'afaGroup', <select className={inputStyle} value={form.afaGroup} onChange={event => setForm(current => ({ ...current, afaGroup: event.target.value }))}><option value="">Unassigned</option>{groupOptions.map(group => <option key={group} value={group}>{groupLabel(group)}</option>)}</select>)}
+      </div>
+      {error && <div role="alert" style={{ color: '#D0A023', fontSize: 12, marginTop: 8 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+        <button type="submit" className={btnPrimary}>Save changes</button>
+        <button type="button" className={btnGhost} onClick={onCancel}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 function RosterPanel({ roster, staff, cityCodes, rooms = [], onChange, onRoomsChange = null, onAccount, showToast }) {
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [afaGroup, setAfaGroup] = useState(''); const [track, setTrack] = useState(''); const [grade, setGrade] = useState(''); const [placementCity, setPlacementCity] = useState(''); const [error, setError] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false); const [bulkText, setBulkText] = useState('');
+  const [editingFellow, setEditingFellow] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [editError, setEditError] = useState('');
   const afaStaff = (staff || []).filter(p => (p.role === 'afa' || p.role === 'afa_lead') && p.name);
   const legacyGroups = [...new Set((roster || []).map(r => (r.afaGroup || '').trim()).filter(Boolean))];
   const groupOptions = [...new Set([...afaStaff.map(p => p.group || p.name), ...legacyGroups].map(g => (g || '').trim()).filter(Boolean))];
@@ -5119,7 +5160,44 @@ function RosterPanel({ roster, staff, cityCodes, rooms = [], onChange, onRoomsCh
     setName(''); setEmail(''); setAfaGroup(''); setTrack(''); setGrade(''); setPlacementCity(''); setError(''); showToast('Fellow added (cohort ' + fellow.cohort + ')');
   };
   const removeOne = (id) => { onChange(roster.filter(r => r.id !== id)); showToast('Fellow removed'); };
-  const editOne = (fellow) => { const name = window.prompt('Fellow name', fellow.name); if (!name?.trim()) return; const email = window.prompt('Fellow email', fellow.email); if (!email?.trim()) return; const afa = window.prompt('AFA group', fellow.afaGroup || '') ?? (fellow.afaGroup || ''); const cohort = window.prompt('Cohort (year)', fellow.cohort || defaultCohortForCreator({ role: 'afa' })) ?? fellow.cohort; const next = { ...fellow, name: name.trim(), email: email.trim().toLowerCase(), afaGroup: afa.trim(), cohort: Number(cohort) || fellow.cohort, track: (window.prompt('Track: primary or secondary', fellow.track || '') || fellow.track || '').toLowerCase(), grade: window.prompt('Grade', fellow.grade || '') || fellow.grade || '', placementCity: window.prompt('Placement city', fellow.placementCity || '') || fellow.placementCity || '', roomIds: fellow.roomIds || [] }; onChange(roster.map(item => item.id === fellow.id ? next : item)); onAccount(next, 'fellow'); showToast('Fellow updated'); };
+  const editOne = fellow => {
+    setEditingFellow(fellow);
+    setEditForm({
+      name: fellow.name || '',
+      email: fellow.email || '',
+      cohort: String(fellow.cohort || defaultCohortForCreator({ role: 'afa' })),
+      track: fellow.track || '',
+      grade: fellow.grade || '',
+      placementCity: fellow.placementCity || '',
+      afaGroup: fellow.afaGroup || '',
+    });
+    setEditError('');
+  };
+  const saveFellowEdit = event => {
+    event.preventDefault();
+    const nextName = String(editForm.name || '').trim();
+    const nextEmail = String(editForm.email || '').trim().toLowerCase();
+    const nextCohort = Number(editForm.cohort);
+    const validationError = fellowEditError(editForm, roster, editingFellow.id);
+    if (validationError) { setEditError(validationError); return; }
+    const updated = {
+      ...editingFellow,
+      name: nextName,
+      email: nextEmail,
+      cohort: nextCohort,
+      track: String(editForm.track || '').trim().toLowerCase(),
+      grade: String(editForm.grade || '').trim(),
+      placementCity: String(editForm.placementCity || '').trim(),
+      afaGroup: String(editForm.afaGroup || '').trim(),
+      roomIds: editingFellow.roomIds || [],
+    };
+    onChange(roster.map(fellow => String(fellow.id) === String(editingFellow.id) ? updated : fellow));
+    onAccount(updated, 'fellow');
+    setEditingFellow(null);
+    setEditForm(null);
+    setEditError('');
+    showToast('Fellow updated');
+  };
   const importBulk = () => {
     const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
     let added = 0, skipped = 0; const next = [...roster];
@@ -5165,7 +5243,21 @@ function RosterPanel({ roster, staff, cityCodes, rooms = [], onChange, onRoomsCh
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead><tr style={{ background: '#00402E', textAlign: 'left' }}><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Name</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Track / Grade</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>City / AFA</th><th style={{ padding: '9px 12px', fontWeight: 600, color: '#D5E0D5', borderBottom: '1px solid #2A5C4B' }}>Analysis opt-out</th><th style={{ padding: '9px 12px', borderBottom: '1px solid #2A5C4B' }}></th></tr></thead>
           <tbody>
-            {sorted.map(r => (
+            {sorted.map(r => editingFellow && String(editingFellow.id) === String(r.id) ? (
+              <tr key={r.id} style={{ borderBottom: '1px solid #1F4A3C', background: '#00281D' }}>
+                <td colSpan={5} style={{ padding: 14 }}>
+                  <FellowProfileEditForm
+                    form={editForm}
+                    setForm={setEditForm}
+                    groupOptions={groupOptions}
+                    groupLabel={groupLabel}
+                    error={editError}
+                    onSave={saveFellowEdit}
+                    onCancel={() => { setEditingFellow(null); setEditForm(null); setEditError(''); }}
+                  />
+                </td>
+              </tr>
+            ) : (
               <tr key={r.id} style={{ borderBottom: '1px solid #1F4A3C' }}>
                 <td style={{ padding: '8px 12px' }}>{r.name}<div style={{ fontSize: 11, color: '#9DB09D' }}>{r.email}</div></td><td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{r.cohort ? r.cohort + ' · ' : ''}{r.track || '--'}{r.grade ? ' · ' + r.grade : ''}</td><td style={{ padding: '8px 12px', color: '#D5E0D5' }}>{r.placementCity ? <>{(cityCodes || []).find(c => c.city.toLowerCase() === r.placementCity.toLowerCase()) && <span style={{ ...callSignChipStyle, marginRight: 6 }}>{(cityCodes || []).find(c => c.city.toLowerCase() === r.placementCity.toLowerCase()).code}</span>}{r.placementCity}</> : '--'}{r.afaGroup ? ' · ' + r.afaGroup : ''}</td>
                 <td style={{ padding: '8px 12px' }}><label style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', fontSize: 11.5 }}><input type="checkbox" checked={r.excludeFromAnalysis === true} aria-label={`Don't include ${r.name} in analysis`} onChange={event => { const updated = { ...r, excludeFromAnalysis: event.target.checked }; onChange(roster.map(item => item.id === r.id ? updated : item)); showToast(event.target.checked ? 'Fellow excluded from analysis' : 'Fellow included in analysis'); }} />Don't include in analysis</label></td>
@@ -5719,4 +5811,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceTimingFromSession, validateAttendanceTiming, normalizeSessionAttendance, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, FellowProfileEditForm, fellowEditError, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceTimingFromSession, validateAttendanceTiming, normalizeSessionAttendance, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };
