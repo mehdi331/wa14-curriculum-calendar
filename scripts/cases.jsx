@@ -66,7 +66,7 @@ const legacyFacs = [
 ];
 const wrapSession = (facilitators) => ({
   id: 1, week: 1, date: '2026-10-25', weekday: 'Sunday', start: '23:00', end: '01:00',
-  name: 'Cross-midnight session', type: 'Team Culture', pillarIds: ['ptag0'], mode: 'Sync',
+  name: 'Cross-midnight session', type: 'Team Culture', pillarIds: ['ptag0'], mode: 'Sync', attendanceRequired: true,
   facilitators, roomIds: ['r1'], rooms: [], resources: [{ id: 'res1', label: 'Deck', url: 'https://x.dev' }],
   outcomes: ['Outcome A'], notes: 'n', fellowNotes: 'fn', afaGroup: 'AFA 1', calendared: true, assessmentTotal: 10,
 });
@@ -124,7 +124,9 @@ export const cases = [
   ['TopBar', () => <P.TopBar tab="calendar" isFullAdmin auth={auth} onLogout={noop} onExport={noop} onImport={noop} onReset={noop} onAdd={noop} />],
   ['FilterBar', () => <P.FilterBar typeFilter="all" setTypeFilter={noop} pillarTagFilter="all" setPillarTagFilter={noop} modeFilter="all" setModeFilter={noop} sessionTypes={null} pillarTags={null} modes={null} />],
   ['MyAttendancePanel', () => <P.MyAttendancePanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} />],
+  ['MyAttendancePanel-opt-out', () => <P.MyAttendancePanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} roster={[{ ...roster[0], excludeFromAnalysis: true }]} />],
   ['AttendanceRecordsPanel', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={auth} onExport={noop} onSaveAttendance={noop} />],
+  ['AttendanceRecordsPanel-opt-out', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={[roster[0], { ...roster[1], excludeFromAnalysis: true }]} auth={auth} onExport={noop} onSaveAttendance={noop} />],
   // AFA staff edit attendance only inside their own group (approved plan item).
   ['AttendanceRecordsPanel-afa', () => <P.AttendanceRecordsPanel sessions={sessions} attendance={attendanceRecs} roster={roster} auth={{ email: 'n@x.dev', role: 'afa', afaGroup: 'AFA 1', access: 'full' }} onExport={noop} onSaveAttendance={noop} />],
 
@@ -135,6 +137,7 @@ export const cases = [
   ['FellowOverview', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} />],
   ['FellowOverview-attendance-active', () => <P.FellowOverview sessions={[{ id: 'attendance-test', name: 'Attendance test session', date: '2026-10-25', start: '09:00', end: '10:00', mode: 'Sync', attendanceRequired: true }]} auth={fellowAuth} rooms={rooms} attendance={[]} onCheckIn={noop} nowOverride={new Date('2026-10-25T03:14:00Z')} />],
   ['FellowOverview-attendance-ended', () => <P.FellowOverview sessions={[{ id: 'attendance-test', name: 'Attendance test session', date: '2026-10-25', start: '09:00', end: '10:00', mode: 'Sync', attendanceRequired: true }]} auth={fellowAuth} rooms={rooms} attendance={[]} onCheckIn={noop} nowOverride={new Date('2026-10-25T04:00:00Z')} />],
+  ['FellowOverview-opt-out', () => <P.FellowOverview sessions={[{ id: 'attendance-test', name: 'Attendance test session', date: '2026-10-25', start: '09:00', end: '10:00', mode: 'Sync', attendanceRequired: true }]} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} roster={[{ ...roster[0], excludeFromAnalysis: true }]} />],
   // Accountability partner resolves from the roster and shows beside the AFA group.
   ['FellowOverview-partner', () => <P.FellowOverview sessions={sessions} auth={fellowAuth} rooms={rooms} attendance={attendanceRecs} onCheckIn={noop} roster={[{ id: 'fe1', name: 'Fellow One', afaGroup: 'AFA 1', accountabilityIds: ['fe2'] }, { id: 'fe2', name: 'Fellow Two' }]} />],
   ['FellowAnalyticsPanel', () => <P.FellowAnalyticsPanel sessions={sessions} attendance={attendanceRecs} auth={fellowAuth} assessments={assessments} attempts={attempts} roster={roster} manualSessionMarks={[]} />],

@@ -49,7 +49,7 @@ service cloud.firestore {
     match /wa14/{docId} {
       allow read: if isTfbUser();
       allow create, update, delete: if isPlanner()
-        && docId in ['wa14-sessions', 'wa14-rooms', 'wa14-pillars', 'wa14-requests', 'wa14-settings', 'wa14-assessments', 'wa14-assessment-questions', 'wa14-assessment-analytics', 'wa14-staff-tasks',
+        && docId in ['wa14-sessions', 'wa14-rooms', 'wa14-pillars', 'wa14-requests', 'wa14-settings', 'wa14-assessments', 'wa14-assessment-questions', 'wa14-assessment-analytics', 'wa14-staff-tasks', 'wa14-wa-resources-config',
           // Practice-teaching collaborations + grade/subject learning outcomes + manual session marks.
           'wa14-collaborations', 'wa14-learning-outcomes', 'wa14-session-marks',
           // [CITY] City system documents (year-round fellowship calendar).

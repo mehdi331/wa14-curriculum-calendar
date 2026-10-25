@@ -42,6 +42,7 @@ export const CITY_KEYS = {
 
 const attendanceKey = record => JSON.stringify([String(record.sessionId), String(record.fellowId)]);
 const attendanceRef = () => doc(db, COLLECTION, ASSESSMENT_KEYS.attendance);
+const rosterRef = () => doc(db, COLLECTION, 'wa14-roster');
 
 function attendanceFromSnapshot(snapshot) {
   if (!snapshot.exists() || !snapshot.data().value) return [];
@@ -50,8 +51,31 @@ function attendanceFromSnapshot(snapshot) {
   return records;
 }
 
+function rosterFromSnapshot(snapshot) {
+  if (!snapshot.exists() || !snapshot.data().value) return [];
+  const roster = JSON.parse(snapshot.data().value);
+  if (!Array.isArray(roster)) throw new Error('Stored Fellow roster is not an array.');
+  return roster;
+}
+
+export function filterExcludedAttendanceRecords(records, roster) {
+  const excludedIds = new Set((roster || [])
+    .filter(fellow => fellow.excludeFromAnalysis === true)
+    .map(fellow => String(fellow.id)));
+  return (records || []).filter(record => !excludedIds.has(String(record.fellowId)));
+}
+
 export async function getAttendanceRecords() {
-  return attendanceFromSnapshot(await getDoc(attendanceRef()));
+  return runTransaction(db, async transaction => {
+    const roster = rosterFromSnapshot(await transaction.get(rosterRef()));
+    const ref = attendanceRef();
+    const records = attendanceFromSnapshot(await transaction.get(ref));
+    const filtered = filterExcludedAttendanceRecords(records, roster);
+    if (filtered.length !== records.length) {
+      transaction.set(ref, { value: JSON.stringify(filtered), updatedAt: Date.now() });
+    }
+    return filtered;
+  });
 }
 
 export async function createAttendanceRecord(record) {
@@ -60,6 +84,9 @@ export async function createAttendanceRecord(record) {
   }
   return runTransaction(db, async transaction => {
     const ref = attendanceRef();
+    const roster = rosterFromSnapshot(await transaction.get(rosterRef()));
+    const fellow = roster.find(item => String(item.id) === String(record.fellowId));
+    if (fellow?.excludeFromAnalysis === true) return 'excluded';
     const records = attendanceFromSnapshot(await transaction.get(ref));
     const key = attendanceKey(record);
     if (records.some(existing => attendanceKey(existing) === key)) return false;
@@ -68,6 +95,42 @@ export async function createAttendanceRecord(record) {
       updatedAt: Date.now(),
     });
     return true;
+  });
+}
+
+export async function setFellowAnalysisOptOut(fellowId, excluded, nextRoster) {
+  if (fellowId == null) throw new Error('An opt-out update requires a Fellow ID.');
+  const updatedRoster = (nextRoster || []).map(fellow => String(fellow.id) === String(fellowId)
+    ? { ...fellow, excludeFromAnalysis: excluded === true }
+    : fellow);
+  if (!updatedRoster.some(fellow => String(fellow.id) === String(fellowId))) {
+    throw new Error('The Fellow to update was not found in the roster.');
+  }
+
+  return runTransaction(db, async transaction => {
+    const rosterDocument = rosterRef();
+    const attendanceDocument = attendanceRef();
+    const [rosterSnapshot, attendanceSnapshot] = await Promise.all([
+      transaction.get(rosterDocument),
+      transaction.get(attendanceDocument),
+    ]);
+    const storedRoster = rosterFromSnapshot(rosterSnapshot);
+    if (!storedRoster.some(fellow => String(fellow.id) === String(fellowId))) {
+      throw new Error('The Fellow to update was not found in the saved roster.');
+    }
+    const storedAttendance = attendanceFromSnapshot(attendanceSnapshot);
+    const updatedAttendance = excluded === true
+      ? storedAttendance.filter(record => String(record.fellowId) !== String(fellowId))
+      : storedAttendance;
+    transaction.set(rosterDocument, {
+      value: JSON.stringify(updatedRoster),
+      updatedAt: Date.now(),
+    });
+    transaction.set(attendanceDocument, {
+      value: JSON.stringify(updatedAttendance),
+      updatedAt: Date.now(),
+    });
+    return { roster: updatedRoster, attendance: updatedAttendance };
   });
 }
 
@@ -86,13 +149,18 @@ export function mergeAttendanceChanges(currentRecords, previousRecords, nextReco
 export async function saveAttendanceChanges(previousRecords, nextRecords) {
   const previousByKey = new Map((previousRecords || []).map(record => [attendanceKey(record), record]));
   const nextByKey = new Map((nextRecords || []).map(record => [attendanceKey(record), record]));
-  if (JSON.stringify([...previousByKey]) === JSON.stringify([...nextByKey])) return;
+  if (JSON.stringify([...previousByKey]) === JSON.stringify([...nextByKey])) return nextRecords || [];
 
-  await runTransaction(db, async transaction => {
+  return runTransaction(db, async transaction => {
     const ref = attendanceRef();
+    const roster = rosterFromSnapshot(await transaction.get(rosterRef()));
     const records = attendanceFromSnapshot(await transaction.get(ref));
-    const merged = mergeAttendanceChanges(records, previousRecords, nextRecords);
+    const merged = filterExcludedAttendanceRecords(
+      mergeAttendanceChanges(records, previousRecords, nextRecords),
+      roster,
+    );
     transaction.set(ref, { value: JSON.stringify(merged), updatedAt: Date.now() });
+    return merged;
   });
 }
 

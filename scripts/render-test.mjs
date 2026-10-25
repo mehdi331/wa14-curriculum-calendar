@@ -19,7 +19,7 @@ const vite = await createServer({
 
 const { cases } = await vite.ssrLoadModule('/scripts/cases.jsx');
 const { __panels: P } = await vite.ssrLoadModule('/src/App.jsx');
-const { mergeAttendanceChanges } = await vite.ssrLoadModule('/src/storage.js');
+const { mergeAttendanceChanges, filterExcludedAttendanceRecords } = await vite.ssrLoadModule('/src/storage.js');
 
 let failed = 0;
 for (const [name, factory] of cases) {
@@ -130,10 +130,16 @@ else { console.log('FAIL  practice teaching: ' + badPt.join('; ')); failed++; }
 
 const attendanceSettingsHtml = renderHtml('AttendanceRecordsPanel');
 const sessionEditHtml = renderHtml('EditPanel-new');
+const attendanceOptOutHtml = renderHtml('AttendanceRecordsPanel-opt-out');
+const myAttendanceOptOutHtml = renderHtml('MyAttendancePanel-opt-out');
+const fellowOverviewOptOutHtml = renderHtml('FellowOverview-opt-out');
 const attendanceUiChecks = [
   ['attendance records do not expose global timing settings', !attendanceSettingsHtml.includes('Attendance window settings') && !attendanceSettingsHtml.includes('Save attendance window')],
   ['session editor exposes per-session attendance inclusion', sessionEditHtml.includes('Count attendance for this session')],
   ['session editor exposes timing controls and defaults', sessionEditHtml.includes('Attendance button window') && sessionEditHtml.includes('Open before start (minutes)') && sessionEditHtml.includes('On-time cutoff (minutes after start)') && sessionEditHtml.includes('Late window duration (minutes after on-time cutoff)') && sessionEditHtml.includes('value="3"') && sessionEditHtml.includes('value="2"') && sessionEditHtml.includes('value="10"')],
+  ['opted-out Fellow is hidden from staff attendance entry and records', !attendanceOptOutHtml.includes('Fellow Two')],
+  ['opted-out Fellow sees no personal attendance records', myAttendanceOptOutHtml.includes('Attendance is not included for your profile') && !myAttendanceOptOutHtml.includes('Recorded')],
+  ['opted-out Fellow has no check-in or prior attendance shown', fellowOverviewOptOutHtml.includes('Attendance is not included for your profile') && !fellowOverviewOptOutHtml.includes('Mark my attendance') && !fellowOverviewOptOutHtml.includes('Attendance recorded')],
 ];
 const badAttendanceUi = attendanceUiChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (!badAttendanceUi.length) console.log('OK    per-session attendance controls; no global timing form');
@@ -161,6 +167,19 @@ const attendanceMergeChecks = [
 const badAttendanceMerge = attendanceMergeChecks.filter(([, ok]) => !ok).map(([label]) => label);
 if (!badAttendanceMerge.length) console.log('OK    transactional attendance update preserves concurrent records');
 else { console.log('FAIL  attendance storage: ' + badAttendanceMerge.join('; ')); failed++; }
+const excludedAttendance = filterExcludedAttendanceRecords(
+  [
+    { sessionId: 's1', fellowId: 'included' },
+    { sessionId: 's1', fellowId: 'excluded' },
+  ],
+  [{ id: 'included' }, { id: 'excluded', excludeFromAnalysis: true }],
+);
+if (excludedAttendance.length === 1 && excludedAttendance[0].fellowId === 'included') {
+  console.log('OK    excluded Fellow records are removed from attendance writes');
+} else {
+  console.log('FAIL  excluded Fellow records were not filtered from attendance writes');
+  failed++;
+}
 
 // Saved list preview shows all entries and their per-outcome metadata.
 const loMultiHtml = renderHtml('LearningOutcomesPanel-multi');
@@ -341,7 +360,7 @@ try {
   const timing = mod2.__panels.attendanceTimingFromSession;
   const validateTiming = mod2.__panels.validateAttendanceTiming;
   const normalizeSessionAttendance = mod2.__panels.normalizeSessionAttendance;
-  const syncSession = { mode: 'Sync', date: '2026-10-25', start: '09:00', end: '10:00' };
+  const syncSession = { mode: 'Sync', date: '2026-10-25', start: '09:00', end: '10:00', attendanceRequired: true };
   // Defaults: opens at -3, on time until +2, then late for 10 more minutes.
   const phaseChecks = [
     ['upcoming', phase(syncSession, new Date('2026-10-25T02:56:59Z'))],
@@ -371,11 +390,30 @@ try {
     && Boolean(validateTiming({ ...custom, lateWindowMinutes: 121 }));
   const overrideChecks = elig({ mode: 'Async', attendanceRequired: true }) === true
     && elig({ mode: 'Sync', attendanceRequired: false }) === false
-    && elig({ mode: 'Sync' }) === true && elig({ mode: 'Async' }) === false;
+    && elig({ mode: 'Sync' }) === false && elig({ mode: 'Workshop' }) === false
+    && elig({ mode: 'Clinic', attendanceRequired: true }) === true;
+  const includedAttendance = mod2.__panels.attendanceRecordsForEligibleFellows(
+    [
+      { sessionId: 'sync-enabled', fellowId: 'included', status: 'on_time' },
+      { sessionId: 'sync-unset', fellowId: 'included', status: 'late' },
+      { sessionId: 'async-enabled', fellowId: 'included', status: 'late' },
+      { sessionId: 'sync-enabled', fellowId: 'excluded', status: 'on_time' },
+    ],
+    [
+      { id: 'sync-enabled', mode: 'Sync', attendanceRequired: true },
+      { id: 'sync-unset', mode: 'Sync' },
+      { id: 'async-enabled', mode: 'Async', attendanceRequired: true },
+    ],
+    [{ id: 'included' }, { id: 'excluded', excludeFromAnalysis: true }],
+  );
+  const attendanceFilteringChecks = includedAttendance.length === 2
+    && includedAttendance.some(record => record.sessionId === 'sync-enabled' && record.fellowId === 'included')
+    && includedAttendance.some(record => record.sessionId === 'async-enabled' && record.fellowId === 'included')
+    && !includedAttendance.some(record => record.fellowId === 'excluded' || record.sessionId === 'sync-unset');
   const timingDefaults = JSON.stringify(timing({})) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateWindowMinutes: 10 });
   const legacyDefaultMigration = JSON.stringify(normalizeSessionAttendance({ ...syncSession, attendanceTiming: { openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateUntilMinutes: 12 } }).attendanceTiming) === JSON.stringify({ openBeforeStartMinutes: 3, onTimeUntilMinutes: 2, lateWindowMinutes: 10 });
-  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && customChecks && extendedChecks && individualizedChecks && migrationChecks && legacyDefaultMigration && validationChecks && overrideChecks && timingDefaults) console.log('OK    per-session attendance boundaries + defaults + validation + eligibility');
-  else { console.log('FAIL  attendance timing got ' + JSON.stringify({ phaseChecks, asyncNull, customChecks, extendedChecks, individualizedChecks, migrationChecks, legacyDefaultMigration, validationChecks, overrideChecks, timingDefaults })); failed++; }
+  if (phaseChecks.every(([want, got]) => got === want) && asyncNull && customChecks && extendedChecks && individualizedChecks && migrationChecks && legacyDefaultMigration && validationChecks && overrideChecks && attendanceFilteringChecks && timingDefaults) console.log('OK    explicit attendance checkbox, timing boundaries, and opt-out filtering');
+  else { console.log('FAIL  attendance timing got ' + JSON.stringify({ phaseChecks, asyncNull, customChecks, extendedChecks, individualizedChecks, migrationChecks, legacyDefaultMigration, validationChecks, overrideChecks, attendanceFilteringChecks, includedAttendance, timingDefaults })); failed++; }
   const released = mod2.__panels.isGradeReleased({ gradesReleased: true });
   const hidden = mod2.__panels.isGradeReleased({ gradesReleased: false });
   const submittedUngraded = mod2.__panels.attemptGradeStatus({ status: 'submitted', questionOrder: ['q1'], answers: { q1: 'x' }, reviews: {} }, mockAssessment);

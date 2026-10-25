@@ -7,7 +7,7 @@ npm ci
 npm run dev
 ```
 
-During local development only, the sign-in screen includes **Test superuser** and **Test Fellow** buttons. These identities are stored in local browser storage and are removed from production builds. They are useful for checking role-based layouts and workflows, but they do not bypass Firestore security rules; use an authenticated Firebase account when testing live data reads and writes.
+During local development only, the sign-in screen includes **Test superuser** and **Test Fellow** buttons. These identities are stored in local browser storage and are removed from production builds. They are useful for checking role-based layouts and workflows, but they do not bypass Firestore security rules; use an authenticated Firebase account when testing live data reads and writes. Resources created with a local test account are saved only in that browser.
 
 ### Local TnDOS desktop experiment
 
@@ -20,7 +20,7 @@ The app uses Firebase Authentication and Cloud Firestore. The Firebase web confi
 1. Keep the project on the no-cost Spark plan unless paid Google Cloud services are required.
 2. In Firebase Console, enable **Authentication > Sign-in method > Google**.
 3. Add the GitHub Pages domain to Firebase Authentication's authorized domains.
-4. Publish `firestore.rules` before deploying the frontend. The rules require a verified `@teachforbangladesh.org` Google account and limit writes by role.
+4. Publish `firestore.rules` before deploying the frontend. The rules require a verified `@teachforbangladesh.org` Google account and limit writes by role; resource configuration is stored at `wa14/wa14-wa-resources-config`.
 5. Confirm Firestore usage stays within the Spark quota: 50,000 reads/day, 20,000 writes/day, 20,000 deletes/day, 1 GiB storage, and 10 GiB/month outbound transfer.
 
 The current rules include a temporary transition bridge for the existing planning-team email addresses. Replace that bridge with Firebase custom claims managed by a trusted administrator before adding more privileged users. Never restore password or PIN authentication in the browser.
@@ -43,7 +43,9 @@ Staff can use the **Review** tab to score paragraph responses, add feedback, and
 
 The initial assessment persistence uses aggregate documents for compatibility with the existing app. It is suitable for local/demo testing, but production assessment use still requires stricter per-Fellow Firestore rules, server-authoritative grading/timing, protected answer keys, and per-record response storage.
 
-Fellow attendance windows are configured individually in **Edit session**. Each session defaults to opening 3 minutes before start, recording check-ins as on time until the +2-minute mark, then accepting late check-ins for 10 more minutes (through +12). Staff can adjust the opening lead, on-time cutoff, and late-window duration separately for each session; each value must be a whole number from 0 to 120. For example, a 2-minute on-time cutoff and a 120-minute late duration keeps check-in open through +122 minutes. Existing sessions are initialized with these defaults, and earlier late cutoffs are migrated to equivalent durations. The separate attendance-required option defaults to enabled for Sync, Workshop, and Clinic modes and disabled for other modes. Excluded sessions do not appear in attendance records or Fellow attendance totals.
+Fellow attendance is enabled only for sessions with **Count attendance for this session** explicitly checked in **Edit session**; session mode alone does not enable check-in. Existing sessions without a saved checkbox value are treated as unchecked. When enabled, the attendance window defaults to opening 3 minutes before start, recording check-ins as on time until the +2-minute mark, then accepting late check-ins for 10 more minutes (through +12). Staff can adjust the opening lead, on-time cutoff, and late-window duration separately for each session; each value must be a whole number from 0 to 120. For example, a 2-minute on-time cutoff and a 120-minute late duration keeps check-in open through +122 minutes. Existing attendance-window timing values are migrated to the current defaults or equivalent durations.
+
+Fellows with **Don't include in analysis** enabled are excluded from attendance check-in, staff entry, attendance totals, reports, and exports. Enabling the opt-out permanently deletes that Fellow's existing attendance records; removing the opt-out does not restore them. Attendance transactions check the latest saved roster setting to prevent a stale open page from recreating deleted records.
 
 Attendance check-ins and staff edits update the existing `wa14/wa14-attendance` document in Firestore transactions, so concurrent check-ins are merged instead of overwriting one another. This uses the existing attendance permissions in `firestore.rules`.
 
