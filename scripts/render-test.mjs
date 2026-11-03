@@ -481,13 +481,21 @@ try {
     'room-a',
     [...mainRooms, replacementRoom],
   );
-  const defaultedSessions = mod2.__panels.addDefaultRoomToUnassignedSessions([
-    { id: 'break', type: 'Break', mode: 'Sync', roomIds: [] },
-    { id: 'async', type: 'Workshop', mode: 'Async', roomIds: [] },
-    { id: 'coaching', type: 'Coaching', mode: 'Coaching' },
-    { id: 'assigned', type: 'Workshop', roomIds: ['room-a'] },
-    { id: 'legacy', type: 'Workshop', roomIds: [], rooms: [{ id: 'room-a', name: 'Room A' }] },
+  const shouldDefaultRoom = [
+    mod2.__panels.shouldDefaultMainRoom({ type: 'Break', mode: 'Sync' }),
+    mod2.__panels.shouldDefaultMainRoom({ type: 'Workshop', mode: 'Async' }),
+    mod2.__panels.shouldDefaultMainRoom({ type: 'Workshop', mode: 'Coaching' }),
+    mod2.__panels.shouldDefaultMainRoom({ type: 'Workshop', mode: 'Sync' }),
+  ];
+  const cleanedRoomAssignments = mod2.__panels.removeUnintendedMainRoomAssignments([
+    { id: 'migrated', roomIds: ['room-main'], rooms: [] },
+    { id: 'targeted', roomIds: ['room-main', 'room-a'], rooms: [] },
+    { id: 'legacy', roomIds: ['room-main'], rooms: [{ id: 'room-a', name: 'Room A' }] },
   ], 'room-main');
+  const roomRemoved = mod2.__panels.toggleSessionRoomAssignment({
+    roomIds: ['room-main'],
+    facilitators: [{ id: 'fac1', roomId: 'room-main' }],
+  }, 'room-main');
   const roomRoster = [{ id: 'f1' }, { id: 'f2' }, { id: 'f3' }];
   const allRoomFellowIds = mod2.__panels.roomFellowIdsAfterSelectAll(true, roomRoster);
   const noRoomFellowIds = mod2.__panels.roomFellowIdsAfterSelectAll(false, roomRoster);
@@ -501,8 +509,10 @@ try {
     ['main room auto-created once', ensuredEmpty.room.name === 'Main Room' && ensuredAgain.rooms === ensuredEmpty.rooms && ensuredAgain.room.id === ensuredEmpty.room.id],
     ['selecting a different facilitator room replaces default Main Room', roomIdsAfterReplacement.length === 1 && roomIdsAfterReplacement[0] === 'room-a'],
     ['Main Room remains when another facilitator is explicitly assigned there', roomIdsWithExplicitMain.includes('room-main') && roomIdsWithExplicitMain.includes('room-a')],
-    ['unassigned break, async, and coaching sessions get Main Room', defaultedSessions.slice(0, 3).every(session => session.roomIds?.[0] === 'room-main')],
-    ['existing room assignments are preserved during default migration', defaultedSessions[3].roomIds[0] === 'room-a' && defaultedSessions[4].rooms[0].id === 'room-a'],
+    ['default Main Room is excluded for break, async, and coaching sessions', shouldDefaultRoom.join(',') === 'false,false,false,true'],
+    ['rollback clears default-only room assignments and preserves other room targeting', cleanedRoomAssignments[0].roomIds.length === 0 && cleanedRoomAssignments[1].roomIds.join(',') === 'room-main,room-a' && cleanedRoomAssignments[2].roomIds[0] === 'room-main'],
+    ['session room control removes room and facilitator assignment', roomRemoved.roomIds.length === 0 && roomRemoved.facilitators[0].roomId === ''],
+    ['session editor exposes direct room assignment controls', renderHtml('EditPanel-new').includes('Session rooms')],
     ['Select all Fellows selects and clears the full room roster', allRoomFellowIds.length === roomRoster.length && mod2.__panels.allRoomFellowsSelected({ fellowIds: allRoomFellowIds }, roomRoster) && noRoomFellowIds.length === 0 && !mod2.__panels.allRoomFellowsSelected({ fellowIds: noRoomFellowIds }, roomRoster)],
     ['main-room targeting does not hide sessions', visMain === true],
     ['other rooms still restrict', visOther === false],

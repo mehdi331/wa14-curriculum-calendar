@@ -813,6 +813,7 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
   useEffect(() => {
     (async () => {
       let loadedSessions = [];
+      let loadedRooms = [];
       try {
         const r = await storage.get('wa14-sessions');
         const raw = r && r.value ? JSON.parse(r.value) : SEED;
@@ -855,25 +856,14 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
       catch (e) { setRequests([]); }
       try {
         const r = await storage.get('wa14-rooms');
-        const loadedRooms = r && r.value ? JSON.parse(r.value) : [];
-        const ensured = ensureMainRoom(loadedRooms);
-        setRooms(ensured.rooms);
+        const storedRooms = r && r.value ? JSON.parse(r.value) : [];
+        const ensured = ensureMainRoom(storedRooms);
+        loadedRooms = ensured.rooms;
+        setRooms(loadedRooms);
         // Auto-create the Main Room (staff writers only; Fellows keep a local copy).
-        if (ensured.rooms !== loadedRooms && auth.role !== 'fellow') {
+        if (ensured.rooms !== storedRooms && auth.role !== 'fellow') {
           try { await storage.set('wa14-rooms', JSON.stringify(ensured.rooms)); }
           catch (e) { console.error('main room create failed', e); }
-        }
-        const sessionsWithDefaultRoom = addDefaultRoomToUnassignedSessions(loadedSessions, ensured.room.id);
-        if (sessionsWithDefaultRoom !== loadedSessions) {
-          loadedSessions = sessionsWithDefaultRoom;
-          setSessions(loadedSessions);
-          if (auth.role !== 'fellow') {
-            try { await storage.set('wa14-sessions', JSON.stringify(loadedSessions)); }
-            catch (error) {
-              console.error('default session room migration failed', error);
-              showToast('Could not assign the Main Room to existing sessions: ' + (error.code || error.message));
-            }
-          }
         }
       }
       catch (e) { setRooms([]); }
@@ -902,8 +892,28 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
         setCityCodes(r && r.value ? JSON.parse(r.value) : []);
       }
       catch (e) { setCityCodes([]); }
-      try { const r = await storage.get('wa14-settings'); const settings = r && r.value ? JSON.parse(r.value) : {}; setAcademySettings({ ...settings, fellowWeeks: Array.isArray(settings.fellowWeeks) ? settings.fellowWeeks : WEEKS }); }
-      catch (e) { setAcademySettings({ fellowWeeks: WEEKS }); }
+      try {
+        const r = await storage.get('wa14-settings');
+        let settings = r && r.value ? JSON.parse(r.value) : {};
+        if (auth.role !== 'fellow' && settings.mainRoomDefaultCleanupVersion !== 1) {
+          const mainRoom = findMainRoom(loadedRooms);
+          if (mainRoom) {
+            const cleanedSessions = removeUnintendedMainRoomAssignments(loadedSessions, mainRoom.id);
+            if (cleanedSessions !== loadedSessions) {
+              await storage.set('wa14-sessions', JSON.stringify(cleanedSessions));
+              loadedSessions = cleanedSessions;
+              setSessions(cleanedSessions);
+            }
+          }
+          settings = { ...settings, mainRoomDefaultCleanupVersion: 1 };
+          await storage.set('wa14-settings', JSON.stringify(settings));
+        }
+        setAcademySettings({ ...settings, fellowWeeks: Array.isArray(settings.fellowWeeks) ? settings.fellowWeeks : WEEKS });
+      } catch (e) {
+        console.error('default session room cleanup failed', e);
+        showToast('Could not remove the unintended default room from existing sessions: ' + (e.code || e.message));
+        setAcademySettings({ fellowWeeks: WEEKS });
+      }
       try { const r = await storage.get(ACADEMY_KEYS.academyOverview); setAcademyOverview(r && r.value ? JSON.parse(r.value) : { academyName: 'Winter Academy 14', theme: '', vision: '', goals: [], outcomes: [], pillars: [] }); }
       catch (e) { setAcademyOverview({ academyName: 'Winter Academy 14', theme: '', vision: '', goals: [], outcomes: [], pillars: [] }); }
       try { loadedQuestions = parseStoredArray(await storage.get(ASSESSMENT_KEYS.questions)); setAssessmentQuestions(loadedQuestions); }
@@ -1167,7 +1177,7 @@ const importArchivedSessions = (imported) => {
   if (!Array.isArray(imported) || !imported.length) return;
   // Imported sessions are new too: default unassigned rooms to the Main Room.
   const ensured = ensureMainRoom(rooms);
-  const nextImported = imported.map(s => (!(s.roomIds || []).length && !(s.rooms || []).length) ? { ...s, roomIds: [ensured.room.id] } : s);
+  const nextImported = imported.map(s => shouldDefaultMainRoom(s) && !(s.roomIds || []).length && !(s.rooms || []).length ? { ...s, roomIds: [ensured.room.id] } : s);
   if (ensured.rooms !== rooms) persistRooms(ensured.rooms);
   persist([...(sessions || []), ...nextImported]);
   showToast(imported.length + ' session' + (imported.length === 1 ? '' : 's') + ' imported from archive');
@@ -1287,7 +1297,7 @@ const importExcel = () => {
 
       // CSV/XLSX imports create new sessions: default unassigned rooms to Main Room.
       const ensuredImport = ensureMainRoom(rooms);
-      newSessions.forEach(s => { if (!(s.roomIds || []).length && !(s.rooms || []).length) s.roomIds = [ensuredImport.room.id]; });
+      newSessions.forEach(s => { if (shouldDefaultMainRoom(s) && !(s.roomIds || []).length && !(s.rooms || []).length) s.roomIds = [ensuredImport.room.id]; });
       if (ensuredImport.rooms !== rooms) persistRooms(ensuredImport.rooms);
       const next = [...sessions, ...newSessions];
       persist(next);
@@ -1311,7 +1321,7 @@ const saveSession = (s) => {
     // sessions are never rewritten (no retroactive room changes).
     const ensured = ensureMainRoom(rooms);
     nextRooms = ensured.rooms;
-    if (!(s.roomIds || []).length && !(s.rooms || []).length) toSave = { ...toSave, roomIds: [ensured.room.id] };
+    if (shouldDefaultMainRoom(s) && !(s.roomIds || []).length && !(s.rooms || []).length) toSave = { ...toSave, roomIds: [ensured.room.id] };
   }
   const next = exists ? current.map(x => String(x.id) === String(s.id) ? toSave : x) : [...current, toSave];
   persist(next);
@@ -2378,14 +2388,34 @@ function ensureMainRoom(rooms) {
   const room = { id: 'room-main', name: MAIN_ROOM_NAME, locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] };
   return { rooms: [...(rooms || []), room], room };
 }
-function addDefaultRoomToUnassignedSessions(sessions, roomId) {
+function shouldDefaultMainRoom(session) {
+  const type = String(session.type || session.pillar || '').trim().toLowerCase();
+  const mode = String(session.mode || '').trim().toLowerCase();
+  return type !== 'break' && mode !== 'async' && mode !== 'coaching';
+}
+function removeUnintendedMainRoomAssignments(sessions, roomId) {
   let changed = false;
   const updated = (sessions || []).map(session => {
-    if ((session.roomIds || []).length || (session.rooms || []).length) return session;
+    const assignedRooms = session.roomIds || [];
+    if ((session.rooms || []).length || assignedRooms.length !== 1 || String(assignedRooms[0]) !== String(roomId)) {
+      return session;
+    }
     changed = true;
-    return { ...session, roomIds: [roomId] };
+    return { ...session, roomIds: [] };
   });
   return changed ? updated : sessions;
+}
+function toggleSessionRoomAssignment(session, roomId) {
+  const assigned = (session.roomIds || []).some(id => String(id) === String(roomId));
+  return {
+    ...session,
+    roomIds: assigned
+      ? (session.roomIds || []).filter(id => String(id) !== String(roomId))
+      : [...(session.roomIds || []), roomId],
+    facilitators: assigned
+      ? (session.facilitators || []).map(f => String(f.roomId) === String(roomId) ? { ...f, roomId: '' } : f)
+      : (session.facilitators || []),
+  };
 }
 function roomIdsAfterFacilitatorUpdate(roomIds, facilitators, selectedRoomId, rooms) {
   const nextRoomIds = [...(roomIds || [])];
@@ -5778,6 +5808,7 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
   const updateOutcome = (id, val) => set('outcomes', form.outcomes.map(o => o.id === id ? { ...o, text: val } : o));
   const removeOutcome = (id) => set('outcomes', form.outcomes.filter(o => o.id !== id));
   const addFacilitator = () => set('facilitators', [...form.facilitators, { id: newResId(), staffName: '', roomId: '' }]);
+  const toggleSessionRoom = roomId => setForm(current => toggleSessionRoomAssignment(current, roomId));
   const updateFacilitator = (id, key, val) => {
     const old = form.facilitators.find(f => f.id === id);
     const nextFacilitators = form.facilitators.map(f => f.id === id ? { ...f, [key]: val } : f);
@@ -5868,6 +5899,22 @@ function EditPanel({ session, onSave, onDelete, onClose, canEditSchedule, sessio
           </div>
           {attendanceTimingError && <div role="alert" style={{ color: '#F0A39A', fontSize: 12, marginTop: 4 }}>{attendanceTimingError}</div>}
         </div>
+        <Field label="Session rooms">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+            {(rooms || []).map(room => (
+              <label key={room.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#D5E0D5' }}>
+                <input
+                  type="checkbox"
+                  disabled={!canEditSchedule}
+                  checked={(form.roomIds || []).some(id => String(id) === String(room.id))}
+                  onChange={() => toggleSessionRoom(room.id)}
+                />
+                {room.name}
+              </label>
+            ))}
+            {!(rooms || []).length && <span style={{ fontSize: 12, color: '#9DB09D' }}>No rooms available.</span>}
+          </div>
+        </Field>
         <Field label="Facilitators">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {form.facilitators.map(f => (
@@ -5933,4 +5980,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, allRoomFellowsSelected, roomFellowIdsAfterSelectAll, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, FellowProfileEditForm, fellowEditError, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceRecordsForEligibleFellows, attendanceTimingFromSession, validateAttendanceTiming, normalizeSessionAttendance, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, addDefaultRoomToUnassignedSessions, roomIdsAfterFacilitatorUpdate, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, allRoomFellowsSelected, roomFellowIdsAfterSelectAll, shouldDefaultMainRoom, removeUnintendedMainRoomAssignments, toggleSessionRoomAssignment, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, FellowProfileEditForm, fellowEditError, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceRecordsForEligibleFellows, attendanceTimingFromSession, validateAttendanceTiming, normalizeSessionAttendance, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, roomIdsAfterFacilitatorUpdate, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };
