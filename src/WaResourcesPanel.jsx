@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, X } from '@phosphor-icons/react';
 import WaResourcesListPanel from './WaResourcesListPanel.jsx';
+import WaResourcesListView from './WaResourcesListView.jsx';
 import TaxonomiesEditor from './WaResourcesTaxonomies.jsx';
 import { WaResourcesStore } from './waResourcesStore.js';
 
@@ -22,27 +23,56 @@ export default function WaResourcesPanel({ store = null, role = 'staff' }) {
   const sharedStore = React.useMemo(() => store || new WaResourcesStore(), [store]);
   const [storeState, setStoreState] = React.useState(sharedStore.state);
   React.useEffect(() => {
+    if (store) return undefined;
+    sharedStore.load();
+    return () => sharedStore.dispose();
+  }, [sharedStore, store]);
+  React.useEffect(() => {
     setStoreState(sharedStore.state);
     return sharedStore.subscribe(setStoreState);
   }, [sharedStore]);
   const resources = storeState.resources || [];
   const taxonomies = storeState.taxonomies || { grades: [], subjects: [], tags: [], resourceKinds: [] };
-  const [filter, setFilter] = React.useState({ search: '', kind: 'all', grade: 'all', visible: 'all' });
+  const [filter, setFilter] = React.useState({ search: '', kind: 'all', grade: 'all', visible: 'all', tags: 'all' });
+  const [form, setForm] = React.useState({ id: null, title: '', kind: 'handout', url: '', description: '', grade: '', subject: '', tags: [], visibleToFellows: 'true', createdBy: '', createdAt: '', updatedAt: '' });
+  const [creating, setCreating] = React.useState(false);
+  if (role === 'fellow') {
+    return (
+      <div className="max-w-7xl mx-auto">
+        {storeState.error && (
+          <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+            Could not load resources: {storeState.error}
+          </div>
+        )}
+        {storeState.loading && <p className="mb-4 text-sm text-wa-muted" role="status">Loading resources…</p>}
+        <WaResourcesListView store={sharedStore} />
+      </div>
+    );
+  }
   const updatedFilter = (k, v) => setFilter(f => ({ ...f, [k]: v }));
   const filtered = resources.filter(r => {
     if (filter.search && !String(r.title || '').toLowerCase().includes(filter.search.toLowerCase())) return false;
     if (filter.kind !== 'all' && r.kind !== filter.kind) return false;
     if (filter.grade !== 'all' && r.grade !== filter.grade) return false;
     if (filter.visible !== 'all' && r.visibleToFellows !== filter.visible) return false;
+    if (filter.tags !== 'all' && !((Array.isArray(r.tags) ? r.tags : []).includes(filter.tags))) return false;
     return true;
   });
   const isSpecific = r => r.grade || r.subject;
   const kindMeta = { handout: 'Handout', reading: 'Reading', video: 'Video', template: 'Template', slides: 'Slides', assignment: 'Assignment', lessonPlan: 'Lesson Plan' };
-  const [form, setForm] = React.useState({ id: null, title: '', kind: 'handout', url: '', description: '', grade: '', subject: '', tags: [], visibleToFellows: 'true', createdBy: '', createdAt: '', updatedAt: '' });
-  const [creating, setCreating] = React.useState(false);
   const openAdd = () => { setForm({ id: null, title: '', kind: 'handout', url: '', description: '', grade: '', subject: '', tags: [], visibleToFellows: 'true', createdBy: '', createdAt: '', updatedAt: '' }); setCreating(true); };
   const cancelAdd = () => { setCreating(false); };
-  const startEdit = r => { setForm(r); setCreating(true); };
+  const startEdit = r => {
+    setForm({
+      ...r,
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      grade: r.grade || '',
+      subject: r.subject || '',
+      description: r.description || '',
+      visibleToFellows: String(r.visibleToFellows == null ? true : r.visibleToFellows),
+    });
+    setCreating(true);
+  };
   const cancelEdit = () => { setCreating(false); };
   const save = async (e) => {
     e?.preventDefault();

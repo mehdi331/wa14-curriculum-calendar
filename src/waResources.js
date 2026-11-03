@@ -40,8 +40,8 @@ export function validateResource(resource) {
   if (resource && resource.url && !String(resource.url).startsWith('http')) {
     errors.push('URL must start with http:// or https://');
   }
-  if (resource && !['handout', 'reading', 'video', 'template', 'slides', 'assignment', 'lessonPlan'].includes(String(resource.kind))) {
-    errors.push(`Invalid kind: ${resource.kind}. Must be one of the known resource kinds.`);
+  if (resource && String(resource.kind).trim() === '') {
+    errors.push('Kind is required.');
   }
   if (resource && !['true', 'false'].includes(String(resource.visibleToFellows))) {
     errors.push('visibleToFellows must be a boolean string ("true" or "false").');

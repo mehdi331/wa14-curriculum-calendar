@@ -74,8 +74,7 @@ export class WaResourcesStore {
       try {
         const data = snap.data();
         if (!data) {
-          const defaults = { ...DEFAULT_TAXONOMIES, resources: [], updatedAt: serverTimestamp() };
-          await setDoc(docRef, defaults, { merge: true });
+          const defaults = { ...DEFAULT_TAXONOMIES, resources: [] };
           this.setState({ config: defaults, resources: [], taxonomies: { ...DEFAULT_TAXONOMIES }, loading: false, error: null });
           return;
         }
@@ -156,7 +155,7 @@ export class WaResourcesStore {
     };
     const toSave = {
       ...clean,
-      resources: [...(clean.resources || []), { id: resource.id || baseId, title: resource.title, kind: resource.kind, url: resource.url, description: resource.description, grade: resource.grade || '', subject: resource.subject || '', tags: resource.tags || [], visibleToFellows: resource.visibleToFellows, createdBy: resource.createdBy || '', createdAt: resource.createdAt || now, updatedAt: now }],
+      resources: [...(clean.resources || []), { id: resource.id || baseId, title: resource.title, kind: resource.kind, url: resource.url, description: resource.description, grade: resource.grade || '', subject: resource.subject || '', tags: Array.isArray(resource.tags) ? resource.tags : [], visibleToFellows: resource.visibleToFellows, createdBy: resource.createdBy || '', createdAt: resource.createdAt || now, updatedAt: now }],
     };
     await this.saveConfig(toSave);
     this.setState({ config: toSave, resources: toSave.resources });
@@ -167,7 +166,7 @@ export class WaResourcesStore {
     const toSave = {
       ...this.state.config,
       resources: (this.state.config.resources || []).filter(r => r.id !== id),
-      updatedAt: serverTimestamp(),
+      updatedAt: this.timestamp(),
     };
     await this.saveConfig(toSave);
     this.setState({ config: toSave, resources: toSave.resources });

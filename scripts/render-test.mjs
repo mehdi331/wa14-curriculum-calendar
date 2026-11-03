@@ -1,6 +1,7 @@
 // Runner: loads cases.jsx through Vite (JSX transform) and renders each panel.
 import { createServer } from 'vite';
 import { renderToString } from 'react-dom/server';
+import React from 'react';
 
 // Minimal browser shims so Firebase (imported by App.jsx) can load under Node
 const g = globalThis;
@@ -22,6 +23,45 @@ const { __panels: P } = await vite.ssrLoadModule('/src/App.jsx');
 const { mergeAttendanceChanges, filterExcludedAttendanceRecords } = await vite.ssrLoadModule('/src/storage.js');
 
 let failed = 0;
+try {
+  const { WaResourcesStore } = await vite.ssrLoadModule('/src/waResourcesStore.js');
+  const { default: WaResourcesListView } = await vite.ssrLoadModule('/src/WaResourcesListView.jsx');
+  const { default: WaResourcesPanel } = await vite.ssrLoadModule('/src/WaResourcesPanel.jsx');
+  const resourceStore = new WaResourcesStore({ localOnly: true });
+  resourceStore.load();
+  await resourceStore.saveResource({
+    title: 'Tagged lesson',
+    kind: 'handout',
+    url: 'https://example.test/lesson',
+    tags: ['assessment'],
+    visibleToFellows: 'true',
+  });
+  const savedResource = resourceStore.state.resources[0];
+  const resourceHtml = renderToString(React.createElement(WaResourcesListView, {
+    resources: [
+      savedResource,
+      { ...savedResource, id: 'hidden', title: 'Hidden lesson', visibleToFellows: 'false' },
+    ],
+    taxonomies: { tags: [{ id: 'assessment', label: 'Assessment' }] },
+  }));
+  const fellowPanelHtml = renderToString(React.createElement(WaResourcesPanel, {
+    store: resourceStore,
+    role: 'fellow',
+  }));
+  const resourceChecks = [
+    ['resource tag is persisted', savedResource.tags.length === 1 && savedResource.tags[0] === 'assessment'],
+    ['resource tag uses its taxonomy label', resourceHtml.includes('Assessment')],
+    ['hidden resources are excluded from Fellow library', !resourceHtml.includes('Hidden lesson')],
+    ['Fellow resource tab is browse-only', fellowPanelHtml.includes('Tagged lesson') && !fellowPanelHtml.includes('Add resource') && !fellowPanelHtml.includes('Manage Taxonomies')],
+  ];
+  const failedResourceChecks = resourceChecks.filter(([, ok]) => !ok).map(([label]) => label);
+  if (!failedResourceChecks.length) console.log('OK    resource tags persist and render; hidden items stay private');
+  else { console.log('FAIL  resources: ' + failedResourceChecks.join('; ')); failed++; }
+} catch (err) {
+  console.log('FAIL  resource checks: ' + err.message);
+  failed++;
+}
+
 for (const [name, factory] of cases) {
   try {
     const html = renderToString(factory());
@@ -428,6 +468,19 @@ try {
   const ensuredEmpty = mod2.__panels.ensureMainRoom([]);
   const ensuredAgain = mod2.__panels.ensureMainRoom(ensuredEmpty.rooms);
   const mainRooms = [{ id: 'room-main', name: 'Main Room', fellowIds: [] }];
+  const replacementRoom = { id: 'room-a', name: 'Room A', fellowIds: [] };
+  const roomIdsAfterReplacement = mod2.__panels.roomIdsAfterFacilitatorUpdate(
+    ['room-main'],
+    [{ id: 'fac1', roomId: 'room-a' }],
+    'room-a',
+    [...mainRooms, replacementRoom],
+  );
+  const roomIdsWithExplicitMain = mod2.__panels.roomIdsAfterFacilitatorUpdate(
+    ['room-main'],
+    [{ id: 'fac1', roomId: 'room-main' }, { id: 'fac2', roomId: 'room-a' }],
+    'room-a',
+    [...mainRooms, replacementRoom],
+  );
   const visMain = mod2.__panels.isSessionVisibleToFellow({ roomIds: ['room-main'], rooms: [], afaGroup: '' }, { role: 'fellow', fellowId: 'fe9', email: 'new@x.dev' }, [{ id: 'fe9', email: 'new@x.dev' }], mainRooms);
   const visOther = mod2.__panels.isSessionVisibleToFellow({ roomIds: ['r1'], rooms: [], afaGroup: '' }, { role: 'fellow', fellowId: 'fe9', email: 'new@x.dev' }, [{ id: 'fe9', email: 'new@x.dev' }], [{ id: 'r1', name: 'Room A', fellowIds: ['someone-else'] }]);
   const mainVisible = mod2.__panels.getVisibleRooms({ rooms: [], roomIds: ['room-main'] }, { role: 'fellow', email: 'stranger@x.dev' }, [], mainRooms);
@@ -436,6 +489,8 @@ try {
   const gradesHtml = renderHtml('FellowGradesPanel-released');
   const planChecks = [
     ['main room auto-created once', ensuredEmpty.room.name === 'Main Room' && ensuredAgain.rooms === ensuredEmpty.rooms && ensuredAgain.room.id === ensuredEmpty.room.id],
+    ['selecting a different facilitator room replaces default Main Room', roomIdsAfterReplacement.length === 1 && roomIdsAfterReplacement[0] === 'room-a'],
+    ['Main Room remains when another facilitator is explicitly assigned there', roomIdsWithExplicitMain.includes('room-main') && roomIdsWithExplicitMain.includes('room-a')],
     ['main-room targeting does not hide sessions', visMain === true],
     ['other rooms still restrict', visOther === false],
     ['main room link visible to non-member fellow', mainVisible.length === 1],
@@ -518,7 +573,7 @@ try {
     ['superadmin keeps admin', flagsSuper.isAdmin === true && flagsSuper.isFullAdmin === true],
     ['AFA full keeps attendance admin', flagsAfaFull.isAdmin === true && flagsAfaFull.isFullAdmin === true],
     ['resources-only staff stays non-full', flagsResStaff.isAdmin === true && flagsResStaff.isFullAdmin === false],
-    ['fellow sidebar is exactly 5 items ending at Legend', JSON.stringify(fellowNav) === JSON.stringify(['overview', 'calendar', 'fellowAnalytics', 'fellowPractice', 'legend'])],
+    ['fellow sidebar includes resource library after Legend', JSON.stringify(fellowNav) === JSON.stringify(['overview', 'calendar', 'fellowAnalytics', 'fellowPractice', 'legend', 'resources'])],
     ['fellow sidebar hides admin pages', !sidebarFellow.includes('Attendance records') && !sidebarFellow.includes('Time Summary') && !sidebarFellow.includes('Incidents') && !sidebarFellow.includes('Devices') && !sidebarFellow.includes('WA Staff')],
   ];
   const badGate = gatingChecks.filter(([, ok]) => !ok).map(([label]) => label);

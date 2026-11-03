@@ -1,6 +1,6 @@
 import React from 'react';
-import { LinkIcon, ExternalLink, Eye, EyeSlash, FolderOpen, FileIcon as FileIconP } from '@phosphor-icons/react';
-import { classifyTargeting, isGradeSpecific } from './waResources.js';
+import { LinkIcon, Eye, EyeSlash, FileIcon as FileIconP } from '@phosphor-icons/react';
+import { isGradeSpecific } from './waResources.js';
 
 /**
  * Reusable resource card component used by both staff and Fellows views.
@@ -11,13 +11,17 @@ import { classifyTargeting, isGradeSpecific } from './waResources.js';
  * @param {function} props.onOpen
  * @param {'staff'|'fellow'} props.mode — controls which affordances are shown
  */
-export default function ResourceCard({ resource, showVisibilityToggle = false, onToggleVisibility = () => {}, onOpen = () => {}, mode = 'fellow' }) {
+export default function ResourceCard({ resource, taxonomies = null, showVisibilityToggle = false, onToggleVisibility = () => {}, onOpen = () => {}, mode = 'fellow' }) {
   const kindMeta = (typeof window !== 'undefined' && window.waResourceKindsMap) || {};
   const displayKind = kindMeta[resource.kind] ? kindMeta[resource.kind] : resource.kind;
   const isSpecific = isGradeSpecific(resource);
   const targetLabel = isSpecific
     ? (String(resource.grade || '').trim() ? `Grade ${String(resource.grade).trim()}` : '') + (String(resource.grade || '').trim() && String(resource.subject || '').trim() ? ', ' : '') + (String(resource.subject || '').trim() ? `Subject: ${String(resource.subject).trim()}` : '')
     : 'All Fellows';
+
+  const tagLabelMap = (taxonomies && taxonomies.tags)
+    ? Object.fromEntries(taxonomies.tags.map(t => [t.id, t.label]))
+    : {};
 
   return (
     <div className="wa-resource-card card bg-wa-container border border-wa-borderrounded-lg shadow-sm hover:shadow-md transition-shadow p-4">
@@ -73,10 +77,10 @@ export default function ResourceCard({ resource, showVisibilityToggle = false, o
           <span className="ml-1">{targetLabel}</span>
         </div>
       ) : null}
-      {resource.tags && resource.tags.length > 0 && (
+      {Array.isArray(resource.tags) && resource.tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {resource.tags.slice(0, 5).map(t => (
-            <span key={t} className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] bg-wa-container2 text-wa-muted">{t}</span>
+            <span key={t} className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[11px] bg-wa-container2 text-wa-muted">{tagLabelMap[t] || t}</span>
           ))}
         </div>
       )}

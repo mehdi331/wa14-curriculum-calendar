@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Funnel, Grid, ListDashes } from '@phosphor-icons/react';
+import { SquaresFour, ListDashes } from '@phosphor-icons/react';
 import ResourceCard from './ResourceCard';
 import { DEFAULT_RESOURCE_KINDS } from './waResources.js';
 
@@ -7,11 +7,26 @@ import { DEFAULT_RESOURCE_KINDS } from './waResources.js';
  * Fellows-facing resource list: browse, filter by grade/subject/tag, view cards.
  */
 export default function WaResourcesListView({
+  store = null,
   resources = [],
   taxonomies = null,
   loading = false,
   emptyMessage = 'No resources yet.',
 }) {
+  const sharedStore = React.useMemo(() => store || null, [store]);
+  const [internalState, setInternalState] = React.useState(() =>
+    sharedStore ? sharedStore.state : null
+  );
+  React.useEffect(() => {
+    if (!sharedStore) return undefined;
+    setInternalState(sharedStore.state);
+    return sharedStore.subscribe(setInternalState);
+  }, [sharedStore]);
+
+  const displayResources = internalState ? internalState.resources : resources;
+  const displayTaxonomies = internalState ? internalState.taxonomies : taxonomies;
+  const displayLoading = internalState ? internalState.loading : loading;
+
   const [search, setSearch] = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('all');
   const [gradeFilter, setGradeFilter] = React.useState('all');
@@ -19,17 +34,18 @@ export default function WaResourcesListView({
   const [tagFilter, setTagFilter] = React.useState('all');
   const [viewMode, setViewMode] = React.useState('grid');
 
-  const tags = (taxonomies && taxonomies.tags) || [];
-  const grades = (taxonomies && taxonomies.grades) || [];
-  const subjects = (taxonomies && taxonomies.subjects) || [];
+  const tags = (displayTaxonomies && displayTaxonomies.tags) || [];
+  const grades = (displayTaxonomies && displayTaxonomies.grades) || [];
+  const subjects = (displayTaxonomies && displayTaxonomies.subjects) || [];
 
-  const filtered = resources.filter(r => {
-    if (loading) return false;
+  const fellowResources = displayResources.filter(r => String(r.visibleToFellows) === 'true');
+  const filtered = fellowResources.filter(r => {
+    if (displayLoading) return false;
     if (search && !String(r.title || '').toLowerCase().includes(search.toLowerCase())) return false;
     if (typeFilter !== 'all' && r.kind !== typeFilter) return false;
     if (gradeFilter !== 'all' && r.grade !== gradeFilter) return false;
     if (subjectFilter !== 'all' && r.subject !== subjectFilter) return false;
-    if (tagFilter !== 'all' && !r.tags.includes(tagFilter)) return false;
+    if (tagFilter !== 'all' && !((Array.isArray(r.tags) ? r.tags : []).includes(tagFilter))) return false;
     return true;
   });
 
@@ -39,10 +55,10 @@ export default function WaResourcesListView({
       <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
         <div>
           <h1 className="text-xl font-bold text-wa-text">Resources</h1>
-          <p className="text-xs text-wa-muted mt-0.5">{resources.length} resource{resources.length !== 1 ? 's' : ''} — view all materials Fellows can access</p>
+          <p className="text-xs text-wa-muted mt-0.5">{fellowResources.length} resource{fellowResources.length !== 1 ? 's' : ''} — view all materials Fellows can access</p>
         </div>
         <div className="flex gap-2">
-          <button className="btn-ghost btn-sm" onClick={() => setViewMode('grid')} title="Grid view"><Grid size={14} /></button>
+          <button className="btn-ghost btn-sm" onClick={() => setViewMode('grid')} title="Grid view"><SquaresFour size={14} /></button>
           <button className="btn-ghost btn-sm" onClick={() => setViewMode('list')} title="List view"><ListDashes size={14} /></button>
         </div>
       </div>
@@ -99,6 +115,7 @@ export default function WaResourcesListView({
             <ResourceCard
               key={r.id}
               resource={r}
+              taxonomies={displayTaxonomies}
               mode="fellow"
               showVisibilityToggle={false}
               onOpen={(res) => { if (res.url && typeof window !== 'undefined') window.open(res.url, '_blank', 'noopener,noreferrer'); }}
@@ -111,6 +128,7 @@ export default function WaResourcesListView({
             <ResourceCard
               key={r.id}
               resource={r}
+              taxonomies={displayTaxonomies}
               mode="fellow"
               showVisibilityToggle={false}
               onOpen={(res) => { if (res.url && typeof window !== 'undefined') window.open(res.url, '_blank', 'noopener,noreferrer'); }}
