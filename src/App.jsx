@@ -812,21 +812,25 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
 
   useEffect(() => {
     (async () => {
+      let loadedSessions = [];
       try {
         const r = await storage.get('wa14-sessions');
         const raw = r && r.value ? JSON.parse(r.value) : SEED;
         // Migrate legacy session fields and stamp the current per-session attendance defaults.
-        const normalizedSessions = raw.map(s => normalizeSessionAttendance({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 }));
-        setSessions(normalizedSessions);
-        if (auth.role !== 'fellow' && JSON.stringify(normalizedSessions) !== JSON.stringify(raw)) {
-          try { await storage.set('wa14-sessions', JSON.stringify(normalizedSessions)); }
+        loadedSessions = raw.map(s => normalizeSessionAttendance({ ...s, type: s.type || s.pillar || SESSION_TYPES[0], pillarIds: Array.isArray(s.pillarIds) ? s.pillarIds : [], assessmentTotal: Number(s.assessmentTotal) || 0 }));
+        setSessions(loadedSessions);
+        if (auth.role !== 'fellow' && JSON.stringify(loadedSessions) !== JSON.stringify(raw)) {
+          try { await storage.set('wa14-sessions', JSON.stringify(loadedSessions)); }
           catch (error) {
             console.error('session attendance timing migration failed', error);
             showToast('Could not save default session attendance windows: ' + (error.code || error.message));
           }
         }
       }
-      catch (e) { setSessions(SEED.map(s => normalizeSessionAttendance({ ...s, type: s.pillar || SESSION_TYPES[0], pillarIds: [] }))); }
+      catch (e) {
+        loadedSessions = SEED.map(s => normalizeSessionAttendance({ ...s, type: s.pillar || SESSION_TYPES[0], pillarIds: [] }));
+        setSessions(loadedSessions);
+      }
       let loadedQuestions = [];
       let storedCollaborations = [];
       let storedLearningOutcomes = [];
@@ -858,6 +862,18 @@ function MainApp({ auth, onLogout, onSwitchSystem = null, cityStore = null }) {
         if (ensured.rooms !== loadedRooms && auth.role !== 'fellow') {
           try { await storage.set('wa14-rooms', JSON.stringify(ensured.rooms)); }
           catch (e) { console.error('main room create failed', e); }
+        }
+        const sessionsWithDefaultRoom = addDefaultRoomToUnassignedSessions(loadedSessions, ensured.room.id);
+        if (sessionsWithDefaultRoom !== loadedSessions) {
+          loadedSessions = sessionsWithDefaultRoom;
+          setSessions(loadedSessions);
+          if (auth.role !== 'fellow') {
+            try { await storage.set('wa14-sessions', JSON.stringify(loadedSessions)); }
+            catch (error) {
+              console.error('default session room migration failed', error);
+              showToast('Could not assign the Main Room to existing sessions: ' + (error.code || error.message));
+            }
+          }
         }
       }
       catch (e) { setRooms([]); }
@@ -2361,6 +2377,15 @@ function ensureMainRoom(rooms) {
   if (existing) return { rooms, room: existing };
   const room = { id: 'room-main', name: MAIN_ROOM_NAME, locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] };
   return { rooms: [...(rooms || []), room], room };
+}
+function addDefaultRoomToUnassignedSessions(sessions, roomId) {
+  let changed = false;
+  const updated = (sessions || []).map(session => {
+    if ((session.roomIds || []).length || (session.rooms || []).length) return session;
+    changed = true;
+    return { ...session, roomIds: [roomId] };
+  });
+  return changed ? updated : sessions;
 }
 function roomIdsAfterFacilitatorUpdate(roomIds, facilitators, selectedRoomId, rooms) {
   const nextRoomIds = [...(roomIds || [])];
@@ -4721,7 +4746,17 @@ function RoomsPanel({ rooms, roster, onChange, showToast }) {
   const emptyRoom = () => ({ id: 'room' + Date.now(), name: '', locationType: 'physical', physicalLocation: '', onlinePlatform: '', meetingUrl: '', accessInstructions: '', fellowIds: [] });
   const save = room => { if (!room.name.trim()) return; onChange(rooms.some(item => item.id === room.id) ? rooms.map(item => item.id === room.id ? room : item) : [...rooms, room]); setDraft(null); showToast('Room saved'); };
   const toggleFellow = id => setDraft(room => ({ ...room, fellowIds: (room.fellowIds || []).includes(id) ? room.fellowIds.filter(item => item !== id) : [...(room.fellowIds || []), id] }));
-  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={() => setDraft(emptyRoom())} className={btnPrimary + ' mb-[18px]'}><Plus size={14} /> Add room</button>{draft && <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 18 }}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Room A" /></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType || 'physical'} onChange={e => setDraft({ ...draft, locationType: e.target.value })}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType !== 'online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation || ''} onChange={e => setDraft({ ...draft, physicalLocation: e.target.value })} placeholder="Building, floor, or room location" /></Field>}{draft.locationType !== 'physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform || ''} onChange={e => setDraft({ ...draft, onlinePlatform: e.target.value })} placeholder="Zoom or Google Meet" /></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl || ''} onChange={e => setDraft({ ...draft, meetingUrl: e.target.value })} placeholder="https://..." /></Field><Field label="Access instructions"><textarea className={inputStyle + ' resize-y'} rows={2} value={draft.accessInstructions || ''} onChange={e => setDraft({ ...draft, accessInstructions: e.target.value })} /></Field></>}<Field label="Fellows"><div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>{roster.map(f => <label key={f.id} style={{ fontSize: 12 }}><input type="checkbox" checked={(draft.fellowIds || []).includes(f.id)} onChange={() => toggleFellow(f.id)} /> {f.name}</label>)}</div></Field><div style={{ display: 'flex', gap: 8 }}><button onClick={() => save(draft)} className={btnPrimary}>Save room</button><button onClick={() => setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room => <div key={room.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 8, maxWidth: 560 }}><b>{room.name}</b><div style={{ fontSize: 12, color: '#D5E0D5', overflowWrap: 'anywhere', wordBreak: 'break-word', overflow: 'hidden' }}>{[room.facilitator, room.locationType || 'physical'].filter(Boolean).join(' · ')}{room.meetingUrl ? <>{' · '}<a href={room.meetingUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#7FD4FF', textDecoration: 'underline', overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{room.meetingUrl}</a></> : <>{room.physicalLocation ? ' · ' + room.physicalLocation : ' · Location not set'}</>}{' · ' + (room.fellowIds || []).length + ' Fellows'}</div><button onClick={() => setDraft({ ...room })} style={{ ...linkBtn, marginTop: 8 }}>Edit</button><button onClick={() => onChange(rooms.filter(r => r.id !== room.id))} style={{ ...linkBtn, color: '#D0A023', marginTop: 8, marginLeft: 12 }}>Delete</button></div>)}</div>;
+  const allFellowsSelected = allRoomFellowsSelected(draft, roster);
+  return <div><div style={{ fontSize: 13, color: '#D5E0D5', marginBottom: 16 }}>Create and edit rooms, assign Fellows, and add physical or online locations.</div><button onClick={() => setDraft(emptyRoom())} className={btnPrimary + ' mb-[18px]'}><Plus size={14} /> Add room</button>{draft && <div style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 18, maxWidth: 560, marginBottom: 18 }}><Field label="Room name"><input className={inputStyle} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Room A" /></Field><Field label="Location type"><select className={inputStyle} value={draft.locationType || 'physical'} onChange={e => setDraft({ ...draft, locationType: e.target.value })}><option value="physical">Physical</option><option value="online">Online</option><option value="hybrid">Hybrid</option></select></Field>{draft.locationType !== 'online' && <Field label="Physical location"><input className={inputStyle} value={draft.physicalLocation || ''} onChange={e => setDraft({ ...draft, physicalLocation: e.target.value })} placeholder="Building, floor, or room location" /></Field>}{draft.locationType !== 'physical' && <><Field label="Online platform"><input className={inputStyle} value={draft.onlinePlatform || ''} onChange={e => setDraft({ ...draft, onlinePlatform: e.target.value })} placeholder="Zoom or Google Meet" /></Field><Field label="Meeting URL"><input type="url" className={inputStyle} value={draft.meetingUrl || ''} onChange={e => setDraft({ ...draft, meetingUrl: e.target.value })} placeholder="https://..." /></Field><Field label="Access instructions"><textarea className={inputStyle + ' resize-y'} rows={2} value={draft.accessInstructions || ''} onChange={e => setDraft({ ...draft, accessInstructions: e.target.value })} /></Field></>}  <Field label="Fellows"><label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, marginBottom: 8 }}>  <input type="checkbox" checked={allFellowsSelected} onChange={e => setDraft(room => ({ ...room, fellowIds: roomFellowIdsAfterSelectAll(e.target.checked, roster) }))} /> Select all Fellows</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>{roster.map(f => <label key={f.id} style={{ fontSize: 12 }}><input type="checkbox" checked={(draft.fellowIds || []).some(id => String(id) === String(f.id))} onChange={() => toggleFellow(f.id)} /> {f.name}</label>)}</div></Field><div style={{ display: 'flex', gap: 8 }}><button onClick={() => save(draft)} className={btnPrimary}>Save room</button><button onClick={() => setDraft(null)} className={btnGhost}>Cancel</button></div></div>}{rooms.map(room => <div key={room.id} style={{ background: '#003223', border: '1px solid #2A5C4B', borderRadius: 8, padding: 14, marginBottom: 8, maxWidth: 560 }}><b>{room.name}</b><div style={{ fontSize: 12, color: '#D5E0D5', overflowWrap: 'anywhere', wordBreak: 'break-word', overflow: 'hidden' }}>{[room.facilitator, room.locationType || 'physical'].filter(Boolean).join(' · ')}{room.meetingUrl ? <>{' · '}<a href={room.meetingUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#7FD4FF', textDecoration: 'underline', overflowWrap: 'anywhere', wordBreak: 'break-all' }}>{room.meetingUrl}</a></> : <>{room.physicalLocation ? ' · ' + room.physicalLocation : ' · Location not set'}</>}{' · ' + (room.fellowIds || []).length + ' Fellows'}</div><button onClick={() => setDraft({ ...room })} style={{ ...linkBtn, marginTop: 8 }}>Edit</button><button onClick={() => onChange(rooms.filter(r => r.id !== room.id))} style={{ ...linkBtn, color: '#D0A023', marginTop: 8, marginLeft: 12 }}>Delete</button></div>)}</div>;
+}
+
+function allRoomFellowsSelected(room, roster) {
+  return (roster || []).length > 0
+    && roster.every(fellow => ((room && room.fellowIds) || []).some(id => String(id) === String(fellow.id)));
+}
+
+function roomFellowIdsAfterSelectAll(selected, roster) {
+  return selected ? (roster || []).map(fellow => fellow.id) : [];
 }
 
 function SessionTypesPanel({ sessionTypes, onChange, showToast }) {
@@ -5898,4 +5933,4 @@ function Field({ label, children, style }) {
 const inputStyle = 'field-input';
 
 // Test hook: lets tooling render every panel in isolation (harmless in the app bundle)
-export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, FellowProfileEditForm, fellowEditError, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceRecordsForEligibleFellows, attendanceTimingFromSession, validateAttendanceTiming, normalizeSessionAttendance, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, roomIdsAfterFacilitatorUpdate, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };
+export const __panels = { CalendarView, PlacementPanel, SessionsTable, AssignmentPanel, RoomsPanel, allRoomFellowsSelected, roomFellowIdsAfterSelectAll, PillarsPanel, SessionTypesPanel, WorkModesPanel, RolesPanel, TimeSummary, ExpandedAnalyticsPanel, ParagraphReviewPanel, ViewPanel, RosterPanel, FellowProfileEditForm, fellowEditError, PlannerPanel, RequestsPanel, LocalAssessmentsPanel, EditPanel, Sidebar, TopBar, FilterBar, SessionAssessmentBreakdown, FellowAttendanceBreakdown, FellowOverview, AttendanceRecordsPanel, MyAttendancePanel, FellowAnalyticsPanel, FellowRecentAttempts, FellowGradesPanel, AcademyOverviewPanel, PracticeTeachingPanel, CollabEditor, LearningOutcomesPanel, FellowPracticePanel, HistoricalAcademiesPanel, ReuseSessionsModal, normalizeHashTab, getSidebarTabs, IncidentLogPanel, DeviceRequestPanel, StaffCalendar, StaffTaskEditor, SessionMarksPanel, SessionMarkRow, computeAttemptScore, computeAttemptPercentage, weekForDate, effectiveWeekOf, attendancePhase, attendanceEligible, attendanceRecordsForEligibleFellows, attendanceTimingFromSession, validateAttendanceTiming, normalizeSessionAttendance, DEFAULT_ATTENDANCE_TIMING, attemptGradeStatus, isGradeReleased, getDeviceFingerprint, layoutOverlapping, getTypeColor, getModeColor, isSessionVisibleToFellow, getVisibleRooms, ensureMainRoom, findMainRoom, isMainRoom, addDefaultRoomToUnassignedSessions, roomIdsAfterFacilitatorUpdate, callSignFromName, getRoleLabel, endFromDuration, durationBetween, normalizeGoals, normalizeCollab, schoolForMember, nextCollabCode, rotationTallies, scheduledDays, isFellowAssigned, unassignedFellows, collabForFellow, normalizeOutcomeRecord, outcomesForDay, outcomesForSubject, learningOutcomesFor, accountabilityGroups, inAccountabilityGroup, setAccountabilityGroup, clearAccountabilityGroup, PRACTICE_SUBJECTS, PRACTICE_GRADES, PRACTICE_DAYS_DEFAULT, systemAccessFor, deriveRoleFlags };

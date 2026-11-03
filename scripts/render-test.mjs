@@ -481,6 +481,16 @@ try {
     'room-a',
     [...mainRooms, replacementRoom],
   );
+  const defaultedSessions = mod2.__panels.addDefaultRoomToUnassignedSessions([
+    { id: 'break', type: 'Break', mode: 'Sync', roomIds: [] },
+    { id: 'async', type: 'Workshop', mode: 'Async', roomIds: [] },
+    { id: 'coaching', type: 'Coaching', mode: 'Coaching' },
+    { id: 'assigned', type: 'Workshop', roomIds: ['room-a'] },
+    { id: 'legacy', type: 'Workshop', roomIds: [], rooms: [{ id: 'room-a', name: 'Room A' }] },
+  ], 'room-main');
+  const roomRoster = [{ id: 'f1' }, { id: 'f2' }, { id: 'f3' }];
+  const allRoomFellowIds = mod2.__panels.roomFellowIdsAfterSelectAll(true, roomRoster);
+  const noRoomFellowIds = mod2.__panels.roomFellowIdsAfterSelectAll(false, roomRoster);
   const visMain = mod2.__panels.isSessionVisibleToFellow({ roomIds: ['room-main'], rooms: [], afaGroup: '' }, { role: 'fellow', fellowId: 'fe9', email: 'new@x.dev' }, [{ id: 'fe9', email: 'new@x.dev' }], mainRooms);
   const visOther = mod2.__panels.isSessionVisibleToFellow({ roomIds: ['r1'], rooms: [], afaGroup: '' }, { role: 'fellow', fellowId: 'fe9', email: 'new@x.dev' }, [{ id: 'fe9', email: 'new@x.dev' }], [{ id: 'r1', name: 'Room A', fellowIds: ['someone-else'] }]);
   const mainVisible = mod2.__panels.getVisibleRooms({ rooms: [], roomIds: ['room-main'] }, { role: 'fellow', email: 'stranger@x.dev' }, [], mainRooms);
@@ -491,6 +501,9 @@ try {
     ['main room auto-created once', ensuredEmpty.room.name === 'Main Room' && ensuredAgain.rooms === ensuredEmpty.rooms && ensuredAgain.room.id === ensuredEmpty.room.id],
     ['selecting a different facilitator room replaces default Main Room', roomIdsAfterReplacement.length === 1 && roomIdsAfterReplacement[0] === 'room-a'],
     ['Main Room remains when another facilitator is explicitly assigned there', roomIdsWithExplicitMain.includes('room-main') && roomIdsWithExplicitMain.includes('room-a')],
+    ['unassigned break, async, and coaching sessions get Main Room', defaultedSessions.slice(0, 3).every(session => session.roomIds?.[0] === 'room-main')],
+    ['existing room assignments are preserved during default migration', defaultedSessions[3].roomIds[0] === 'room-a' && defaultedSessions[4].rooms[0].id === 'room-a'],
+    ['Select all Fellows selects and clears the full room roster', allRoomFellowIds.length === roomRoster.length && mod2.__panels.allRoomFellowsSelected({ fellowIds: allRoomFellowIds }, roomRoster) && noRoomFellowIds.length === 0 && !mod2.__panels.allRoomFellowsSelected({ fellowIds: noRoomFellowIds }, roomRoster)],
     ['main-room targeting does not hide sessions', visMain === true],
     ['other rooms still restrict', visOther === false],
     ['main room link visible to non-member fellow', mainVisible.length === 1],
